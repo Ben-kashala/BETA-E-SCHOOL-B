@@ -15,6 +15,7 @@ class Notification(models.Model):
         ('PAYMENT', 'Paiement'),
         ('ANNOUNCEMENT', 'Annonce'),
         ('MEETING', 'Réunion'),
+        ('DISCIPLINE', 'Discipline'),
         ('GENERAL', 'Général'),
     ]
     

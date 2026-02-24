@@ -90,6 +90,8 @@ class PaymentViewSet(viewsets.ModelViewSet):
             user=payment_user
         )
         if payment.status == 'COMPLETED':
+            from apps.communication.notifications import notify_payment_made
+            notify_payment_made(payment)
             receipt_number = f"REC-{uuid.uuid4().hex[:12].upper()}"
             PaymentReceipt.objects.get_or_create(
                 payment=payment,
@@ -132,6 +134,8 @@ class PaymentViewSet(viewsets.ModelViewSet):
         old_instance = serializer.instance
         instance = serializer.save()
         if instance.status == 'COMPLETED' and getattr(old_instance, 'status', None) != 'COMPLETED':
+            from apps.communication.notifications import notify_payment_made
+            notify_payment_made(instance)
             if not CashMovement.objects.filter(school=instance.school, reference_type='payment', reference_id=instance.id).exists():
                 _create_cash_movement(
                     school=instance.school,
@@ -158,6 +162,8 @@ class PaymentViewSet(viewsets.ModelViewSet):
         payment.status = 'COMPLETED'
         payment.payment_date = timezone.now()
         payment.save()
+        from apps.communication.notifications import notify_payment_made
+        notify_payment_made(payment)
         receipt_number = f"REC-{uuid.uuid4().hex[:12].upper()}"
         PaymentReceipt.objects.get_or_create(payment=payment, defaults={'receipt_number': receipt_number})
         if not CashMovement.objects.filter(school=payment.school, reference_type='payment', reference_id=payment.id).exists():

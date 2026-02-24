@@ -629,8 +629,10 @@ class DisciplineRecordViewSet(viewsets.ModelViewSet):
         return queryset
     
     def perform_create(self, serializer):
-        serializer.save(recorded_by=self.request.user, status='OPEN')
-    
+        record = serializer.save(recorded_by=self.request.user, status='OPEN')
+        from apps.communication.notifications import notify_discipline_record_created
+        notify_discipline_record_created(record)
+
     @action(detail=True, methods=['post'])
     def resolve(self, request, pk=None):
         """Résoudre une fiche de discipline (Admin et Enseignant)"""

@@ -1,14 +1,67 @@
-import { Bell, Menu } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { Bell, Menu, MessageSquare } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import api from '@/services/api'
 import { User as UserType } from '@/types'
 import logoImage from '@/images/logo.png'
 import UserMenu from '@/components/user/UserMenu'
+import { format } from 'date-fns'
+import { fr } from 'date-fns/locale'
+
 interface HeaderProps {
   user: UserType
   onLogout: () => void
   onMenuClick: () => void
 }
 
+const ROLE_COMMUNICATION_PATH: Record<string, string> = {
+  ADMIN: '/admin/communication',
+  TEACHER: '/teacher/communication',
+  PARENT: '/parent/communication',
+  STUDENT: '/student/communication',
+  ACCOUNTANT: '/accountant',
+  DISCIPLINE_OFFICER: '/discipline-officer/communication',
+}
+
 export default function Header({ user, onLogout, onMenuClick }: HeaderProps) {
+  const [notificationOpen, setNotificationOpen] = useState(false)
+  const notificationRef = useRef<HTMLDivElement>(null)
+  const queryClient = useQueryClient()
+
+  const { data: notificationsData } = useQuery({
+    queryKey: ['header-notifications'],
+    queryFn: async () => {
+      const res = await api.get('/communication/notifications/', { params: { page_size: 10 } })
+      return res.data
+    },
+  })
+
+  const markAllReadMutation = useMutation({
+    mutationFn: () => api.post('/communication/notifications/mark_all_read/'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['header-notifications'] })
+      queryClient.invalidateQueries({ queryKey: ['communication-notifications'] })
+    },
+  })
+
+  const notifications = Array.isArray(notificationsData)
+    ? notificationsData
+    : (notificationsData?.results ?? [])
+  const unreadCount = notifications.filter((n: { is_read: boolean }) => !n.is_read).length
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (notificationRef.current && !notificationRef.current.contains(e.target as Node)) {
+        setNotificationOpen(false)
+      }
+    }
+    if (notificationOpen) document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [notificationOpen])
+
+  const communicationPath = ROLE_COMMUNICATION_PATH[user.role] || '/'
+
   const roleLabels: Record<string, string> = {
     ADMIN: 'Administrateur',
     TEACHER: 'Enseignant',
@@ -85,10 +138,68 @@ export default function Header({ user, onLogout, onMenuClick }: HeaderProps) {
         </div>
         
         <div className="flex items-center space-x-2 sm:space-x-4 flex-shrink-0">
-          <button className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white relative transition-colors">
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
-          </button>
+          <div className="relative" ref={notificationRef}>
+            <button
+              type="button"
+              onClick={() => setNotificationOpen((o) => !o)}
+              className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white relative transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+              aria-label="Notifications"
+            >
+              <Bell className="w-5 h-5" />
+              {unreadCount > 0 && (
+                <span className="absolute top-0.5 right-0.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-red-500 text-white text-xs font-medium rounded-full">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </button>
+            {notificationOpen && (
+              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-50 max-h-[80vh] overflow-hidden flex flex-col">
+                <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                  <span className="font-semibold text-gray-900 dark:text-white">Notifications</span>
+                  {unreadCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => markAllReadMutation.mutate()}
+                      disabled={markAllReadMutation.isPending}
+                      className="text-xs text-primary-600 dark:text-primary-400 hover:underline"
+                    >
+                      Tout marquer lu
+                    </button>
+                  )}
+                </div>
+                <div className="overflow-y-auto flex-1">
+                  {notifications.length === 0 ? (
+                    <p className="px-4 py-6 text-sm text-gray-500 dark:text-gray-400 text-center">
+                      Aucune notification
+                    </p>
+                  ) : (
+                    notifications.map((n: { id: number; title: string; message: string; is_read: boolean; created_at: string }) => (
+                      <Link
+                        key={n.id}
+                        to={communicationPath}
+                        onClick={() => setNotificationOpen(false)}
+                        className={`block px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700 last:border-0 ${!n.is_read ? 'bg-primary-50/50 dark:bg-primary-900/20' : ''}`}
+                      >
+                        <p className="font-medium text-gray-900 dark:text-white text-sm">{n.title}</p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 mt-0.5">{n.message}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                          {format(new Date(n.created_at), 'dd MMM à HH:mm', { locale: fr })}
+                        </p>
+                      </Link>
+                    ))
+                  )}
+                </div>
+                <Link
+                  to={communicationPath}
+                  onClick={() => setNotificationOpen(false)}
+                  className="flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium text-primary-600 dark:text-primary-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 border-t border-gray-200 dark:border-gray-700"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  Voir toute la communication
+                </Link>
+              </div>
+            )}
+          </div>
           
           <div className="flex items-center space-x-2 sm:space-x-3">
             <div className="text-right hidden sm:block">
