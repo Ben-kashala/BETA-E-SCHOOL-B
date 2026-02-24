@@ -16,6 +16,8 @@ class Notification(models.Model):
         ('ANNOUNCEMENT', 'Annonce'),
         ('MEETING', 'Réunion'),
         ('DISCIPLINE', 'Discipline'),
+        ('MESSAGE', 'Message'),
+        ('QUIZ', 'Interrogation / Examen'),
         ('GENERAL', 'Général'),
     ]
     

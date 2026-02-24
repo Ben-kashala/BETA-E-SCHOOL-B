@@ -136,13 +136,23 @@ class AssignmentViewSet(viewsets.ModelViewSet):
         if self.request.user.is_teacher:
             try:
                 teacher_profile = self.request.user.teacher_profile
-                serializer.save(teacher=teacher_profile)
-            except:
+                assignment = serializer.save(teacher=teacher_profile)
+                if assignment.is_published:
+                    from apps.communication.notifications import notify_assignment_published
+                    notify_assignment_published(assignment)
+            except Exception:
                 from rest_framework.exceptions import ValidationError
                 raise ValidationError({'teacher': 'Vous devez avoir un profil enseignant pour créer un devoir.'})
         else:
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied('Seuls les enseignants peuvent créer des devoirs.')
+
+    def perform_update(self, serializer):
+        old_published = serializer.instance.is_published
+        assignment = serializer.save()
+        if assignment.is_published and not old_published:
+            from apps.communication.notifications import notify_assignment_published
+            notify_assignment_published(assignment)
 
     @action(detail=True, methods=['get', 'post'], url_path='questions')
     def questions(self, request, pk=None):
@@ -365,13 +375,23 @@ class QuizViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         if self.request.user.is_teacher:
             try:
-                serializer.save(teacher=self.request.user.teacher_profile)
+                quiz = serializer.save(teacher=self.request.user.teacher_profile)
+                if quiz.is_published:
+                    from apps.communication.notifications import notify_quiz_published
+                    notify_quiz_published(quiz)
             except Exception:
                 from rest_framework.exceptions import ValidationError
                 raise ValidationError({'teacher': 'Profil enseignant requis.'})
         else:
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied('Réservé aux enseignants.')
+
+    def perform_update(self, serializer):
+        old_published = serializer.instance.is_published
+        quiz = serializer.save()
+        if quiz.is_published and not old_published:
+            from apps.communication.notifications import notify_quiz_published
+            notify_quiz_published(quiz)
 
     @action(detail=True, methods=['get', 'post'], url_path='questions')
     def questions(self, request, pk=None):

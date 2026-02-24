@@ -88,11 +88,13 @@ class MessageViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
     
     def perform_create(self, serializer):
-        serializer.save(
+        message = serializer.save(
             sender=self.request.user,
             school=self.request.user.school
         )
-    
+        from .notifications import notify_message_received
+        notify_message_received(message)
+
     @action(detail=True, methods=['post'])
     def mark_read(self, request, pk=None):
         """Mark message as read"""
@@ -208,11 +210,8 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         announcement.is_published = True
         announcement.published_at = timezone.now()
         announcement.save()
-        
-        # Create notifications for target audience
-        # This would be handled by a Celery task in production
-        # For now, we'll just return success
-        
+        from .notifications import notify_announcement_published
+        notify_announcement_published(announcement)
         return Response(AnnouncementSerializer(announcement).data)
 
 

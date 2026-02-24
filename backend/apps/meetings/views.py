@@ -45,11 +45,13 @@ class MeetingViewSet(viewsets.ModelViewSet):
         return queryset
     
     def perform_create(self, serializer):
-        serializer.save(
+        meeting = serializer.save(
             organizer=self.request.user,
             school=self.request.user.school
         )
-    
+        from apps.communication.notifications import notify_meeting_created
+        notify_meeting_created(meeting)
+
     @action(detail=True, methods=['post'])
     def confirm(self, request, pk=None):
         """Confirm attendance to a meeting"""
