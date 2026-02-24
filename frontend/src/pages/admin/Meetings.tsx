@@ -86,7 +86,7 @@ export default function AdminMeetings() {
     },
   })
 
-  const { data: classes } = useQuery({
+  useQuery({
     queryKey: ['school-classes'],
     queryFn: async () => {
       const response = await api.get('/schools/classes/')
@@ -124,27 +124,11 @@ export default function AdminMeetings() {
     createMutation.mutate(data)
   }
 
-  const toggleStudent = (studentId: number) => {
-    setSelectedStudents(prev =>
-      prev.includes(studentId)
-        ? prev.filter(id => id !== studentId)
-        : [...prev, studentId]
-    )
-  }
-
   const toggleParent = (parentId: number) => {
     setSelectedParents(prev =>
       prev.includes(parentId)
         ? prev.filter(id => id !== parentId)
         : [...prev, parentId]
-    )
-  }
-
-  const toggleGroup = (groupId: number) => {
-    setSelectedGroups(prev =>
-      prev.includes(groupId)
-        ? prev.filter(id => id !== groupId)
-        : [...prev, groupId]
     )
   }
 

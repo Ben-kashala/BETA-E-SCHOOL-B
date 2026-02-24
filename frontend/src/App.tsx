@@ -37,6 +37,7 @@ import TeacherClassSubjects from './pages/teacher/ClassSubjects'
 import TeacherMyClass from './pages/teacher/MyClass'
 import TeacherDiscipline from './pages/teacher/Discipline'
 import TeacherTutoring from './pages/teacher/Tutoring'
+import TeacherCommunication from './pages/teacher/Communication'
 
 // Parent pages
 import ParentDashboard from './pages/parent/Dashboard'
@@ -139,6 +140,7 @@ function App() {
           <Route path="meetings" element={<TeacherMeetings />} />
           <Route path="discipline" element={<TeacherDiscipline />} />
           <Route path="tutoring" element={<TeacherTutoring />} />
+          <Route path="communication" element={<TeacherCommunication />} />
         </Route>
 
         {/* Parent Routes */}

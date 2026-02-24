@@ -5,8 +5,11 @@ import Sidebar from './Sidebar'
 import Header from './Header'
 import Footer from './Footer'
 
+/** Vérification de l'inactivité toutes les 60 secondes pour déconnexion automatique. */
+const INACTIVITY_CHECK_INTERVAL_MS = 60_000
+
 export default function Layout() {
-  const { user, logout } = useAuthStore()
+  const { user, logout, checkInactivity } = useAuthStore()
   const navigate = useNavigate()
   const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -15,6 +18,13 @@ export default function Layout() {
     logout()
     navigate('/login')
   }
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      checkInactivity()
+    }, INACTIVITY_CHECK_INTERVAL_MS)
+    return () => clearInterval(interval)
+  }, [checkInactivity])
 
   // Fermer la sidebar lors du changement de route sur mobile
   useEffect(() => {

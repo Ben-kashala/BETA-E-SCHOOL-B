@@ -24,6 +24,11 @@ api.interceptors.request.use(
       config.headers['X-School-Code'] = schoolCode
     }
     
+    // Mise à jour de la dernière activité (déconnexion automatique après inactivité)
+    if (token) {
+      localStorage.setItem('last_activity_at', String(Date.now()))
+    }
+    
     return config
   },
   (error) => {
@@ -67,6 +72,7 @@ api.interceptors.response.use(
         localStorage.removeItem('refresh_token')
         localStorage.removeItem('user')
         localStorage.removeItem('school_code')
+        localStorage.removeItem('last_activity_at')
         window.location.href = '/login'
         return Promise.reject(refreshError)
       }

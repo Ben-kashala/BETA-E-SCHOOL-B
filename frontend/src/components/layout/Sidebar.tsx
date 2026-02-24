@@ -60,6 +60,7 @@ const teacherMenu = [
   { path: '/teacher/meetings', label: 'Réunions', icon: Calendar },
   { path: '/teacher/discipline', label: 'Fiches de discipline', icon: AlertCircle },
   { path: '/teacher/tutoring', label: 'Encadrement', icon: MessageSquare },
+  { path: '/teacher/communication', label: 'Communication', icon: MessageSquare },
 ]
 
 const parentMenu = [

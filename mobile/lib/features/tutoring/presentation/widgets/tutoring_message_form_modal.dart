@@ -18,12 +18,14 @@ class TutoringMessageFormModal extends ConsumerStatefulWidget {
 
 class _TutoringMessageFormModalState extends ConsumerState<TutoringMessageFormModal> {
   final _formKey = GlobalKey<FormState>();
+  final _subjectController = TextEditingController();
   final _messageController = TextEditingController();
   int? _selectedStudentId;
   bool _isSubmitting = false;
 
   @override
   void dispose() {
+    _subjectController.dispose();
     _messageController.dispose();
     super.dispose();
   }
@@ -42,7 +44,10 @@ class _TutoringMessageFormModalState extends ConsumerState<TutoringMessageFormMo
     try {
       await ApiService().post('/api/tutoring/messages/', data: {
         'student': _selectedStudentId,
-        'message': _messageController.text,
+        'subject': _subjectController.text.trim().isEmpty 
+            ? 'Message d\'encadrement' 
+            : _subjectController.text.trim(),
+        'message': _messageController.text.trim(),
       });
 
       if (mounted) {
@@ -76,7 +81,7 @@ class _TutoringMessageFormModalState extends ConsumerState<TutoringMessageFormMo
   Widget build(BuildContext context) {
     return Dialog(
       child: Container(
-        constraints: const BoxConstraints(maxHeight: 500),
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
         child: Form(
           key: _formKey,
           child: Column(
@@ -93,46 +98,55 @@ class _TutoringMessageFormModalState extends ConsumerState<TutoringMessageFormMo
                   ),
                 ],
               ),
-              // Contenu
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Enfant
-                      DropdownButtonFormField<int>(
-                        decoration: const InputDecoration(
-                          labelText: 'Enfant *',
-                          border: OutlineInputBorder(),
-                        ),
-                        value: _selectedStudentId,
-                        items: widget.children.map((child) {
-                          final identity = child['identity'] ?? child;
-                          final studentId = identity['id'];
-                          return DropdownMenuItem<int>(
-                            value: studentId as int,
-                            child: Text(_getChildName(child)),
-                          );
-                        }).toList(),
-                        onChanged: (value) => setState(() => _selectedStudentId = value),
-                        validator: (value) => value == null ? 'Ce champ est requis' : null,
+              // Contenu scrollable
+              SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Enfant
+                    DropdownButtonFormField<int>(
+                      decoration: const InputDecoration(
+                        labelText: 'Enfant *',
+                        border: OutlineInputBorder(),
                       ),
-                      const SizedBox(height: 16),
-                      // Message
-                      TextFormField(
-                        controller: _messageController,
-                        decoration: const InputDecoration(
-                          labelText: 'Message *',
-                          border: OutlineInputBorder(),
-                          hintText: 'Votre message...',
-                        ),
-                        maxLines: 8,
-                        validator: (value) =>
-                            value?.isEmpty ?? true ? 'Le message est requis' : null,
+                      value: _selectedStudentId,
+                      items: widget.children.map((child) {
+                        final identity = child['identity'] ?? child;
+                        // L'ID de l'identité est l'ID Student (depuis parent_dashboard)
+                        final studentId = identity['id'];
+                        return DropdownMenuItem<int>(
+                          value: studentId as int,
+                          child: Text(_getChildName(child)),
+                        );
+                      }).toList(),
+                      onChanged: (value) => setState(() => _selectedStudentId = value),
+                      validator: (value) => value == null ? 'Ce champ est requis' : null,
+                    ),
+                    const SizedBox(height: 16),
+                    // Sujet
+                    TextFormField(
+                      controller: _subjectController,
+                      decoration: const InputDecoration(
+                        labelText: 'Sujet',
+                        border: OutlineInputBorder(),
+                        hintText: 'Sujet du message (optionnel)',
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 16),
+                    // Message
+                    TextFormField(
+                      controller: _messageController,
+                      decoration: const InputDecoration(
+                        labelText: 'Message *',
+                        border: OutlineInputBorder(),
+                        hintText: 'Votre message...',
+                      ),
+                      maxLines: 8,
+                      validator: (value) =>
+                          value?.isEmpty ?? true ? 'Le message est requis' : null,
+                    ),
+                  ],
                 ),
               ),
               // Boutons

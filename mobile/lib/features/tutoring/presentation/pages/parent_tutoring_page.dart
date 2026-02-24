@@ -137,11 +137,18 @@ class _ParentTutoringPageState extends ConsumerState<ParentTutoringPage> with Si
             IconButton(
               icon: const Icon(Icons.edit),
               onPressed: () {
+                if (_children.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Chargement des enfants en cours ou aucun enfant inscrit')),
+                  );
+                  return;
+                }
                 showDialog(
                   context: context,
                   builder: (context) => TutoringMessageFormModal(
                     children: _children,
                     onSubmitted: () {
+                      Navigator.of(context).pop();
                       _loadData();
                     },
                   ),
@@ -170,11 +177,18 @@ class _ParentTutoringPageState extends ConsumerState<ParentTutoringPage> with Si
                             const SizedBox(height: 24),
                             ElevatedButton.icon(
                               onPressed: () {
+                                if (_children.isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Chargement des enfants en cours ou aucun enfant inscrit')),
+                                  );
+                                  return;
+                                }
                                 showDialog(
                                   context: context,
                                   builder: (context) => TutoringMessageFormModal(
                                     children: _children,
                                     onSubmitted: () {
+                                      Navigator.of(context).pop();
                                       _loadData();
                                     },
                                   ),
