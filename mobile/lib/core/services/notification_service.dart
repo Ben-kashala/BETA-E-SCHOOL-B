@@ -1,5 +1,7 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/foundation.dart';
+import 'package:timezone/timezone.dart' as tz;
+import 'package:timezone/data/latest_all.dart' as tz_data;
 import '../preferences/preferences_service.dart';
 
 class NotificationService {
@@ -12,6 +14,7 @@ class NotificationService {
 
   Future<void> initialize() async {
     if (_initialized) return;
+    tz_data.initializeTimeZones();
 
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosSettings = DarwinInitializationSettings(
@@ -97,21 +100,18 @@ class NotificationService {
       iOS: iosDetails,
     );
 
-    await _notifications.schedule(
+    final tzDate = tz.TZDateTime.from(scheduledDate, tz.local);
+    await _notifications.zonedSchedule(
       id,
       title,
       body,
-      scheduledDate,
+      tzDate,
       details,
-      payload: payload,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      payload: payload,
     );
-  }
-
-  DateTime _convertToTZDateTime(DateTime dateTime) {
-    // Conversion simple pour l'instant
-    return dateTime;
   }
 
   Future<void> cancelNotification(int id) async {

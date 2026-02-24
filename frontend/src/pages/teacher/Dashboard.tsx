@@ -42,7 +42,7 @@ export default function TeacherDashboard() {
         disciplineRes,
         attendanceRes,
       ] = await Promise.allSettled([
-        api.get('/schools/classes/my_grades_classes/'),
+        api.get('/schools/classes/'),
         api.get('/accounts/students/', { params: { page_size: 1 } }),
         api.get('/elearning/assignments/', { params: { page_size: 1 } }),
         api.get('/meetings/', { params: { page_size: 1 } }),

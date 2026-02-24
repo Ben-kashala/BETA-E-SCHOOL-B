@@ -50,45 +50,44 @@ def _evaluate_answer(question_type, student_answer, correct_answer, points):
 class CourseViewSet(viewsets.ModelViewSet):
     serializer_class = CourseSerializer
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     filterset_fields = ['subject', 'school_class', 'teacher', 'academic_year', 'is_published']
     search_fields = ['title', 'description']
     
     def get_queryset(self):
-        # Les enseignants voient tous leurs cours (publiés et non publiés)
-        if self.request.user.is_teacher:
+        user = self.request.user
+        school = getattr(user, 'school', None)
+        base = Course.objects.all()
+        if school:
+            base = base.filter(school_class__school=school)
+        if getattr(user, 'is_admin', False):
+            return base
+        if user.is_teacher:
             try:
-                teacher_profile = self.request.user.teacher_profile
-                queryset = Course.objects.filter(teacher=teacher_profile)
-                if self.request.user.school:
-                    queryset = queryset.filter(school_class__school=self.request.user.school)
-            except:
-                # Si l'enseignant n'a pas de profil, retourner un queryset vide
-                queryset = Course.objects.none()
-        else:
-            # Pour les autres utilisateurs, ne voir que les cours publiés
-            queryset = Course.objects.filter(is_published=True)
-            if self.request.user.school:
-                queryset = queryset.filter(school_class__school=self.request.user.school)
-            # Students can only see courses for their class
-            if self.request.user.is_student:
-                try:
-                    queryset = queryset.filter(school_class=self.request.user.student_profile.school_class)
-                except:
-                    queryset = queryset.none()
-        return queryset
+                return base.filter(teacher=user.teacher_profile)
+            except Exception:
+                return Course.objects.none()
+        base = base.filter(is_published=True)
+        if user.is_student:
+            try:
+                return base.filter(school_class=user.student_profile.school_class)
+            except Exception:
+                return Course.objects.none()
+        return base
     
     def perform_create(self, serializer):
-        """Assigner automatiquement l'enseignant connecté"""
-        if self.request.user.is_teacher:
+        """Enseignant : assigné automatiquement ; Admin : enseignant depuis le formulaire."""
+        if getattr(self.request.user, 'is_admin', False) and serializer.validated_data.get('teacher'):
+            serializer.save()
+        elif self.request.user.is_teacher:
             try:
-                teacher_profile = self.request.user.teacher_profile
-                serializer.save(teacher=teacher_profile)
-            except:
+                serializer.save(teacher=self.request.user.teacher_profile)
+            except Exception:
                 from rest_framework.exceptions import ValidationError
                 raise ValidationError({'teacher': 'Vous devez avoir un profil enseignant pour créer un cours.'})
         else:
             from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied('Seuls les enseignants peuvent créer des cours.')
+            raise PermissionDenied('Seuls les enseignants ou l\'admin peuvent créer des cours.')
 
 
 class AssignmentViewSet(viewsets.ModelViewSet):
@@ -160,9 +159,20 @@ class AssignmentViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def submit(self, request, pk=None):
-        """Submit an assignment. Évaluation automatique avec similarité pour les questions texte."""
+        """Submit an assignment. Une seule soumission autorisée sauf si l'enseignant a autorisé une nouvelle."""
         assignment = self.get_object()
         student = request.user.student_profile
+
+        existing = AssignmentSubmission.objects.filter(
+            assignment=assignment,
+            student=student,
+        ).first()
+
+        if existing and not existing.allow_resubmit:
+            return Response(
+                {'detail': 'Une seule soumission est autorisée pour ce devoir. Demandez à votre enseignant d\'autoriser une nouvelle soumission.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         submission, created = AssignmentSubmission.objects.get_or_create(
             assignment=assignment,
@@ -177,6 +187,7 @@ class AssignmentViewSet(viewsets.ModelViewSet):
             submission.submission_text = request.data.get('submission_text', submission.submission_text)
             if 'submission_file' in request.FILES:
                 submission.submission_file = request.FILES['submission_file']
+            submission.allow_resubmit = False  # une seule nouvelle soumission après autorisation
             submission.save()
 
         # Check if late
@@ -303,6 +314,19 @@ class AssignmentSubmissionViewSet(viewsets.ModelViewSet):
         submission.graded_by = request.user.teacher_profile
         submission.graded_at = timezone.now()
         submission.status = 'GRADED'
+        submission.save()
+        return Response(AssignmentSubmissionSerializer(submission).data)
+
+    @action(detail=True, methods=['post'])
+    def allow_resubmit(self, request, pk=None):
+        """Autoriser l'élève à soumettre à nouveau ce devoir (une seule fois). Réservé aux enseignants."""
+        submission = self.get_object()
+        if not request.user.is_teacher:
+            return Response(
+                {'detail': 'Seul l\'enseignant peut autoriser une nouvelle soumission.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        submission.allow_resubmit = True
         submission.save()
         return Response(AssignmentSubmissionSerializer(submission).data)
 

@@ -217,7 +217,7 @@ export default function AdminMeetings() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Enseignant <span className="text-red-500">*</span>
+                  Enseignant <span className="text-red-500"></span>
                 </label>
                 <select {...register('teacher', { valueAsNumber: true })} className="input">
                   <option value="">Sélectionner un enseignant</option>
@@ -268,97 +268,6 @@ export default function AdminMeetings() {
                 />
               </div>
             </div>
-
-            {/* Participants - Groupes */}
-            {(meetingType === 'GROUP' || meetingType === 'GENERAL' || meetingType === 'TEACHER_MEETING' || meetingType === 'PARENT_MEETING') && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Groupes/Classes
-                </label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 max-h-40 overflow-y-auto border border-gray-300 dark:border-gray-600 rounded-lg p-2">
-                  {classes?.results?.map((cls: any) => (
-                    <label key={cls.id} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 p-2 rounded">
-                      <input
-                        type="checkbox"
-                        checked={selectedGroups.includes(cls.id)}
-                        onChange={() => toggleGroup(cls.id)}
-                        className="rounded"
-                      />
-                      <span className="text-sm text-gray-900 dark:text-gray-100">{cls.name}</span>
-                    </label>
-                  ))}
-                </div>
-                {selectedGroups.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {selectedGroups.map(groupId => {
-                      const group = classes?.results?.find((g: any) => g.id === groupId)
-                      return group ? (
-                        <span key={groupId} className="badge badge-info flex items-center gap-1">
-                          {group.name}
-                          <button
-                            type="button"
-                            onClick={() => toggleGroup(groupId)}
-                            className="ml-1"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </span>
-                      ) : null
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Participants - Étudiants */}
-            {(meetingType === 'GROUP' || meetingType === 'GENERAL' || meetingType === 'TEACHER_MEETING' || meetingType === 'PARENT_MEETING') && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Étudiants
-                </label>
-                <div className="max-h-40 overflow-y-auto border border-gray-300 dark:border-gray-600 rounded-lg p-2">
-                  <input
-                    type="text"
-                    placeholder="Rechercher un étudiant..."
-                    className="input mb-2"
-                  />
-                  <div className="space-y-1">
-                    {students?.results?.slice(0, 50).map((student: any) => (
-                      <label key={student.id} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 p-2 rounded">
-                        <input
-                          type="checkbox"
-                          checked={selectedStudents.includes(student.id)}
-                          onChange={() => toggleStudent(student.id)}
-                          className="rounded"
-                        />
-                        <span className="text-sm text-gray-900 dark:text-gray-100">
-                          {[student.user?.first_name, student.user?.last_name, student.user?.middle_name].filter(Boolean).join(' ')} - {student.student_id}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                {selectedStudents.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {selectedStudents.map(studentId => {
-                      const student = students?.results?.find((s: any) => s.id === studentId)
-                      return student ? (
-                        <span key={studentId} className="badge badge-info flex items-center gap-1">
-                          {[student.user?.first_name, student.user?.last_name, student.user?.middle_name].filter(Boolean).join(' ')}
-                          <button
-                            type="button"
-                            onClick={() => toggleStudent(studentId)}
-                            className="ml-1"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </span>
-                      ) : null
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* Participants - Parents */}
             {(meetingType === 'GROUP' || meetingType === 'GENERAL' || meetingType === 'TEACHER_MEETING' || meetingType === 'PARENT_MEETING') && (

@@ -116,7 +116,12 @@ class _AssignmentDetailPageState extends ConsumerState<AssignmentDetailPage> {
         ? DateTime.parse(_assignment!['due_date'])
         : null;
     final status = _assignment!['status'] ?? 'pending';
-    final canSubmit = status != 'submitted' && dueDate != null && DateTime.now().isBefore(dueDate);
+    // Une seule soumission autorisée sauf si l'enseignant a autorisé une nouvelle (allow_resubmit)
+    final hasSubmission = _submission != null;
+    final allowResubmit = _submission?['allow_resubmit'] == true;
+    final canSubmit = (!hasSubmission || allowResubmit) &&
+        dueDate != null &&
+        DateTime.now().isBefore(dueDate);
 
     return Scaffold(
       appBar: AppBar(
@@ -242,12 +247,33 @@ class _AssignmentDetailPageState extends ConsumerState<AssignmentDetailPage> {
                 ),
               ),
             ],
+            if (hasSubmission && !allowResubmit) ...[
+              const SizedBox(height: 16),
+              Card(
+                color: Colors.orange.shade50,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.orange.shade800),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Ce devoir a déjà été soumis. Une seule soumission est autorisée. Pour soumettre à nouveau, votre enseignant doit vous y autoriser.',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.orange.shade900),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 24),
-            if (canSubmit && (_submission == null || _assignment!['allow_multiple_attempts'] == true))
+            if (canSubmit)
               ElevatedButton.icon(
                 onPressed: _isSubmitting ? null : _showSubmissionModal,
                 icon: const Icon(Icons.upload),
-                label: Text(_submission != null ? 'Resoumettre le devoir' : 'Soumettre le devoir'),
+                label: Text(_submission != null ? 'Soumettre à nouveau (autorisé)' : 'Soumettre le devoir'),
                 style: ElevatedButton.styleFrom(
                   minimumSize: const Size(double.infinity, 48),
                 ),

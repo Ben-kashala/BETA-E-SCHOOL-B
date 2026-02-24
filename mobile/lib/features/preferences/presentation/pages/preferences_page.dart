@@ -75,7 +75,8 @@ class _PreferencesPageState extends ConsumerState<PreferencesPage> {
                             value: 'system',
                             groupValue: _theme,
                             onChanged: (value) {
-                              setState(() => _theme = value!);
+                              if (value == null) return;
+                              setState(() => _theme = value);
                               PreferencesService.setTheme(value);
                               Navigator.of(context).pop();
                             },
@@ -85,7 +86,8 @@ class _PreferencesPageState extends ConsumerState<PreferencesPage> {
                             value: 'light',
                             groupValue: _theme,
                             onChanged: (value) {
-                              setState(() => _theme = value!);
+                              if (value == null) return;
+                              setState(() => _theme = value);
                               PreferencesService.setTheme(value);
                               Navigator.of(context).pop();
                             },
@@ -95,7 +97,8 @@ class _PreferencesPageState extends ConsumerState<PreferencesPage> {
                             value: 'dark',
                             groupValue: _theme,
                             onChanged: (value) {
-                              setState(() => _theme = value!);
+                              if (value == null) return;
+                              setState(() => _theme = value);
                               PreferencesService.setTheme(value);
                               Navigator.of(context).pop();
                             },
@@ -145,7 +148,8 @@ class _PreferencesPageState extends ConsumerState<PreferencesPage> {
                             value: 'fr',
                             groupValue: _language,
                             onChanged: (value) {
-                              setState(() => _language = value!);
+                              if (value == null) return;
+                              setState(() => _language = value);
                               PreferencesService.setLanguage(value);
                               Navigator.of(context).pop();
                             },
@@ -155,7 +159,8 @@ class _PreferencesPageState extends ConsumerState<PreferencesPage> {
                             value: 'en',
                             groupValue: _language,
                             onChanged: (value) {
-                              setState(() => _language = value!);
+                              if (value == null) return;
+                              setState(() => _language = value);
                               PreferencesService.setLanguage(value);
                               Navigator.of(context).pop();
                             },

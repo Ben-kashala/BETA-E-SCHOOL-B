@@ -34,7 +34,7 @@ class _TeacherMyClassPageState extends ConsumerState<TeacherMyClassPage> {
       
       if (classData != null) {
         setState(() {
-          _homeroomClass = classData is Map ? classData : null;
+          _homeroomClass = classData is Map ? Map<String, dynamic>.from(classData as Map) : null;
         });
         
         // Charger les élèves de la classe

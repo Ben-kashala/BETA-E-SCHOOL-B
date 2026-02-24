@@ -50,6 +50,7 @@ class FormBuilder {
   }
 
   static Widget buildDatePicker({
+    required BuildContext context,
     required String label,
     required DateTime? value,
     required Function(DateTime?) onChanged,
@@ -60,7 +61,7 @@ class FormBuilder {
       child: InkWell(
         onTap: () async {
           final date = await showDatePicker(
-            context: (label as dynamic).context ?? throw Exception('Context required'),
+            context: context,
             initialDate: value ?? DateTime.now(),
             firstDate: DateTime(2020),
             lastDate: DateTime(2030),
@@ -84,6 +85,7 @@ class FormBuilder {
   }
 
   static Widget buildTimePicker({
+    required BuildContext context,
     required String label,
     required TimeOfDay? value,
     required Function(TimeOfDay?) onChanged,
@@ -94,7 +96,7 @@ class FormBuilder {
       child: InkWell(
         onTap: () async {
           final time = await showTimePicker(
-            context: (label as dynamic).context ?? throw Exception('Context required'),
+            context: context,
             initialTime: value ?? TimeOfDay.now(),
           );
           onChanged(time);

@@ -12,6 +12,10 @@ class ApiService {
   late Dio _dio;
   final _storage = const FlutterSecureStorage();
   
+  String get baseUrl => _dio.options.baseUrl;
+
+  Future<String?> getToken() async => _storage.read(key: 'access_token');
+
   void init() {
     _dio = Dio(BaseOptions(
       baseUrl: AppConfig.baseUrl,
@@ -185,6 +189,26 @@ class ApiService {
     }
   }
   
+  Future<Response<T>> patch<T>(
+    String path, {
+    dynamic data,
+    Map<String, dynamic>? queryParameters,
+  }) async {
+    final isConnected = await ConnectivityService.isConnected();
+    if (!isConnected) {
+      throw DioException(
+        requestOptions: RequestOptions(path: path),
+        error: 'No internet connection',
+        type: DioExceptionType.connectionError,
+      );
+    }
+    return await _dio.patch<T>(
+      path,
+      data: data,
+      queryParameters: queryParameters,
+    );
+  }
+
   Future<Response<T>> put<T>(
     String path, {
     dynamic data,

@@ -38,6 +38,7 @@ dependencies:
   
   # Notifications locales (sans Firebase)
   flutter_local_notifications: ^17.2.3
+  timezone: ^0.9.4
   
   # File Management
   file_picker: ^8.3.0

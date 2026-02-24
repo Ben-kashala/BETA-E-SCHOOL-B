@@ -37,6 +37,7 @@ class _TeacherClassSubjectsPageState extends ConsumerState<TeacherClassSubjectsP
           ? classesRes.data 
           : (classesRes.data['results'] ?? []);
       
+      final firstClassId = classes.isNotEmpty ? classes.first['id'] as int? : null;
       setState(() {
         _classes = classes;
         _allSubjects = subjectsRes.data is List 
@@ -45,14 +46,14 @@ class _TeacherClassSubjectsPageState extends ConsumerState<TeacherClassSubjectsP
         _teachers = teachersRes.data is List 
             ? teachersRes.data 
             : (teachersRes.data['results'] ?? []);
-        
-        // Auto-sélectionner la première classe
-        if (_classes.isNotEmpty && _selectedClassId == null) {
-          _selectedClassId = _classes.first['id'];
-          await _loadClassSubjects(_selectedClassId!);
+        if (firstClassId != null && _selectedClassId == null) {
+          _selectedClassId = firstClassId;
         }
         _isLoading = false;
       });
+      if (firstClassId != null) {
+        await _loadClassSubjects(firstClassId);
+      }
     } catch (e) {
       setState(() => _isLoading = false);
     }
@@ -150,8 +151,8 @@ class _TeacherClassSubjectsPageState extends ConsumerState<TeacherClassSubjectsP
                     final assignedIds = _classSubjects.map((cs) => cs['subject']).toSet();
                     return !assignedIds.contains(s['id']);
                   }).map((s) {
-                    return DropdownMenuItem(
-                      value: s['id'],
+                    return DropdownMenuItem<int>(
+                      value: s['id'] as int,
                       child: Text(s['name'] ?? 'Matière'),
                     );
                   }).toList(),
@@ -172,8 +173,8 @@ class _TeacherClassSubjectsPageState extends ConsumerState<TeacherClassSubjectsP
                   items: [
                     const DropdownMenuItem(value: null, child: Text('Aucun')),
                     ..._teachers.map((t) {
-                      return DropdownMenuItem(
-                        value: t['id'],
+                      return DropdownMenuItem<int>(
+                        value: t['id'] as int,
                         child: Text('${t['user']?['first_name'] ?? ''} ${t['user']?['last_name'] ?? ''}'.trim()),
                       );
                     }),
@@ -243,8 +244,8 @@ class _TeacherClassSubjectsPageState extends ConsumerState<TeacherClassSubjectsP
               ),
               value: _selectedClassId,
               items: _classes.map((c) {
-                return DropdownMenuItem(
-                  value: c['id'],
+                return DropdownMenuItem<int>(
+                  value: c['id'] as int,
                   child: Text('${c['name'] ?? ''} ${c['academic_year'] != null ? '(${c['academic_year']})' : ''}'),
                 );
               }).toList(),

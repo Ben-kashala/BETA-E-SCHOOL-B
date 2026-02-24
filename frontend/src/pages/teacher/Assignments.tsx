@@ -151,6 +151,16 @@ export default function TeacherAssignments() {
     onError: (e: any) => showErrorToast(e, 'Erreur lors de la notation'),
   })
 
+  const allowResubmitMutation = useMutation({
+    mutationFn: (submissionId: number) => api.post(`/elearning/submissions/${submissionId}/allow_resubmit/`),
+    onSuccess: () => {
+      refetchSubmissions()
+      queryClient.invalidateQueries({ queryKey: ['student-submissions'] })
+      showSuccessToast('L\'élève peut soumettre à nouveau ce devoir.')
+    },
+    onError: (e: any) => showErrorToast(e, 'Erreur lors de l\'autorisation'),
+  })
+
   const { data: assignmentQuestions = [], refetch: refetchQuestions } = useQuery({
     queryKey: ['assignment-questions', selectedAssignmentId],
     queryFn: async () => {
@@ -686,6 +696,8 @@ export default function TeacherAssignments() {
                             totalPoints={Number(selectedAssignment?.total_points ?? 20)}
                             onGrade={(payload) => gradeMutation.mutate({ id: sub.id, payload })}
                             isGrading={gradeMutation.isPending}
+                            onAllowResubmit={() => allowResubmitMutation.mutate(sub.id)}
+                            isAllowingResubmit={allowResubmitMutation.isPending}
                           />
                         ))}
                       </div>
@@ -707,6 +719,8 @@ function SubmissionCard({
   totalPoints = 20,
   onGrade,
   isGrading,
+  onAllowResubmit,
+  isAllowingResubmit,
 }: {
   submission: any
   assignmentQuestions: any[]
@@ -717,6 +731,8 @@ function SubmissionCard({
     feedback: string
   }) => void
   isGrading: boolean
+  onAllowResubmit?: () => void
+  isAllowingResubmit?: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
   const [feedback, setFeedback] = useState(submission.feedback ?? '')
@@ -883,6 +899,17 @@ function SubmissionCard({
             >
               {isGrading ? '...' : submission.status === 'GRADED' ? 'Modifier' : 'Noter'}
             </button>
+            {onAllowResubmit && (
+              <button
+                type="button"
+                onClick={onAllowResubmit}
+                disabled={isAllowingResubmit}
+                className="btn btn-secondary"
+                title="L'élève pourra soumettre une seule fois à nouveau"
+              >
+                {isAllowingResubmit ? '...' : 'Autoriser une nouvelle soumission'}
+              </button>
+            )}
           </div>
         </div>
       )}

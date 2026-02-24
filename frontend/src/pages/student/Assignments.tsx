@@ -95,6 +95,7 @@ export default function StudentAssignments() {
       {selectedAssignment && (
         <AssignmentWorkModal
           assignment={selectedAssignment}
+          existingSubmission={submissionByAssignment[selectedAssignment.id]}
           onClose={() => setSelectedAssignment(null)}
         />
       )}

@@ -20,6 +20,16 @@ class _TeacherAssignmentsPageState extends ConsumerState<TeacherAssignmentsPage>
     _loadAssignments();
   }
 
+  /// school_class peut être un id (int) ou un objet { id, name } selon l'API.
+  String _className(dynamic schoolClass) {
+    if (schoolClass == null) return 'N/A';
+    if (schoolClass is Map && schoolClass['name'] != null) {
+      return schoolClass['name'].toString();
+    }
+    if (schoolClass is num) return 'Classe #$schoolClass';
+    return 'N/A';
+  }
+
   Future<void> _loadAssignments() async {
     setState(() => _isLoading = true);
     try {
@@ -62,7 +72,7 @@ class _TeacherAssignmentsPageState extends ConsumerState<TeacherAssignmentsPage>
                         child: ListTile(
                           leading: const Icon(Icons.assignment),
                           title: Text(assignment['title'] ?? 'Devoir'),
-                          subtitle: Text('Classe: ${assignment['school_class']?['name'] ?? 'N/A'}'),
+                          subtitle: Text('Classe: ${_className(assignment['school_class'])}'),
                           trailing: const Icon(Icons.chevron_right),
                           onTap: () {
                             // TODO: Navigation vers détails

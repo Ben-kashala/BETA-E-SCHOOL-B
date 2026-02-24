@@ -91,8 +91,8 @@ class _TeacherGradesPageState extends ConsumerState<TeacherGradesPage> {
                   DropdownButtonFormField<int>(
                     value: _selectedClassId,
                     decoration: const InputDecoration(labelText: 'Classe'),
-                    items: _classes.map((c) => DropdownMenuItem(
-                      value: c['id'],
+                    items: _classes.map((c) => DropdownMenuItem<int>(
+                      value: c['id'] as int,
                       child: Text(c['name'] ?? 'Classe'),
                     )).toList(),
                     onChanged: (value) {
@@ -107,8 +107,8 @@ class _TeacherGradesPageState extends ConsumerState<TeacherGradesPage> {
                   DropdownButtonFormField<int>(
                     value: _selectedSubjectId,
                     decoration: const InputDecoration(labelText: 'Matière'),
-                    items: _subjects.map((s) => DropdownMenuItem(
-                      value: s['id'],
+                    items: _subjects.map((s) => DropdownMenuItem<int>(
+                      value: s['id'] as int,
                       child: Text(s['name'] ?? 'Matière'),
                     )).toList(),
                     onChanged: (value) {

@@ -91,6 +91,27 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage> {
   bool _statusEqual(dynamic a, String b) =>
       a != null && (a.toString().toUpperCase() == b.toUpperCase());
 
+  void _applyFilters() {
+    final q = _searchQuery.trim().toLowerCase();
+    final cur = _selectedCurrency;
+    setState(() {
+      _filteredPayments = _payments.where((p) {
+        final matchQuery = q.isEmpty ||
+            (_paymentTitle(p).toLowerCase().contains(q)) ||
+            (p['amount']?.toString().toLowerCase().contains(q) ?? false);
+        final matchCur = cur == null || (p['currency']?.toString() == cur);
+        return matchQuery && matchCur;
+      }).toList();
+      _filteredPendingPayments = _pendingPayments.where((p) {
+        final matchQuery = q.isEmpty ||
+            (_paymentTitle(p).toLowerCase().contains(q)) ||
+            (p['amount']?.toString().toLowerCase().contains(q) ?? false);
+        final matchCur = cur == null || (p['currency']?.toString() == cur);
+        return matchQuery && matchCur;
+      }).toList();
+    });
+  }
+
   Future<void> _processPayment(Map<String, dynamic> payment) async {
     // Ouvrir l'URL de paiement
     final paymentUrl = payment['payment_url'];
@@ -177,6 +198,26 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage> {
     }
   }
 
+  void _openNewPaymentModal() {
+    if (_children.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Chargement des enfants en cours ou aucun enfant inscrit')),
+      );
+      return;
+    }
+    showDialog<void>(
+      context: context,
+      builder: (context) => PaymentFormModal(
+        children: _children,
+        feeTypes: _feeTypes,
+        onSubmitted: () {
+          Navigator.of(context).pop();
+          _loadPayments();
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
@@ -184,6 +225,14 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage> {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Paiements'),
+          actions: [
+            if (_isParent)
+              IconButton(
+                icon: const Icon(Icons.add),
+                onPressed: _openNewPaymentModal,
+                tooltip: 'Nouveau paiement',
+              ),
+          ],
           bottom: TabBar(
             tabs: const [
               Tab(text: 'En attente'),
@@ -321,6 +370,9 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage> {
                         ),
                 ],
               ),
+            ),
+          ],
+        ),
       ),
     );
   }

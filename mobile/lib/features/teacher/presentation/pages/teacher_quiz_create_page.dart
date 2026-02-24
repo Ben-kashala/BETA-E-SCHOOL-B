@@ -145,8 +145,8 @@ class _TeacherQuizCreatePageState extends ConsumerState<TeacherQuizCreatePage> {
               FormBuilder.buildDropdown<int>(
                 label: 'Matière',
                 value: _selectedSubjectId,
-                items: _subjects.map((s) => DropdownMenuItem(
-                  value: s['id'],
+                items: _subjects.map((s) => DropdownMenuItem<int>(
+                  value: s['id'] as int,
                   child: Text(s['name'] ?? 'Matière'),
                 )).toList(),
                 onChanged: (value) => setState(() => _selectedSubjectId = value),
@@ -155,8 +155,8 @@ class _TeacherQuizCreatePageState extends ConsumerState<TeacherQuizCreatePage> {
               FormBuilder.buildDropdown<int>(
                 label: 'Classe',
                 value: _selectedClassId,
-                items: _classes.map((c) => DropdownMenuItem(
-                  value: c['id'],
+                items: _classes.map((c) => DropdownMenuItem<int>(
+                  value: c['id'] as int,
                   child: Text(c['name'] ?? 'Classe'),
                 )).toList(),
                 onChanged: (value) => setState(() => _selectedClassId = value),

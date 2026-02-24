@@ -118,7 +118,7 @@ class _PaymentFormModalState extends ConsumerState<PaymentFormModal> {
   Widget build(BuildContext context) {
     return Dialog(
       child: Container(
-        constraints: const BoxConstraints(maxHeight: 600),
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
         child: Form(
           key: _formKey,
           child: Column(
@@ -135,13 +135,12 @@ class _PaymentFormModalState extends ConsumerState<PaymentFormModal> {
                   ),
                 ],
               ),
-              // Contenu
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
+              // Contenu scrollable
+              SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                       // Enfant
                       DropdownButtonFormField<int>(
                         decoration: const InputDecoration(
@@ -152,8 +151,8 @@ class _PaymentFormModalState extends ConsumerState<PaymentFormModal> {
                         items: widget.children.map((child) {
                           final identity = child['identity'] ?? child;
                           final studentId = identity['id'];
-                          return DropdownMenuItem(
-                            value: studentId,
+                          return DropdownMenuItem<int>(
+                            value: studentId as int,
                             child: Text(_getChildName(child)),
                           );
                         }).toList(),
@@ -171,8 +170,8 @@ class _PaymentFormModalState extends ConsumerState<PaymentFormModal> {
                         items: [
                           const DropdownMenuItem(value: null, child: Text('Aucun')),
                           ...widget.feeTypes.map((fee) {
-                            return DropdownMenuItem(
-                              value: fee['id'],
+                            return DropdownMenuItem<int>(
+                              value: fee['id'] as int,
                               child: Text('${fee['name']} - ${fee['amount']} ${fee['currency'] ?? 'CDF'}'),
                             );
                           }),
@@ -258,7 +257,6 @@ class _PaymentFormModalState extends ConsumerState<PaymentFormModal> {
                     ],
                   ),
                 ),
-              ),
               // Boutons
               Padding(
                 padding: const EdgeInsets.all(16),

@@ -166,7 +166,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   physics: const NeverScrollableScrollPhysics(),
                   crossAxisSpacing: 16,
                   mainAxisSpacing: 16,
-                  childAspectRatio: 1.2,
+                  childAspectRatio: 1.05,
                   children: [
                     _DashboardCard(
                       icon: Icons.book,
@@ -200,7 +200,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     ),
                     _DashboardCard(
                       icon: Icons.gavel,
-                      title: 'Fiches de discipline',
+                      title: 'Discipline',
                       color: Colors.brown,
                       onTap: () => context.push('/discipline'),
                     ),
@@ -285,7 +285,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   physics: const NeverScrollableScrollPhysics(),
                   crossAxisSpacing: 16,
                   mainAxisSpacing: 16,
-                  childAspectRatio: 1.2,
+                  childAspectRatio: 1.05,
                   children: [
                     _DashboardCard(
                       icon: Icons.grade,
@@ -319,7 +319,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     ),
                     _DashboardCard(
                       icon: Icons.gavel,
-                      title: 'Fiches de discipline',
+                      title: 'Discipline',
                       color: Colors.brown,
                       onTap: () => context.push('/discipline'),
                     ),
@@ -350,7 +350,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   physics: const NeverScrollableScrollPhysics(),
                   crossAxisSpacing: 16,
                   mainAxisSpacing: 16,
-                  childAspectRatio: 1.2,
+                  childAspectRatio: 1.05,
                   children: [
                     _DashboardCard(
                       icon: Icons.class_,
@@ -415,7 +415,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   physics: const NeverScrollableScrollPhysics(),
                   crossAxisSpacing: 16,
                   mainAxisSpacing: 16,
-                  childAspectRatio: 1.2,
+                  childAspectRatio: 1.05,
                   children: [
                     _DashboardCard(
                       icon: Icons.person_add,
@@ -480,7 +480,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   physics: const NeverScrollableScrollPhysics(),
                   crossAxisSpacing: 16,
                   mainAxisSpacing: 16,
-                  childAspectRatio: 1.2,
+                  childAspectRatio: 1.05,
                   children: [
                     _DashboardCard(
                       icon: Icons.person_add,
@@ -521,11 +521,11 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   physics: const NeverScrollableScrollPhysics(),
                   crossAxisSpacing: 16,
                   mainAxisSpacing: 16,
-                  childAspectRatio: 1.2,
+                  childAspectRatio: 1.05,
                   children: [
                     _DashboardCard(
                       icon: Icons.gavel,
-                      title: 'Fiches de discipline',
+                      title: 'Discipline',
                       color: Colors.brown,
                       onTap: () => context.push('/discipline-officer/discipline'),
                     ),
@@ -548,8 +548,13 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           ),
         ),
       ),
-      bottomNavigationBar: _buildBottomNavigationBar(context, isStudent, isParent, isTeacher, isAdmin, isAccountant, isDisciplineOfficer),
+      bottomNavigationBar: _wrapBottomNavSafe(context, _buildBottomNavigationBar(context, isStudent, isParent, isTeacher, isAdmin, isAccountant, isDisciplineOfficer)),
     );
+  }
+
+  Widget? _wrapBottomNavSafe(BuildContext context, Widget? child) {
+    if (child == null) return null;
+    return SafeArea(child: child);
   }
 
   Widget? _buildBottomNavigationBar(BuildContext context, bool isStudent, bool isParent, bool isTeacher, bool isAdmin, bool isAccountant, bool isDisciplineOfficer) {
@@ -730,16 +735,19 @@ class _DashboardCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 48, color: color),
-              const SizedBox(height: 8),
+              Icon(icon, size: 40, color: color),
+              const SizedBox(height: 6),
               Text(
                 title,
-                style: Theme.of(context).textTheme.titleMedium,
+                style: Theme.of(context).textTheme.titleSmall,
                 textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),

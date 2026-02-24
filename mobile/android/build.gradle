@@ -44,14 +44,13 @@ subprojects { sub ->
     }
 }
 
-// Fix "Namespace not specified" pour les plugins Android (ex: connectivity) avec AGP 8+
-// Utiliser gradle.beforeProject pour configurer avant l'évaluation de chaque projet
+// Fix "Namespace not specified" + "android:attr/lStar not found" pour les plugins Android (ex: connectivity_plus)
+// Forcer compileSdkVersion 34+ sur tous les modules pour que les ressources API 31+ (lStar) soient disponibles
 gradle.beforeProject { project ->
     if (project == rootProject) return
     project.pluginManager.withPlugin("com.android.library") {
         project.android {
             if (namespace == null || namespace.isEmpty()) {
-                // Extraire le namespace depuis le package dans AndroidManifest.xml
                 def manifestFile = project.file("src/main/AndroidManifest.xml")
                 if (manifestFile.exists()) {
                     def manifest = manifestFile.text
@@ -65,6 +64,15 @@ gradle.beforeProject { project ->
                     namespace = project.group.toString()
                 }
             }
+            compileSdkVersion 34
+        }
+    }
+}
+
+subprojects { sub ->
+    sub.afterEvaluate { p ->
+        if (p.plugins.hasPlugin("com.android.library") && p.android != null) {
+            p.android.compileSdkVersion 34
         }
     }
 }

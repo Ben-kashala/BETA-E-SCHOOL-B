@@ -6,12 +6,14 @@ import { showErrorToast, showSuccessToast } from '@/utils/toast'
 
 interface AssignmentWorkModalProps {
   assignment: { id: number; title: string; due_date: string; total_points: number }
+  existingSubmission?: { allow_resubmit?: boolean } | null
   onClose: () => void
 }
 
-export default function AssignmentWorkModal({ assignment, onClose }: AssignmentWorkModalProps) {
+export default function AssignmentWorkModal({ assignment, existingSubmission, onClose }: AssignmentWorkModalProps) {
   const queryClient = useQueryClient()
   const [answers, setAnswers] = useState<Record<number, string>>({})
+  const canSubmit = !existingSubmission || existingSubmission.allow_resubmit === true
 
   const { data: questions, isLoading } = useQuery({
     queryKey: ['assignment-questions', assignment.id],
@@ -155,6 +157,11 @@ export default function AssignmentWorkModal({ assignment, onClose }: AssignmentW
               Aucune question dans ce devoir. Vous pouvez soumettre un fichier ou un commentaire.
             </p>
           )}
+          {!canSubmit && (
+            <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-4 text-amber-800 dark:text-amber-200 text-sm">
+              Ce devoir a déjà été soumis. Une seule soumission est autorisée. Pour soumettre à nouveau, votre enseignant doit vous y autoriser.
+            </div>
+          )}
         </div>
         <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
           <button onClick={onClose} className="btn btn-secondary">
@@ -162,7 +169,7 @@ export default function AssignmentWorkModal({ assignment, onClose }: AssignmentW
           </button>
           <button
             onClick={handleSubmit}
-            disabled={submitMutation.isPending}
+            disabled={submitMutation.isPending || !canSubmit}
             className="btn btn-primary flex items-center gap-2"
           >
             {submitMutation.isPending ? (

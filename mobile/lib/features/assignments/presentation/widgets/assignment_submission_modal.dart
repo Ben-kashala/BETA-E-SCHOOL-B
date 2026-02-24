@@ -83,9 +83,6 @@ class _AssignmentSubmissionModalState extends State<AssignmentSubmissionModal> {
       await api.post(
         '/api/elearning/assignments/${widget.assignmentId}/submit/',
         data: formData,
-        options: Options(
-          headers: {'Content-Type': 'multipart/form-data'},
-        ),
       );
 
       if (mounted) {
@@ -97,8 +94,22 @@ class _AssignmentSubmissionModalState extends State<AssignmentSubmissionModal> {
       }
     } catch (e) {
       if (mounted) {
+        String message = 'Erreur lors de la soumission';
+        if (e is DioException && e.response?.statusCode == 403) {
+          final detail = e.response?.data;
+          if (detail is Map && detail['detail'] != null) {
+            message = detail['detail'].toString();
+          } else {
+            message = 'Une seule soumission est autorisée. Demandez à votre enseignant d\'autoriser une nouvelle soumission.';
+          }
+        } else if (e is DioException && e.response?.data != null) {
+          final data = e.response!.data;
+          if (data is Map && data['detail'] != null) {
+            message = data['detail'].toString();
+          }
+        }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur lors de la soumission: $e')),
+          SnackBar(content: Text(message)),
         );
       }
     } finally {

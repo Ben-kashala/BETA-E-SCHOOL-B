@@ -10,20 +10,20 @@ class Course(models.Model):
     """Model for online courses"""
     title = models.CharField(max_length=200, verbose_name="Titre")
     description = models.TextField(verbose_name="Description")
-    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='courses', verbose_name="Matière")
+    subject = models.ForeignKey(Subject, on_delete=models.SET_NULL, null=True, blank=True, related_name='courses', verbose_name="Matière")
     school_class = models.ForeignKey(SchoolClass, on_delete=models.CASCADE, related_name='courses', verbose_name="Classe")
     teacher = models.ForeignKey(Teacher, on_delete=models.CASCADE, related_name='courses', verbose_name="Enseignant")
     academic_year = models.CharField(max_length=20, verbose_name="Année scolaire")
     
-    # Content
-    content = models.TextField(verbose_name="Contenu")
+    # Content (optionnel ; peut être importé via fichier ou lien)
+    content = models.TextField(verbose_name="Contenu", blank=True, default='')
     video_url = models.URLField(null=True, blank=True, verbose_name="URL vidéo")
+    content_url = models.URLField(null=True, blank=True, verbose_name="Lien vers le contenu (import)")
     attachments = models.FileField(upload_to='courses/attachments/', null=True, blank=True, verbose_name="Pièces jointes")
     
     # Settings
     is_published = models.BooleanField(default=False, verbose_name="Publié")
     publish_date = models.DateTimeField(null=True, blank=True, verbose_name="Date de publication")
-    due_date = models.DateTimeField(null=True, blank=True, verbose_name="Date limite")
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -134,6 +134,9 @@ class AssignmentSubmission(models.Model):
     graded_at = models.DateTimeField(null=True, blank=True, verbose_name="Noté le")
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='SUBMITTED', verbose_name="Statut")
+    
+    # Une seule soumission par défaut ; l'enseignant peut autoriser une nouvelle soumission
+    allow_resubmit = models.BooleanField(default=False, verbose_name="Autoriser une nouvelle soumission")
     
     class Meta:
         verbose_name = "Soumission de devoir"

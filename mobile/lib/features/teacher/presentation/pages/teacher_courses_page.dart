@@ -95,7 +95,7 @@ class _TeacherCoursesPageState extends ConsumerState<TeacherCoursesPage> {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     if (course['is_published'] == true)
-                                      const Icon(Icons.published, color: Colors.green),
+                                      const Icon(Icons.check_circle, color: Colors.green),
                                     const Icon(Icons.chevron_right),
                                   ],
                                 ),

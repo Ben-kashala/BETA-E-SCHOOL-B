@@ -172,12 +172,13 @@ class _EnrollmentPageState extends ConsumerState<EnrollmentPage> {
 
   @override
   Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.of(context).padding.bottom + MediaQuery.of(context).viewPadding.bottom + 24;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Inscription'),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPadding),
         child: Form(
           key: _formKey,
           child: Column(

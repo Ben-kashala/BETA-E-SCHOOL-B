@@ -110,8 +110,8 @@ class _TutoringMessageFormModalState extends ConsumerState<TutoringMessageFormMo
                         items: widget.children.map((child) {
                           final identity = child['identity'] ?? child;
                           final studentId = identity['id'];
-                          return DropdownMenuItem(
-                            value: studentId,
+                          return DropdownMenuItem<int>(
+                            value: studentId as int,
                             child: Text(_getChildName(child)),
                           );
                         }).toList(),

@@ -109,8 +109,8 @@ class _TeacherAttendancePageState extends ConsumerState<TeacherAttendancePage> {
                             DropdownButtonFormField<int>(
                               value: _selectedClassId,
                               decoration: const InputDecoration(labelText: 'Classe'),
-                              items: _classes.map((c) => DropdownMenuItem(
-                                value: c['id'],
+                              items: _classes.map((c) => DropdownMenuItem<int>(
+                                value: c['id'] as int,
                                 child: Text(c['name'] ?? 'Classe'),
                               )).toList(),
                               onChanged: (value) {

@@ -4,7 +4,7 @@ from .models import Course, Assignment, AssignmentQuestion, AssignmentSubmission
 
 
 class CourseSerializer(serializers.ModelSerializer):
-    subject_name = serializers.CharField(source='subject.name', read_only=True)
+    subject_name = serializers.CharField(source='subject.name', read_only=True, allow_null=True)
     class_name = serializers.CharField(source='school_class.name', read_only=True)
     teacher_name = serializers.CharField(source='teacher.user.get_full_name', read_only=True)
     
@@ -13,7 +13,9 @@ class CourseSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['created_at', 'updated_at']
         extra_kwargs = {
-            'teacher': {'required': False, 'allow_null': True, 'write_only': False}  # Non requis car assigné dans perform_create
+            'teacher': {'required': False, 'allow_null': True, 'write_only': False},
+            'subject': {'required': False, 'allow_null': True},
+            'content': {'required': False, 'allow_blank': True},
         }
 
 
