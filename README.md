@@ -1,4 +1,4 @@
-﻿# E-School Management Platform
+# E-School Management Platform
 
 Plateforme scolaire digitale complète pour les écoles privées en RDC et autres pays africains.
 
@@ -63,12 +63,7 @@ E-SCHOOL/
 │   │   ├── elearning/       # E-learning (cours, devoirs, quiz)
 │   │   ├── library/         # Bibliothèque numérique
 │   │   ├── payments/        # Paiements (frais, plans, reçus)
-│   │   ├── communication/  # Communication (notifications, messages, SMS, WhatsApp)
-│   │   ├── tutoring/        # Encadrement à domicile
-│   │   └── meetings/        # Réunions parents-enseignants
-│   ├── requirements.txt
-│   ├── Dockerfile
-│   └── docker-compose.yml
+│   │   ├── communication/  # Communication (notifications, messages, 
 ├── frontend/                # Application web React + Vite
 │   ├── src/
 │   │   ├── components/      # Composants (auth, layout, ui)
@@ -183,6 +178,21 @@ Pour plus de détails, voir les README des sous-projets (frontend, mobile) et **
 - **Backend** : [backend/BACKEND_IMPROVEMENTS.md](backend/BACKEND_IMPROVEMENTS.md) — pistes d’évolution
 - **Frontend** : [frontend/FRONTEND_SUMMARY.md](frontend/FRONTEND_SUMMARY.md) — résumé du projet
 - **Configuration** : `backend/.env.example` pour les variables d’environnement de l’API
+
+## 🚂 Déploiement (Railpack / Railway)
+
+Ce dépôt est un **monorepo**. Railpack ne doit pas être lancé à la racine (où il ne voit que le README) mais sur le sous-dossier à déployer.
+
+### Backend (API Django)
+
+1. Dans votre projet Railway (ou plateforme utilisant Railpack), créez un service pour l’**API**.
+2. Définissez le **répertoire racine** (Root Directory) du service sur **`backend`** (et non la racine du repo).
+3. Railpack détectera alors Python (`requirements.txt`, `manage.py`) et utilisera `backend/railpack.json` pour la commande de démarrage (migrations, collectstatic, gunicorn).
+4. Configurez les variables d’environnement (base de données, clés API, etc.) comme indiqué dans `backend/.env.example`.
+
+### Frontend (React)
+
+Pour déployer l’application web, créez un **second service** avec le répertoire racine sur **`frontend`**, afin que Railpack détecte Node et exécute `npm install` puis `npm run build`. Configurez la variable d’API (ex. `VITE_API_URL`) vers l’URL de votre backend déployé.
 
 ## 📄 Licence
 
