@@ -1,6 +1,6 @@
-# E-School Management - Frontend Web
+# E-School Management – Frontend Web
 
-Application web React + TypeScript pour la plateforme scolaire digitale.
+Application web **React 18 + TypeScript + Vite** pour la plateforme E-SCHOOL (écoles privées, RDC / Afrique). Interfaces pour tous les rôles : administrateur, enseignant, comptable, responsable discipline, parent, élève.
 
 ## 🚀 Démarrage
 
@@ -16,7 +16,7 @@ npm install
 npm run dev
 ```
 
-L'application sera accessible sur `http://localhost:3000`
+L’application est accessible sur `http://localhost:5173` (ou le port affiché par Vite).
 
 ### Build Production
 
@@ -28,67 +28,84 @@ npm run build
 
 ```
 src/
-├── components/     # Composants réutilisables
-│   ├── auth/      # Authentification
-│   ├── layout/    # Layout principal
-│   └── ui/        # Composants UI de base
-├── pages/          # Pages de l'application
-│   ├── admin/     # Interfaces administrateur
-│   ├── teacher/   # Interfaces enseignant
-│   ├── parent/    # Interfaces parent
-│   └── student/   # Interfaces élève
-├── services/       # Services API
-├── store/          # State management (Zustand)
-├── types/          # Types TypeScript
-└── utils/          # Utilitaires
+├── components/           # Composants réutilisables
+│   ├── auth/            # Authentification
+│   ├── layout/          # Layout principal
+│   └── ui/              # Composants UI de base
+├── pages/               # Pages par rôle
+│   ├── admin/           # Administrateur école
+│   ├── teacher/         # Enseignant
+│   ├── parent/          # Parent
+│   ├── student/         # Élève
+│   ├── accountant/      # Comptable (paiements, caisse, dépenses)
+│   ├── discipline-officer/  # Responsable discipline
+│   ├── auth/            # Connexion
+│   └── shared/          # Pages partagées (ex. lecteur de livres)
+├── services/            # Services API (axios)
+├── store/               # State management (Zustand)
+├── types/               # Types TypeScript
+└── utils/               # Utilitaires
 ```
 
 ## 🎨 Technologies
 
-- **React 18** - Bibliothèque UI
-- **TypeScript** - Typage statique
-- **Tailwind CSS** - Styling
-- **React Router** - Routing
-- **React Query** - Gestion des données
-- **Zustand** - State management
-- **React Hook Form** - Formulaires
-- **Zod** - Validation
+- **React 18** – Bibliothèque UI
+- **TypeScript** – Typage statique
+- **Vite 5** – Build et dev server
+- **Tailwind CSS** – Styling
+- **React Router v6** – Routing
+- **TanStack React Query** – Données serveur et cache
+- **Zustand** – State management (auth, UI)
+- **React Hook Form** – Formulaires
+- **Zod** – Validation (avec @hookform/resolvers)
+- **Axios** – Client HTTP
+- **Lucide React** – Icônes
+- **react-hot-toast** – Notifications
 
-## 👥 Profils Utilisateurs
+## 👥 Profils utilisateurs
 
-### Administrateur
-- Gestion des inscriptions
-- Gestion des classes et enseignants
-- Statistiques
+### Administrateur école
+- Inscriptions, classes, enseignants
+- Statistiques, discipline, bibliothèque
+- E-learning, encadrement, réunions
 - Paiements
 
 ### Enseignant
-- Notes et présences
-- Devoirs et examens
-- Cours e-learning
-- Réunions
+- Notes, présences, discipline
+- Devoirs, quiz, examens, cours e-learning
+- Réunions, bibliothèque, encadrement
+- Communication
+
+### Comptable
+- Paiements et reçus
+- Caisse (mouvements)
+- Dépenses de l’école
+
+### Responsable discipline
+- Suivi des cas disciplinaires
+- Réunions, communication
 
 ### Parent
-- Suivi scolaire
-- Réunions (visio)
-- Paiements
-- Bibliothèque
-- Encadrement
+- Suivi scolaire (notes des enfants)
+- Réunions, paiements
+- Bibliothèque, encadrement à domicile
+- Communication
 
 ### Élève
 - Tableau de bord
-- Cours et devoirs
-- Examens en ligne
-- Bibliothèque
-- Notes
+- Cours, devoirs, examens, quiz
+- Bibliothèque, notes, discipline
+- Communication
 
 ## 🔧 Configuration
 
-Créer un fichier `.env` :
+Créer un fichier `.env` à la racine de `frontend/` :
 
-```
+```env
 VITE_API_URL=http://localhost:8000/api
 ```
+
+L’API backend doit être démarrée (voir [README principal](../README.md)).
 
 ## 📱 Responsive
 
@@ -99,7 +116,8 @@ L'application est entièrement responsive et optimisée pour :
 
 ## ⚡ Optimisations
 
-- Lazy loading des images
-- Code splitting
-- Cache avec React Query
+- Lazy loading des routes et des images
+- Code splitting (Vite)
+- Cache avec TanStack React Query
 - Optimisé pour faible débit
+- Lint : `npm run lint`

@@ -1,4 +1,4 @@
-# E-School Management Platform
+﻿# E-School Management Platform
 
 Plateforme scolaire digitale complète pour les écoles privées en RDC et autres pays africains.
 
@@ -19,13 +19,15 @@ Cette plateforme couvre tout le cycle de vie de l'élève :
 
 - **Administrateur école** : Gestion complète de l'école (inscriptions, classes, enseignants, statistiques, paiements)
 - **Enseignant** : Gestion des cours, notes, présences, devoirs, examens, réunions
+- **Comptable** : Gestion des paiements, mouvements de caisse, reçus
+- **Responsable discipline** : Suivi et traitement des cas disciplinaires
 - **Parent** : Suivi des enfants, réunions, paiements, encadrement, bibliothèque
 - **Élève** : Tableau de bord, cours, devoirs, examens en ligne, bibliothèque, notes
 
 ## 🏗️ Architecture
 
 ### Backend
-- **Framework** : Django 4.2 + Django REST Framework
+- **Framework** : Django 4.2.x + Django REST Framework
 - **Base de données** : PostgreSQL (production) / SQLite (développement)
 - **Authentification** : JWT (Simple JWT)
 - **Architecture** : Multi-tenant (multi-écoles)
@@ -50,34 +52,33 @@ Cette plateforme couvre tout le cycle de vie de l'élève :
 ## 📁 Structure du projet
 
 ```
-e-school-management/
+E-SCHOOL/
 ├── backend/                 # API Django
-│   ├── config/             # Configuration Django (settings, Celery, etc.)
-│   ├── apps/               # Modules fonctionnels
-│   │   ├── accounts/       # Authentification & utilisateurs (rôles, profils)
-│   │   ├── schools/        # Gestion multi-écoles (classes, matières, périodes)
-│   │   ├── enrollment/     # Inscription & réinscription
-│   │   ├── academics/      # Suivi scolaire (notes, présences, discipline, bulletins)
-│   │   ├── elearning/      # E-learning (cours, devoirs, quiz)
-│   │   ├── library/        # Bibliothèque numérique
+│   ├── config/              # Configuration Django (settings, Celery, etc.)
+│   ├── apps/                # Modules fonctionnels
+│   │   ├── accounts/        # Authentification & utilisateurs (rôles, profils)
+│   │   ├── schools/         # Gestion multi-écoles (classes, matières, périodes)
+│   │   ├── enrollment/      # Inscription & réinscription
+│   │   ├── academics/       # Suivi scolaire (notes, présences, discipline, bulletins)
+│   │   ├── elearning/       # E-learning (cours, devoirs, quiz)
+│   │   ├── library/         # Bibliothèque numérique
 │   │   ├── payments/        # Paiements (frais, plans, reçus)
 │   │   ├── communication/  # Communication (notifications, messages, SMS, WhatsApp)
-│   │   ├── tutoring/       # Encadrement à domicile
-│   │   └── meetings/       # Réunions parents-enseignants
-│   └── requirements.txt
+│   │   ├── tutoring/        # Encadrement à domicile
+│   │   └── meetings/        # Réunions parents-enseignants
+│   ├── requirements.txt
+│   ├── Dockerfile
+│   └── docker-compose.yml
 ├── frontend/                # Application web React + Vite
 │   ├── src/
-│   │   ├── components/     # Composants (auth, layout, ui)
-│   │   ├── pages/          # Pages par rôle (admin, teacher, parent, student)
-│   │   ├── services/       # Services API
-│   │   ├── store/          # Zustand
-│   │   └── types/          # Types TypeScript
+│   │   ├── components/      # Composants (auth, layout, ui)
+│   │   ├── pages/           # Pages par rôle (admin, teacher, parent, student, accountant, discipline)
+│   │   ├── services/        # Services API
+│   │   ├── store/           # Zustand
+│   │   └── types/           # Types TypeScript
 │   └── package.json
-├── mobile/                  # Application Flutter (Élèves & Parents)
-│   └── pubspec.yaml
-└── docs/                    # Documentation
-    ├── INSTALLATION.md      # Guide d'installation détaillé
-    └── API_DOCUMENTATION.md # Documentation de l'API
+└── mobile/                  # Application Flutter (Élèves & Parents)
+    └── pubspec.yaml
 ```
 
 ## 🚀 Installation
@@ -151,7 +152,7 @@ celery -A config worker -l info
 celery -A config beat -l info
 ```
 
-Pour un guide d’installation pas à pas (Windows, PostgreSQL, dépannage), voir **docs/INSTALLATION.md**.
+Pour plus de détails, voir les README des sous-projets (frontend, mobile) et **backend/.env.example** pour les variables d'environnement.
 
 ## 🔧 Configuration
 
@@ -177,10 +178,11 @@ Pour un guide d’installation pas à pas (Windows, PostgreSQL, dépannage), voi
 
 ## 📚 Documentation
 
-- **Installation détaillée** : [docs/INSTALLATION.md](docs/INSTALLATION.md)
-- **API** : [docs/API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md)
 - **Frontend web** : [frontend/README.md](frontend/README.md)
 - **Mobile** : [mobile/README.md](mobile/README.md)
+- **Backend** : [backend/BACKEND_IMPROVEMENTS.md](backend/BACKEND_IMPROVEMENTS.md) — pistes d’évolution
+- **Frontend** : [frontend/FRONTEND_SUMMARY.md](frontend/FRONTEND_SUMMARY.md) — résumé du projet
+- **Configuration** : `backend/.env.example` pour les variables d’environnement de l’API
 
 ## 📄 Licence
 

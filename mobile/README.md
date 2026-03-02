@@ -1,12 +1,13 @@
-# 📱 E-School Mobile - Application Unifiée
+# 📱 E-School Mobile – Application unifiée
 
-Application mobile Flutter unifiée pour les **Élèves** et **Parents** dans le système E-School Management.
+Application mobile **Flutter** du projet **E-SCHOOL** (plateforme scolaire pour écoles privées, RDC / Afrique). Une seule app, plusieurs rôles : **Élève**, **Parent**, et selon les droits **Admin**, **Enseignant**, **Comptable**.
 
 ## 🎯 Concept
 
-Une **seule application** qui s'adapte automatiquement selon le rôle de l'utilisateur connecté :
-- **Élève** : Accès aux cours, devoirs, examens, bibliothèque, notes
-- **Parent** : Accès à l'inscription, suivi scolaire, réunions, paiements, encadrement
+Une **seule application** qui s’adapte au rôle de l’utilisateur après connexion :
+- **Élève** : Cours, devoirs, examens, bibliothèque, notes, communication
+- **Parent** : Inscription, suivi scolaire, réunions, paiements, encadrement, bibliothèque
+- **Admin / Enseignant / Comptable** : Dashboards et fonctionnalités dédiées (selon configuration)
 
 ## ✨ Fonctionnalités
 
@@ -30,10 +31,10 @@ Une **seule application** qui s'adapte automatiquement selon le rôle de l'utili
 - ✅ Bibliothèque
 
 ### Commun
-- ✅ Mode offline-first avec synchronisation
-- ✅ Cache intelligent
-- ✅ Notifications push (Firebase)
-- ✅ Sécurité renforcée
+- ✅ Mode offline-first avec synchronisation (Workmanager, Hive, SQLite)
+- ✅ Cache intelligent (Hive, cached_network_image)
+- ✅ Notifications locales (flutter_local_notifications)
+- ✅ Sécurité (flutter_secure_storage, JWT)
 - ✅ Optimisé pour faible bande passante
 
 ## 🏗️ Architecture
@@ -46,10 +47,17 @@ L'application détecte automatiquement le rôle de l'utilisateur après connexio
 4. Personnalise les fonctionnalités disponibles
 
 ### Routing conditionnel
-Le router (`app_router.dart`) vérifie le rôle et :
+Le router (`lib/core/router/app_router.dart`) vérifie le rôle et :
 - Redirige vers le dashboard si accès non autorisé
 - Affiche uniquement les routes pertinentes
-- Gère la navigation selon le contexte
+- Adapte la navigation (bottom bar, menus) au contexte
+
+### Stack technique
+- **State** : Riverpod + Provider
+- **Navigation** : go_router
+- **Réseau** : Dio, connectivity_plus
+- **Stockage** : Hive, SQLite (sqflite), flutter_secure_storage
+- **PDF** : pdf, syncfusion_flutter_pdfviewer, flutter_pdfview
 
 ## 📦 Installation
 
@@ -63,36 +71,45 @@ flutter run
 
 ## 🔧 Configuration
 
-1. **Firebase** : Ajouter `google-services.json` dans `android/app/`
-2. **API** : Modifier l'URL dans `lib/core/config/app_config.dart`
-3. **Sécurité** : Changer la clé de chiffrement en production
+1. **API** : Modifier l’URL de l’API dans `lib/core/config/app_config.dart` (pointez vers le backend E-SCHOOL).
+2. **Sécurité** : En production, configurer une clé de chiffrement adaptée (stockage sécurisé).
+3. **Firebase** (optionnel) : Pour les notifications push, ajouter `google-services.json` dans `android/app/` et configurer Firebase.
 
 ## 📱 Structure
 
 ```
 mobile/
 ├── lib/
-│   ├── core/              # Services et configuration
-│   │   ├── config/        # Configuration
-│   │   ├── database/      # SQLite + Hive
-│   │   ├── network/       # API + Connectivité
-│   │   ├── services/      # Notifications + Sync
-│   │   ├── router/        # Navigation avec gestion des rôles
-│   │   ├── theme/         # Thème Material 3
-│   │   └── providers/     # State management
+│   ├── core/                  # Configuration et services partagés
+│   │   ├── config/            # app_config, screen_config
+│   │   ├── database/            # Hive, SQLite (database_service)
+│   │   ├── network/            # api_service, connectivity_service
+│   │   ├── services/           # notification_service, sync_service
+│   │   ├── router/             # app_router (navigation + rôles)
+│   │   ├── theme/              # Thème Material
+│   │   ├── providers/          # auth_provider, etc.
+│   │   ├── widgets/            # Composants réutilisables
+│   │   └── preferences/        # Préférences utilisateur
 │   └── features/
-│       ├── auth/          # Authentification
-│       ├── dashboard/     # Dashboard conditionnel
-│       ├── courses/       # (Élèves)
-│       ├── assignments/   # (Élèves)
-│       ├── exams/         # (Élèves)
-│       ├── enrollment/    # (Parents)
-│       ├── meetings/      # (Parents)
-│       ├── payments/      # (Parents)
-│       ├── tutoring/      # (Parents)
-│       ├── library/       # (Commun)
-│       ├── grades/        # (Commun, contenu différent)
-│       └── profile/      # (Commun)
+│       ├── auth/               # Connexion, splash
+│       ├── dashboard/          # Dashboard selon le rôle
+│       ├── admin/              # Admin (classes, enseignants, inscriptions, etc.)
+│       ├── teacher/            # Enseignant (cours, notes, présences, quiz…)
+│       ├── accountant/         # Comptable (caisse, dépenses)
+│       ├── courses/            # (Élèves)
+│       ├── assignments/       # (Élèves)
+│       ├── exams/              # (Élèves)
+│       ├── enrollment/         # (Parents)
+│       ├── meetings/           # (Parents)
+│       ├── payments/            # (Parents)
+│       ├── tutoring/           # (Parents)
+│       ├── library/            # (Commun)
+│       ├── grades/             # (Commun)
+│       ├── discipline/         # Discipline
+│       ├── communication/     # Communication
+│       ├── profile/            # Profil
+│       ├── preferences/       # Paramètres
+│       └── students/           # Liste / détail élèves (admin/teacher)
 ```
 
 ## 🔐 Sécurité
@@ -104,8 +121,8 @@ mobile/
 
 ## 🚀 Déploiement
 
-L'application peut être déployée comme une seule APK/IPA qui s'adapte automatiquement au rôle de l'utilisateur.
+Une seule APK/IPA : l’interface s’adapte au rôle (élève, parent, admin, enseignant, comptable) après connexion.
 
 ---
 
-**Une application, deux expériences utilisateur** 🎓👨‍👩‍👧
+**Projet E-SCHOOL** – [README principal](../README.md) | **Une app, plusieurs rôles** 🎓👨‍👩‍👧
