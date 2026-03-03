@@ -16,7 +16,11 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-me-in-producti
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=True, cast=bool)
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=lambda v: [s.strip() for s in v.split(',')])
+_allowed_hosts_raw = config('ALLOWED_HOSTS', default='localhost,127.0.0.1')
+ALLOWED_HOSTS = [s.strip() for s in _allowed_hosts_raw.split(',') if s.strip()]
+# Sur Railway (PORT défini), si ALLOWED_HOSTS n'a pas été personnalisé, accepter tout pour éviter DisallowedHost
+if os.environ.get('PORT') and _allowed_hosts_raw == 'localhost,127.0.0.1':
+    ALLOWED_HOSTS = ['*']
 
 # URL de l'admin Django (en production sur Railway : définir DJANGO_ADMIN_URL à une valeur secrète)
 # Ex. DJANGO_ADMIN_URL=secret-admin-xyz123 → https://votredomaine.com/secret-admin-xyz123/
@@ -295,15 +299,16 @@ CORS_ALLOW_HEADERS = [
     'x-school-code',  # Header personnalisé pour le multi-tenant
 ]
 
-# CSRF Settings - Required for Django Admin in production
-# IMPORTANT: Django ne supporte pas les wildcards dans CSRF_TRUSTED_ORIGINS
-# Vous devez ajouter votre domaine exact dans Railway Variables :
-# CSRF_TRUSTED_ORIGINS=https://backend-production-195ed.up.railway.app
+# CSRF Settings - Required for Django Admin in production (Django 4+ : inclure le schéma https://)
+# Sur Railway, définir dans Variables : CSRF_TRUSTED_ORIGINS=https://votre-app.up.railway.app
 CSRF_TRUSTED_ORIGINS = config(
     'CSRF_TRUSTED_ORIGINS',
     default='http://localhost:3000,http://localhost:8081',
     cast=lambda v: [s.strip() for s in v.split(',')]
 )
+
+# Derrière un proxy (Railway, etc.) : Django doit faire confiance au header X-Forwarded-Proto pour HTTPS
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # Session Settings - Important pour Django Admin
 SESSION_COOKIE_SECURE = not DEBUG  # True en production (HTTPS uniquement)

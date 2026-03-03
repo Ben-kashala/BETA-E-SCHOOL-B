@@ -2,6 +2,7 @@
 URL configuration for e-school-management project.
 """
 from django.contrib import admin
+from django.http import HttpResponse
 from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
@@ -32,7 +33,12 @@ def admin_redirect(request):
     from django.shortcuts import redirect
     return redirect(f'/{_admin_path}/', permanent=True)
 
+def favicon_view(request):
+    """Réponse vide pour /favicon.ico (évite 404/502 côté proxy)."""
+    return HttpResponse(status=204)
+
 urlpatterns = [
+    path('favicon.ico', favicon_view),
     # Admin : avec slash final (obligatoire pour Django admin)
     path(f'{_admin_path}/', admin.site.urls),
     # Redirection sans slash → avec slash (ex. /africa-admin-xyw → /africa-admin-xyw/)
