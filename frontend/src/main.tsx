@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
 import App from './App'
 import './index.css'
+import favicon from './images/logo.png'
 
 // Initialiser le thème au chargement depuis localStorage
 const initializeTheme = () => {
@@ -55,6 +56,23 @@ const initializeTheme = () => {
   }
 }
 
+const setFavicon = () => {
+  try {
+    const existingLink = document.querySelector<HTMLLinkElement>("link[rel~='icon']")
+    const link = existingLink ?? document.createElement('link')
+
+    link.rel = 'icon'
+    link.type = 'image/png'
+    link.href = favicon
+
+    if (!existingLink) {
+      document.head.appendChild(link)
+    }
+  } catch (error) {
+    console.error('Erreur lors de la mise à jour du favicon:', error)
+  }
+}
+
 // Écouter les changements de préférence système
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
   try {
@@ -80,6 +98,7 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () 
 })
 
 initializeTheme()
+setFavicon()
 
 const queryClient = new QueryClient({
   defaultOptions: {
