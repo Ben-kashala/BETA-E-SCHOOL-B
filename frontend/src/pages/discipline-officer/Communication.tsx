@@ -172,6 +172,17 @@ export default function DisciplineOfficerCommunication() {
     },
   })
 
+  const markNotificationReadMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await api.post(`/communication/notifications/${id}/mark_read/`)
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['communication-notifications'] })
+      queryClient.invalidateQueries({ queryKey: ['header-notifications'] })
+    },
+  })
+
   // Marquer toutes les notifications comme lues
   const markAllNotificationsReadMutation = useMutation({
     mutationFn: async () => {
@@ -523,7 +534,7 @@ export default function DisciplineOfficerCommunication() {
                     key={notification.id}
                     onClick={() => {
                       if (!notification.is_read) {
-                        markReadMutation.mutate(notification.id)
+                        markNotificationReadMutation.mutate(notification.id)
                       }
                       navigate(getNotificationTargetPath(user?.role ?? '', notification.notification_type))
                     }}

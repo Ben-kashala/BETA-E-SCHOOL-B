@@ -13,27 +13,66 @@
   }
 }
 
-/* Zone corps (milieu) : fond #21335c, texte #ededed */
+/* Zone corps (milieu) : fond #21335c, texte blanc #ededed */
 .layout-main {
   @apply bg-eschool-body text-eschool-body-text;
 }
 
-/* Cartes et contenus dans le corps : fond clair, texte sombre pour lisibilité */
-.layout-main .card {
-  @apply bg-eschool-header text-eschool-header-text border-eschool-body/20;
-}
-
+/* Tout le contenu du milieu (cartes, slider, frame) : même fond bleu, texte blanc */
+.layout-main .card,
 .layout-main .bg-white,
 .layout-main .bg-gray-50 {
-  @apply bg-eschool-header text-eschool-header-text;
+  @apply bg-eschool-body text-eschool-body-text border-eschool-body-text/20;
 }
 
 .layout-main thead {
-  @apply bg-eschool-header text-eschool-header-text;
+  @apply bg-eschool-body text-eschool-body-text border-eschool-body-text/20;
 }
 
 .layout-main tbody {
-  @apply bg-eschool-header/90 text-eschool-header-text;
+  @apply bg-eschool-body/95 text-eschool-body-text border-eschool-body-text/10;
+}
+
+.layout-main tbody tr:hover {
+  @apply bg-eschool-body-text/10;
+}
+
+/* Champs et labels dans le corps : rester lisibles sur fond bleu */
+.layout-main .input,
+.layout-main input[type="text"],
+.layout-main input[type="search"],
+.layout-main select {
+  @apply bg-eschool-body-text/15 border-eschool-body-text/40 text-eschool-body-text placeholder:text-eschool-body-text/60 focus:ring-eschool-avatar focus:border-eschool-avatar;
+}
+
+.layout-main label,
+.layout-main .text-gray-700,
+.layout-main .text-gray-900,
+.layout-main .text-gray-600,
+.layout-main .text-gray-500,
+.layout-main .text-gray-400 {
+  @apply text-eschool-body-text;
+}
+
+.layout-main .text-gray-500,
+.layout-main .text-gray-400 {
+  @apply text-eschool-body-text/90;
+}
+
+/* Boutons dans le corps : couleur #ca9d1e avec texte blanc */
+.layout-main .btn-primary,
+.layout-main button.bg-primary-600,
+.layout-main button.bg-primary-500,
+.layout-main button[class*="bg-primary-100"],
+.layout-main button[class*="bg-primary-900"],
+.layout-main button[class*="bg-primary-200"],
+.layout-main button[class*="bg-primary-800"] {
+  @apply bg-eschool-avatar text-eschool-avatar-text hover:opacity-90 active:opacity-95 border-0;
+}
+
+.layout-main [class*="text-primary-600"],
+.layout-main [class*="text-primary-400"] {
+  @apply text-eschool-avatar-text;
 }
 
 @layer components {
@@ -42,7 +81,7 @@
   }
   
   .btn-primary {
-    @apply bg-primary-600 dark:bg-primary-500 text-white hover:bg-primary-700 dark:hover:bg-primary-600 active:bg-primary-800 dark:active:bg-primary-700;
+    @apply bg-eschool-avatar text-eschool-avatar-text hover:opacity-90 active:opacity-95 border-0;
   }
   
   .btn-secondary {
