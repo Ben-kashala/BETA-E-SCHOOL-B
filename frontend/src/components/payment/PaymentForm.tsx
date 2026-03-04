@@ -196,7 +196,7 @@ export default function PaymentForm({
           </button>
         </div>
         <CardPaymentForm
-          config={cardConfig as Parameters<typeof CardPaymentForm>[0]['config']}
+          config={cardConfig as unknown as Parameters<typeof CardPaymentForm>[0]['config']}
           onError={(msg) => toast.error(msg)}
         />
       </Card>

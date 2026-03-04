@@ -22,7 +22,6 @@ export default function PaymentReturnPage() {
   useEffect(() => {
     const paymentId = searchParams.get('payment_id')
     const transactionId = searchParams.get('transaction_id')
-    const txRef = searchParams.get('tx_ref')
 
     if (!paymentId) {
       setStatus('error')
