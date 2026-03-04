@@ -7,6 +7,7 @@ import { fr } from 'date-fns/locale'
 import { Plus, CheckCircle, XCircle, Eye, MessageSquare, Check, X, AlertCircle } from 'lucide-react'
 import { showErrorToast, showSuccessToast } from '@/utils/toast'
 import { cn } from '@/utils/cn'
+import { useAuthStore } from '@/store/authStore'
 
 interface DisciplineRecord {
   id: number
@@ -68,6 +69,8 @@ interface DisciplineRequest {
 
 export default function AdminDiscipline() {
   const queryClient = useQueryClient()
+  const { user } = useAuthStore()
+  const canCreateRecords = user?.role === 'DISCIPLINE_OFFICER' // Seul le chargé de discipline crée les fiches
   const [showForm, setShowForm] = useState(false)
   const [selectedRecord, setSelectedRecord] = useState<DisciplineRecord | null>(null)
   const [showDetails, setShowDetails] = useState(false)
@@ -98,13 +101,16 @@ export default function AdminDiscipline() {
     retry: 1,
   })
 
-  // Récupérer les élèves
+  // Récupérer les élèves de la classe sélectionnée (uniquement quand une classe est choisie)
   const { data: students } = useQuery({
-    queryKey: ['students'],
+    queryKey: ['students', formData.school_class],
     queryFn: async () => {
-      const response = await api.get('/accounts/students/')
+      const response = await api.get('/accounts/students/', {
+        params: { school_class: formData.school_class },
+      })
       return response.data
     },
+    enabled: canCreateRecords && showForm && !!formData.school_class,
   })
 
   // Récupérer les classes
@@ -293,7 +299,7 @@ export default function AdminDiscipline() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Fiches de Discipline</h1>
-        {activeTab === 'records' && (
+        {canCreateRecords && activeTab === 'records' && (
           <button
             onClick={() => setShowForm(!showForm)}
             className="btn btn-primary flex items-center space-x-2"
@@ -458,12 +464,32 @@ export default function AdminDiscipline() {
         </Card>
       ) : (
         <>
-          {/* Formulaire de création */}
-      {showForm && (
+          {/* Formulaire de création (chargé de discipline uniquement) */}
+      {canCreateRecords && showForm && (
         <Card className="mb-6">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">Créer une fiche de discipline</h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Classe *
+                </label>
+                <select
+                  required
+                  value={formData.school_class}
+                  onChange={(e) =>
+                    setFormData({ ...formData, school_class: e.target.value, student: '' })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                >
+                  <option value="">Sélectionner une classe</option>
+                  {classes?.results?.map((cls: any) => (
+                    <option key={cls.id} value={cls.id}>
+                      {cls.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Élève *
@@ -472,30 +498,15 @@ export default function AdminDiscipline() {
                   required
                   value={formData.student}
                   onChange={(e) => setFormData({ ...formData, student: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  disabled={!formData.school_class}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <option value="">Sélectionner un élève</option>
-                  {students?.results?.map((student: any) => (
+                  <option value="">
+                    {formData.school_class ? 'Sélectionner un élève' : 'Sélectionner une classe d\'abord'}
+                  </option>
+                  {(formData.school_class ? students?.results ?? [] : []).map((student: any) => (
                     <option key={student.id} value={student.id}>
                       {[student.user?.first_name, student.user?.last_name, student.user?.middle_name].filter(Boolean).join(' ')} - {student.student_id}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Classe *
-                </label>
-                <select
-                  required
-                  value={formData.school_class}
-                  onChange={(e) => setFormData({ ...formData, school_class: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                >
-                  <option value="">Sélectionner une classe</option>
-                  {classes?.results?.map((cls: any) => (
-                    <option key={cls.id} value={cls.id}>
-                      {cls.name}
                     </option>
                   ))}
                 </select>

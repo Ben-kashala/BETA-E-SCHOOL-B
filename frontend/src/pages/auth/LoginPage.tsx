@@ -100,63 +100,59 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-primary-100 dark:from-gray-900 dark:to-gray-800 px-4 transition-colors">
+    <div className="min-h-screen flex items-center justify-center bg-eschool-body px-4">
       <div className="max-w-md w-full">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 transition-colors">
+        <div className="bg-eschool-header rounded-2xl shadow-xl p-8 border border-eschool-header-text/20">
           <div className="text-center mb-8">
             <div className="flex justify-center mb-4">
-              <img 
-                src={logoImage} 
-                alt="E-School" 
-                className="h-20 w-auto"
-              />
+              <img src={logoImage} alt="E-School" className="h-20 w-auto" />
             </div>
-            <p className="text-gray-600 dark:text-gray-400">Connectez-vous à votre compte</p>
+            <p className="text-eschool-header-text/80">Connectez-vous à votre compte</p>
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label htmlFor="username" className="block text-sm font-medium text-eschool-header-text mb-2">
                 Nom d'utilisateur
               </label>
               <input
                 {...register('username')}
                 type="text"
                 id="username"
-                className="input dark:bg-gray-700 dark:text-white dark:border-gray-600"
+                className="input bg-white border-eschool-header-text/30 text-eschool-header-text placeholder:text-eschool-header-text/50 focus:ring-eschool-body"
                 placeholder="Entrez votre nom d'utilisateur"
               />
               {errors.username && (
-                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.username.message}</p>
+                <p className="mt-1 text-sm text-red-600">{errors.username.message}</p>
               )}
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label htmlFor="password" className="block text-sm font-medium text-eschool-header-text mb-2">
                 Mot de passe
               </label>
               <input
                 {...register('password')}
                 type="password"
                 id="password"
-                className="input dark:bg-gray-700 dark:text-white dark:border-gray-600"
+                className="input bg-white border-eschool-header-text/30 text-eschool-header-text placeholder:text-eschool-header-text/50 focus:ring-eschool-body"
                 placeholder="Entrez votre mot de passe"
               />
               {errors.password && (
-                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.password.message}</p>
+                <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
               )}
             </div>
 
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full btn btn-primary py-3 dark:bg-primary-600 dark:hover:bg-primary-700"
+              className="w-full py-3 rounded-lg font-medium bg-eschool-body text-eschool-body-text hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
               {isLoading ? 'Connexion...' : 'Se connecter'}
             </button>
           </form>
 
-          <div className="mt-6 text-center text-sm text-gray-600 dark:text-gray-400">
+          <div className="mt-6 text-center text-sm text-eschool-header-text/70">
             <p>Plateforme scolaire digitale pour l'Afrique</p>
           </div>
         </div>

@@ -38,17 +38,9 @@ export default function ParentPayments() {
   })
 
   const createPaymentMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: Record<string, unknown>) => {
       const response = await api.post('/payments/payments/', data)
       return response.data
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['parent-payments'] })
-      setShowPaymentForm(false)
-      toast.success('Paiement créé avec succès')
-    },
-    onError: (error: any) => {
-      toast.error(error?.response?.data?.detail || 'Erreur lors de la création du paiement')
     },
   })
 
@@ -79,7 +71,15 @@ export default function ParentPayments() {
           mode="parent"
           children={children}
           feeTypes={feeTypes?.results ?? feeTypes ?? []}
-          onSubmit={(payload) => createPaymentMutation.mutate(payload as any)}
+          onCreatePayment={async (payload) => {
+            const data = await createPaymentMutation.mutateAsync(payload)
+            return { id: data.id, payment_id: data.payment_id }
+          }}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['parent-payments'] })
+            setShowPaymentForm(false)
+            toast.success('Paiement enregistré avec succès')
+          }}
           onCancel={() => setShowPaymentForm(false)}
           isPending={createPaymentMutation.isPending}
           title="Nouveau paiement"

@@ -6,6 +6,50 @@ from apps.accounts.models import User, Student
 from apps.schools.models import School
 
 
+class SchoolPaymentConfig(models.Model):
+    """
+    Configuration des moyens de paiement par école (multi-tenant).
+    Une même clé Flutterwave peut être utilisée pour toutes les écoles (clés globales en .env)
+    ou chaque école peut avoir ses propres clés (remplir ici).
+    Admin école : ne voit/édite que la config de son école. Superadmin : toutes les écoles.
+    """
+    MOBILE_PROVIDER_CHOICES = [
+        ('mock', 'Mock (démo)'),
+        ('flutterwave', 'Flutterwave (Orange, M-Pesa, Airtel)'),
+    ]
+    school = models.OneToOneField(
+        School,
+        on_delete=models.CASCADE,
+        related_name='payment_config',
+        verbose_name='École',
+        unique=True,
+    )
+    is_active = models.BooleanField(default=True, verbose_name='Actif')
+    # Flutterwave : cartes (VISA/Mastercard) + Mobile Money. Vide = utiliser les clés globales (.env)
+    flutterwave_public_key = models.CharField(
+        max_length=255, blank=True, verbose_name='Clé publique Flutterwave'
+    )
+    flutterwave_secret_key = models.CharField(
+        max_length=255, blank=True, verbose_name='Clé secrète Flutterwave'
+    )
+    # Mobile Money : mock ou flutterwave pour cette école
+    mobile_money_provider = models.CharField(
+        max_length=20,
+        choices=MOBILE_PROVIDER_CHOICES,
+        default='mock',
+        verbose_name='Provider Mobile Money',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Configuration paiement (école)'
+        verbose_name_plural = 'Configurations paiement (écoles)'
+
+    def __str__(self):
+        return f"Paiement — {self.school.name}"
+
+
 class FeeType(models.Model):
     """Model for different types of fees"""
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='fee_types', verbose_name="École")
@@ -64,6 +108,7 @@ class Payment(models.Model):
     # Reference
     reference_number = models.CharField(max_length=100, null=True, blank=True, verbose_name="Numéro de référence")
     transaction_id = models.CharField(max_length=100, null=True, blank=True, verbose_name="ID de transaction")
+    payer_phone = models.CharField(max_length=20, null=True, blank=True, verbose_name="Téléphone du payeur (Mobile Money)")
     
     # Metadata
     description = models.TextField(null=True, blank=True, verbose_name="Description")

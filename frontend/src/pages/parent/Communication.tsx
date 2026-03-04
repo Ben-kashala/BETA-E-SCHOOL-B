@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/services/api'
 import { Card } from '@/components/ui/Card'
@@ -8,6 +9,7 @@ import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { cn } from '@/utils/cn'
 import { useAuthStore } from '@/store/authStore'
+import { getNotificationTargetPath } from '@/utils/notifications'
 
 interface Message {
   id: number
@@ -45,6 +47,7 @@ interface Notification {
 
 export default function ParentCommunication() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const { user } = useAuthStore()
   const [activeTab, setActiveTab] = useState<'messages' | 'announcements' | 'notifications'>('messages')
   const [showMessageForm, setShowMessageForm] = useState(false)
@@ -414,6 +417,7 @@ export default function ParentCommunication() {
                       if (!notification.is_read) {
                         markReadMutation.mutate(notification.id)
                       }
+                      navigate(getNotificationTargetPath(user?.role ?? '', notification.notification_type))
                     }}
                     className={cn(
                       'p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors',

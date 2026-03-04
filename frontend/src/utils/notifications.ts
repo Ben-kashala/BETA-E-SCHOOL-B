@@ -1,5 +1,81 @@
 import toast from 'react-hot-toast'
 
+/** Types de notifications du backend (Notification.notification_type) */
+export type NotificationType =
+  | 'GRADE'
+  | 'ATTENDANCE'
+  | 'ASSIGNMENT'
+  | 'PAYMENT'
+  | 'ANNOUNCEMENT'
+  | 'MEETING'
+  | 'DISCIPLINE'
+  | 'MESSAGE'
+  | 'QUIZ'
+  | 'GENERAL'
+
+const ROLE_COMMUNICATION_PATH: Record<string, string> = {
+  ADMIN: '/admin/communication',
+  TEACHER: '/teacher/communication',
+  PARENT: '/parent/communication',
+  STUDENT: '/student/communication',
+  ACCOUNTANT: '/accountant',
+  DISCIPLINE_OFFICER: '/discipline-officer/communication',
+}
+
+const ROLE_BASE_PATH: Record<string, string> = {
+  ADMIN: '/admin',
+  TEACHER: '/teacher',
+  PARENT: '/parent',
+  STUDENT: '/student',
+  ACCOUNTANT: '/accountant',
+  DISCIPLINE_OFFICER: '/discipline-officer',
+}
+
+/**
+ * Retourne l'URL de redirection selon le rôle et le type de notification.
+ * Utilisé par le Header et les pages Communication pour rediriger au clic sur une notification.
+ */
+export function getNotificationTargetPath(
+  role: string,
+  notificationType: NotificationType | string | null
+): string {
+  const base = ROLE_BASE_PATH[role] ?? '/'
+  const comm = ROLE_COMMUNICATION_PATH[role] ?? base + '/communication'
+
+  if (!notificationType) return comm
+
+  switch (notificationType) {
+    case 'MESSAGE':
+    case 'ANNOUNCEMENT':
+    case 'GENERAL':
+      return comm
+    case 'PAYMENT':
+      if (['ADMIN', 'PARENT', 'ACCOUNTANT'].includes(role)) return `${base}/payments`
+      return comm
+    case 'DISCIPLINE':
+      if (['ADMIN', 'TEACHER', 'PARENT', 'STUDENT', 'DISCIPLINE_OFFICER'].includes(role)) return `${base}/discipline`
+      return comm
+    case 'MEETING':
+      if (['ADMIN', 'TEACHER', 'PARENT', 'DISCIPLINE_OFFICER'].includes(role)) return `${base}/meetings`
+      return comm
+    case 'GRADE':
+      if (['TEACHER', 'PARENT', 'STUDENT'].includes(role)) return `${base}/grades`
+      return comm
+    case 'ATTENDANCE':
+      if (role === 'TEACHER') return `${base}/attendance`
+      return comm
+    case 'ASSIGNMENT':
+      if (['TEACHER', 'STUDENT'].includes(role)) return `${base}/assignments`
+      return comm
+    case 'QUIZ':
+      if (role === 'TEACHER') return `${base}/quizzes`
+      if (role === 'STUDENT') return `${base}/exams`
+      return comm
+    default:
+      return comm
+  }
+}
+
 /**
  * Utility functions for displaying notifications with consistent styling
  */

@@ -45,14 +45,13 @@ export default function Layout() {
   if (!user) return null
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors flex flex-col">
+    <div className="min-h-screen flex flex-col">
       <Header 
         user={user} 
         onLogout={handleLogout}
         onMenuClick={() => setSidebarOpen(!sidebarOpen)}
       />
       <div className="flex flex-1 relative">
-        {/* Backdrop pour mobile */}
         {sidebarOpen && (
           <div 
             className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden transition-opacity"
@@ -65,7 +64,7 @@ export default function Layout() {
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
         />
-        <main className="flex-1 p-4 sm:p-6 bg-gray-50 dark:bg-gray-900 transition-colors w-full lg:w-auto">
+        <main className="layout-main flex-1 p-4 sm:p-6 w-full lg:w-auto">
           <Outlet />
         </main>
       </div>

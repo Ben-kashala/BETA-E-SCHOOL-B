@@ -4,13 +4,36 @@
 
 @layer base {
   body {
-    @apply bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white transition-colors;
+    @apply text-eschool-header-text transition-colors;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
       'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
       sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+}
+
+/* Zone corps (milieu) : fond #21335c, texte #ededed */
+.layout-main {
+  @apply bg-eschool-body text-eschool-body-text;
+}
+
+/* Cartes et contenus dans le corps : fond clair, texte sombre pour lisibilité */
+.layout-main .card {
+  @apply bg-eschool-header text-eschool-header-text border-eschool-body/20;
+}
+
+.layout-main .bg-white,
+.layout-main .bg-gray-50 {
+  @apply bg-eschool-header text-eschool-header-text;
+}
+
+.layout-main thead {
+  @apply bg-eschool-header text-eschool-header-text;
+}
+
+.layout-main tbody {
+  @apply bg-eschool-header/90 text-eschool-header-text;
 }
 
 @layer components {

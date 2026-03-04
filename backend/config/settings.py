@@ -329,9 +329,18 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
 CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='redis://localhost:6379/0')
 
-# Payment Gateway (Stripe)
-STRIPE_SECRET_KEY = config('STRIPE_SECRET_KEY', default='')
-STRIPE_PUBLISHABLE_KEY = config('STRIPE_PUBLISHABLE_KEY', default='')
+# Payment Gateway — Flutterwave (RDC, multi-tenant par école)
+# Cartes VISA / Mastercard + Mobile Money (Orange, M-Pesa, Airtel)
+FLUTTERWAVE_PUBLIC_KEY = config('FLUTTERWAVE_PUBLIC_KEY', default='')
+FLUTTERWAVE_SECRET_KEY = config('FLUTTERWAVE_SECRET_KEY', default='')
+FLUTTERWAVE_WEBHOOK_HASH = config('FLUTTERWAVE_WEBHOOK_HASH', default='')
+# Optionnel : clés par école via modèle SchoolPaymentConfig (voir gateways/flutterwave_cards.get_flutterwave_keys)
+
+# Mobile Money (Orange Money, M-Pesa, Airtel) — même compte Flutterwave ou mock
+MOBILE_MONEY_PROVIDER = config('MOBILE_MONEY_PROVIDER', default='mock')
+
+# URL du frontend (pour redirect_url après paiement carte Flutterwave)
+FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:5173')
 
 # SMS/WhatsApp (Twilio)
 TWILIO_ACCOUNT_SID = config('TWILIO_ACCOUNT_SID', default='')

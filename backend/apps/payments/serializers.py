@@ -104,3 +104,21 @@ class CashMovementCreateSerializer(serializers.Serializer):
     currency = serializers.CharField(max_length=3, default='CDF')
     description = serializers.CharField(max_length=255, required=False, allow_blank=True)
     document = serializers.FileField(required=False, allow_null=True)
+
+
+# --- Paiement Mobile Money & Carte (gateways) ---
+MOBILE_MONEY_METHODS = [
+    'MOBILE_MONEY_ORANGE', 'MOBILE_MONEY_MPESA', 'MOBILE_MONEY_AIRTEL',
+]
+
+
+class InitiateMobileSerializer(serializers.Serializer):
+    """Corps de la requête pour initier un paiement Mobile Money."""
+    payment_id = serializers.IntegerField(help_text="ID du paiement (PENDING)")
+    phone_number = serializers.CharField(max_length=20, trim_whitespace=True)
+    payment_method = serializers.ChoiceField(choices=[(m, m) for m in MOBILE_MONEY_METHODS])
+
+
+class InitiateCardSerializer(serializers.Serializer):
+    """Corps de la requête pour initier un paiement par carte (Stripe)."""
+    payment_id = serializers.IntegerField(help_text="ID du paiement (PENDING)")

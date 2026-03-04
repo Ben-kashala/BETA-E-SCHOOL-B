@@ -1,6 +1,9 @@
 import { useState } from 'react'
-import { X } from 'lucide-react'
+import { X, Smartphone, CheckCircle } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
+import api from '@/services/api'
+import toast from 'react-hot-toast'
+import CardPaymentForm from './CardPaymentForm'
 
 type PaymentFormMode = 'parent' | 'accountant'
 
@@ -9,22 +12,6 @@ type StudentOption = { id: number; user?: { first_name?: string; last_name?: str
 type ParentOption = { id: number; first_name?: string; last_name?: string; middle_name?: string | null; email?: string }
 type FeeTypeOption = { id: number; name: string; amount: string | number; currency: string }
 
-interface PaymentFormProps {
-  mode: PaymentFormMode
-  /** Pour parent : liste des enfants (parent_dashboard). Pour accountant : non utilisé ici. */
-  children?: ChildOption[]
-  /** Pour accountant : liste des parents (payeurs). */
-  parents?: ParentOption[]
-  /** Pour accountant : liste de tous les élèves (pour filtrer par parent). */
-  students?: StudentOption[]
-  feeTypes?: FeeTypeOption[]
-  onSubmit: (payload: Record<string, unknown>) => void
-  onCancel: () => void
-  isPending: boolean
-  /** Titre du formulaire */
-  title?: string
-}
-
 const PAYMENT_METHODS = [
   { value: 'CASH', label: 'Espèces' },
   { value: 'MOBILE_MONEY', label: 'Mobile Money' },
@@ -32,9 +19,26 @@ const PAYMENT_METHODS = [
   { value: 'MOBILE_MONEY_ORANGE', label: 'Orange Money' },
   { value: 'MOBILE_MONEY_AIRTEL', label: 'Airtel Money' },
   { value: 'BANK_TRANSFER', label: 'Virement bancaire' },
-  { value: 'CARD', label: 'Carte bancaire' },
+  { value: 'CARD', label: 'Carte bancaire (VISA / Mastercard)' },
   { value: 'ONLINE', label: 'Paiement en ligne' },
 ]
+
+const MOBILE_MONEY_METHODS = ['MOBILE_MONEY_ORANGE', 'MOBILE_MONEY_MPESA', 'MOBILE_MONEY_AIRTEL']
+
+interface PaymentFormProps {
+  mode: PaymentFormMode
+  children?: ChildOption[]
+  parents?: ParentOption[]
+  students?: StudentOption[]
+  feeTypes?: FeeTypeOption[]
+  /** Crée le paiement et retourne l'objet payment (avec id). */
+  onCreatePayment: (payload: Record<string, unknown>) => Promise<{ id: number; payment_id: string }>
+  /** Appelé quand le flux est terminé (création simple ou après confirmation mobile/carte). */
+  onSuccess: () => void
+  onCancel: () => void
+  isPending?: boolean
+  title?: string
+}
 
 export default function PaymentForm({
   mode,
@@ -42,26 +46,37 @@ export default function PaymentForm({
   parents = [],
   students = [],
   feeTypes = [],
-  onSubmit,
+  onCreatePayment,
+  onSuccess,
   onCancel,
-  isPending,
+  isPending = false,
   title = 'Nouveau paiement',
 }: PaymentFormProps) {
-  const [selectedParentId, setSelectedParentId] = useState<string>('')
+  const [selectedParentId, setSelectedParentId] = useState('')
+  const [step, setStep] = useState<'form' | 'mobile_wait' | 'card'>('form')
+  const [createdPayment, setCreatedPayment] = useState<{ id: number; payment_id: string } | null>(null)
+  const [mobileMessage, setMobileMessage] = useState('')
+  const [cardConfig, setCardConfig] = useState<Record<string, unknown> | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [selectedMethod, setSelectedMethod] = useState('')
 
   const studentOptions =
     mode === 'parent'
       ? children
       : students.filter((s) => !selectedParentId || s.parent === Number(selectedParentId))
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const isMobileMoney = (method: string) => MOBILE_MONEY_METHODS.includes(method)
+  const isCard = (method: string) => method === 'CARD'
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
+    const paymentMethod = formData.get('payment_method') as string
     const payload: Record<string, unknown> = {
       student: parseInt(formData.get('student') as string),
       amount: parseFloat(formData.get('amount') as string),
       currency: (formData.get('currency') as string) || 'CDF',
-      payment_method: formData.get('payment_method') as string,
+      payment_method: paymentMethod,
       description: (formData.get('description') as string) || '',
       reference_number: (formData.get('reference_number') as string) || '',
     }
@@ -75,10 +90,118 @@ export default function PaymentForm({
     if (mode === 'accountant' && formData.get('status')) {
       payload.status = formData.get('status') as string
     }
-    onSubmit(payload)
+    if (isMobileMoney(paymentMethod)) {
+      const phone = (formData.get('payer_phone') as string)?.trim()
+      if (!phone) {
+        toast.error('Veuillez indiquer le numéro de téléphone pour le Mobile Money.')
+        return
+      }
+      payload.payer_phone = phone
+    }
+    if (isCard(paymentMethod) || isMobileMoney(paymentMethod)) {
+      payload.status = 'PENDING'
+    }
+
+    setSubmitting(true)
+    try {
+      const payment = await onCreatePayment(payload)
+      setCreatedPayment(payment)
+
+      if (isMobileMoney(paymentMethod)) {
+        const { data } = await api.post('/payments/payments/initiate-mobile/', {
+          payment_id: payment.id,
+          phone_number: payload.payer_phone,
+          payment_method: paymentMethod,
+        })
+        setMobileMessage(data.message || 'Confirmez le paiement sur votre téléphone.')
+        setStep('mobile_wait')
+        setSubmitting(false)
+        return
+      }
+
+      if (isCard(paymentMethod)) {
+        const { data } = await api.post('/payments/payments/initiate-card/', {
+          payment_id: payment.id,
+        })
+        if (data.public_key && data.tx_ref && data.redirect_url) {
+          setCardConfig(data)
+          setStep('card')
+        } else {
+          toast.error(data.error || 'Impossible d\'initialiser le paiement carte (Flutterwave).')
+        }
+        setSubmitting(false)
+        return
+      }
+
+      onSuccess()
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+      toast.error(msg || 'Erreur lors de la création du paiement')
+    }
+    setSubmitting(false)
+  }
+
+  const handleConfirmMobile = async () => {
+    if (!createdPayment) return
+    setSubmitting(true)
+    try {
+      await api.post(`/payments/payments/${createdPayment.id}/confirm-mobile/`)
+      toast.success('Paiement enregistré avec succès.')
+      onSuccess()
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+      toast.error(msg || 'Erreur lors de la confirmation')
+    }
+    setSubmitting(false)
   }
 
   const feeTypesList = Array.isArray(feeTypes) ? feeTypes : ((feeTypes as { results?: FeeTypeOption[] })?.results ?? [])
+
+  if (step === 'mobile_wait') {
+    return (
+      <Card className="mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Confirmation Mobile Money</h2>
+          <button type="button" onClick={onCancel} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+            <X className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+          </button>
+        </div>
+        <div className="flex flex-col items-center text-center space-y-4 py-4">
+          <Smartphone className="w-12 h-12 text-primary-500" />
+          <p className="text-gray-700 dark:text-gray-300">{mobileMessage}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Référence : {createdPayment?.payment_id}
+          </p>
+          <button
+            type="button"
+            onClick={handleConfirmMobile}
+            disabled={submitting}
+            className="btn btn-primary flex items-center gap-2"
+          >
+            <CheckCircle className="w-4 h-4" />
+            {submitting ? 'Enregistrement...' : "J'ai confirmé le paiement sur mon téléphone"}
+          </button>
+        </div>
+      </Card>
+    )
+  }
+
+  if (step === 'card' && cardConfig) {
+    return (
+      <Card className="mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Paiement par carte (Flutterwave)</h2>
+          <button type="button" onClick={onCancel} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+            <X className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+          </button>
+        </div>
+        <CardPaymentForm
+          config={cardConfig as Parameters<typeof CardPaymentForm>[0]['config']}
+          onError={(msg) => toast.error(msg)}
+        />
+      </Card>
+    )
+  }
 
   return (
     <Card className="mb-6">
@@ -191,7 +314,13 @@ export default function PaymentForm({
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Méthode de paiement *
           </label>
-          <select name="payment_method" required className="input w-full">
+          <select
+            name="payment_method"
+            required
+            className="input w-full"
+            value={selectedMethod}
+            onChange={(e) => setSelectedMethod(e.target.value)}
+          >
             <option value="">Sélectionner une méthode</option>
             {PAYMENT_METHODS.map((m) => (
               <option key={m.value} value={m.value}>
@@ -200,6 +329,21 @@ export default function PaymentForm({
             ))}
           </select>
         </div>
+
+        {isMobileMoney(selectedMethod) && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Téléphone du payeur *
+            </label>
+            <input
+              type="tel"
+              name="payer_phone"
+              className="input w-full"
+              placeholder="+243 XXX XXX XXX"
+              required={isMobileMoney(selectedMethod)}
+            />
+          </div>
+        )}
 
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -252,8 +396,8 @@ export default function PaymentForm({
         )}
 
         <div className="flex space-x-3">
-          <button type="submit" disabled={isPending} className="btn btn-primary">
-            {isPending ? 'Création...' : 'Créer le paiement'}
+          <button type="submit" disabled={isPending || submitting} className="btn btn-primary">
+            {submitting ? 'Création...' : 'Créer le paiement'}
           </button>
           <button type="button" onClick={onCancel} className="btn btn-secondary">
             Annuler

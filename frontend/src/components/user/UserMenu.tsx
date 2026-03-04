@@ -52,54 +52,54 @@ export default function UserMenu({ user, onLogout }: UserMenuProps) {
       <div className="relative" ref={menuRef}>
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500"
+          className="flex items-center space-x-3 p-2 rounded-lg hover:bg-eschool-header-text/10 transition-colors focus:outline-none focus:ring-2 focus:ring-eschool-body"
         >
           {user.profile_picture ? (
             <img
               src={user.profile_picture}
               alt={[user?.first_name, user?.last_name].filter(Boolean).join(' ') || 'Avatar'}
-              className="w-10 h-10 rounded-full object-cover"
+              className="w-10 h-10 rounded-full object-cover ring-2 ring-eschool-avatar/50"
             />
           ) : (
-            <div className="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center">
-              <User className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+            <div className="w-10 h-10 rounded-full bg-eschool-avatar flex items-center justify-center">
+              <User className="w-5 h-5 text-eschool-avatar-text" />
             </div>
           )}
           <ChevronDown 
-            className={`w-4 h-4 text-gray-600 dark:text-gray-300 transition-transform ${isOpen ? 'rotate-180' : ''}`} 
+            className={`w-4 h-4 text-eschool-header-text transition-transform ${isOpen ? 'rotate-180' : ''}`} 
           />
         </button>
 
         {isOpen && (
-          <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-50">
-            <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-              <p className="text-sm font-semibold text-gray-900 dark:text-white">
+          <div className="absolute right-0 mt-2 w-64 bg-eschool-header rounded-lg shadow-lg border border-eschool-header-text/20 py-2 z-50">
+            <div className="px-4 py-3 border-b border-eschool-header-text/20">
+              <p className="text-sm font-semibold text-eschool-header-text">
                 {[user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.email || 'Utilisateur'}
               </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{user.email}</p>
+              <p className="text-xs text-eschool-header-text/70 mt-1">{user.email}</p>
             </div>
 
             <button
               onClick={handleProfileClick}
-              className="w-full px-4 py-3 text-left flex items-center space-x-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              className="w-full px-4 py-3 text-left flex items-center space-x-3 hover:bg-eschool-header-text/10 transition-colors"
             >
-              <User className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-              <span className="text-sm text-gray-700 dark:text-gray-300">Profil</span>
+              <User className="w-5 h-5 text-eschool-header-text/80" />
+              <span className="text-sm text-eschool-header-text">Profil</span>
             </button>
 
             <button
               onClick={handlePreferencesClick}
-              className="w-full px-4 py-3 text-left flex items-center space-x-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              className="w-full px-4 py-3 text-left flex items-center space-x-3 hover:bg-eschool-header-text/10 transition-colors"
             >
-              <Settings className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-              <span className="text-sm text-gray-700 dark:text-gray-300">Préférences</span>
+              <Settings className="w-5 h-5 text-eschool-header-text/80" />
+              <span className="text-sm text-eschool-header-text">Préférences</span>
             </button>
 
-            <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
+            <div className="border-t border-eschool-header-text/20 my-2"></div>
 
             <button
               onClick={handleLogoutClick}
-              className="w-full px-4 py-3 text-left flex items-center space-x-3 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors"
+              className="w-full px-4 py-3 text-left flex items-center space-x-3 hover:bg-red-50 text-red-600 transition-colors"
             >
               <LogOut className="w-5 h-5" />
               <span className="text-sm font-medium">Déconnexion</span>

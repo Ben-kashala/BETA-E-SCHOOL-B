@@ -4,6 +4,9 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+from django.http import HttpResponse, JsonResponse
 from django.db.models import Sum, Count, Q, DecimalField, Value
 from django.db import models
 from django.db.models.functions import Coalesce
@@ -17,6 +20,12 @@ from .serializers import (
     FeeTypeSerializer, PaymentSerializer, FeePaymentSerializer,
     PaymentPlanSerializer, PaymentReceiptSerializer, SchoolExpenseSerializer,
     CashMovementSerializer, CashMovementCreateSerializer,
+    InitiateMobileSerializer, InitiateCardSerializer,
+)
+from .gateways import (
+    initiate_mobile_money,
+    get_card_checkout_config,
+    verify_flutterwave_transaction,
 )
 
 
@@ -275,6 +284,204 @@ class PaymentViewSet(viewsets.ModelViewSet):
         
         return Response(result)
     
+    @action(detail=False, methods=['post'], url_path='initiate-mobile')
+    def initiate_mobile(self, request):
+        """Initie un paiement Mobile Money (Orange Money, M-Pesa, Airtel Money)."""
+        serializer = InitiateMobileSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        payment_id = data['payment_id']
+        phone_number = data['phone_number']
+        payment_method = data['payment_method']
+
+        payment = Payment.objects.filter(id=payment_id).first()
+        if not payment:
+            return Response({'error': 'Paiement introuvable'}, status=status.HTTP_404_NOT_FOUND)
+        if payment.status != 'PENDING':
+            return Response({'error': 'Seuls les paiements en attente peuvent être initiés'}, status=status.HTTP_400_BAD_REQUEST)
+        if payment.payment_method not in ('MOBILE_MONEY_ORANGE', 'MOBILE_MONEY_MPESA', 'MOBILE_MONEY_AIRTEL'):
+            return Response({'error': 'Méthode de paiement non supportée pour Mobile Money'}, status=status.HTTP_400_BAD_REQUEST)
+        if request.user.school and payment.school_id != request.user.school_id:
+            return Response({'error': 'Accès refusé'}, status=status.HTTP_403_FORBIDDEN)
+        if not (request.user.is_admin or request.user.is_accountant) and payment.user_id != request.user.id:
+            return Response({'error': 'Accès refusé'}, status=status.HTTP_403_FORBIDDEN)
+
+        payment.payer_phone = phone_number
+        payment.status = 'PROCESSING'
+        payment.save()
+
+        result = initiate_mobile_money(
+            payment_method=payment_method,
+            phone_number=phone_number,
+            amount=payment.amount,
+            currency=payment.currency,
+            reference=payment.payment_id,
+            school_id=payment.school_id,
+        )
+        if not result.success:
+            payment.status = 'PENDING'
+            payment.save()
+            return Response({'error': result.message}, status=status.HTTP_400_BAD_REQUEST)
+        payment.transaction_id = result.transaction_id
+        payment.save()
+        return Response({
+            'transaction_id': result.transaction_id,
+            'message': result.message,
+            'payment_id': payment.id,
+            'status': payment.status,
+        })
+
+    @action(detail=False, methods=['post'], url_path='initiate-card')
+    def initiate_card(self, request):
+        """Retourne la config Flutterwave pour paiement par carte (VISA, Mastercard) — multi-tenant par école."""
+        serializer = InitiateCardSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payment_id = serializer.validated_data['payment_id']
+
+        payment = Payment.objects.filter(id=payment_id).first()
+        if not payment:
+            return Response({'error': 'Paiement introuvable'}, status=status.HTTP_404_NOT_FOUND)
+        if payment.status not in ('PENDING', 'PROCESSING'):
+            return Response({'error': 'Paiement déjà traité ou annulé'}, status=status.HTTP_400_BAD_REQUEST)
+        if request.user.school and payment.school_id != request.user.school_id:
+            return Response({'error': 'Accès refusé'}, status=status.HTTP_403_FORBIDDEN)
+        if not (request.user.is_admin or request.user.is_accountant) and payment.user_id != request.user.id:
+            return Response({'error': 'Accès refusé'}, status=status.HTTP_403_FORBIDDEN)
+
+        payment.status = 'PROCESSING'
+        payment.payment_method = 'CARD'
+        payment.save()
+
+        from django.conf import settings
+        frontend_url = getattr(settings, 'FRONTEND_URL', '') or request.build_absolute_uri('/')[:-1]
+        redirect_url = f"{frontend_url.rstrip('/')}/payments/return?payment_id={payment.id}"
+        customer_name = payment.user.get_full_name() if payment.user else ''
+        customer_email = getattr(payment.user, 'email', '') or ''
+
+        config = get_card_checkout_config(
+            amount=payment.amount,
+            currency=payment.currency,
+            payment_id=payment.payment_id,
+            payment_db_id=payment.id,
+            school_id=payment.school_id,
+            redirect_url=redirect_url,
+            customer_email=customer_email,
+            customer_name=customer_name,
+        )
+        if not config:
+            payment.status = 'PENDING'
+            payment.save()
+            return Response({'error': 'Paiement carte non configuré (Flutterwave).'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({
+            **config,
+            'payment_id': payment.id,
+        })
+
+    @action(detail=False, methods=['get'], url_path='payment-gateway-config')
+    def payment_gateway_config(self, request):
+        """Retourne la clé publique Flutterwave pour le frontend (multi-tenant : école du user)."""
+        from .gateways import get_flutterwave_keys
+        school_id = getattr(request.user, 'school_id', None)
+        public_key, _ = get_flutterwave_keys(school_id)
+        return Response({'public_key': public_key, 'provider': 'flutterwave'})
+
+    @action(detail=False, methods=['post'], url_path='confirm-card')
+    def confirm_card(self, request):
+        """
+        Confirme un paiement carte après retour Flutterwave (transaction_id).
+        Vérifie la transaction via l'API Flutterwave puis marque le paiement COMPLETED.
+        Multi-tenant : le paiement est déjà lié à une école.
+        """
+        payment_id = request.data.get('payment_id')
+        transaction_id = request.data.get('transaction_id')
+        if not payment_id or not transaction_id:
+            return Response(
+                {'error': 'payment_id et transaction_id requis'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        payment = Payment.objects.filter(id=payment_id).first()
+        if not payment:
+            return Response({'error': 'Paiement introuvable'}, status=status.HTTP_404_NOT_FOUND)
+        if request.user.school and payment.school_id != request.user.school_id:
+            return Response({'error': 'Accès refusé'}, status=status.HTTP_403_FORBIDDEN)
+        if not (request.user.is_admin or request.user.is_accountant) and payment.user_id != request.user.id:
+            return Response({'error': 'Accès refusé'}, status=status.HTTP_403_FORBIDDEN)
+        if payment.status == 'COMPLETED':
+            return Response(PaymentSerializer(payment).data)
+        success, message, tx_ref = verify_flutterwave_transaction(transaction_id, payment.school_id)
+        if not success:
+            payment.status = 'FAILED'
+            payment.notes = (payment.notes or '') + f" Flutterwave: {message}"
+            payment.save()
+            return Response({'error': message or 'Transaction non réussie'}, status=status.HTTP_400_BAD_REQUEST)
+        payment.status = 'COMPLETED'
+        payment.payment_date = timezone.now()
+        payment.transaction_id = transaction_id
+        payment.save()
+        receipt_number = f"REC-{uuid.uuid4().hex[:12].upper()}"
+        PaymentReceipt.objects.get_or_create(payment=payment, defaults={'receipt_number': receipt_number})
+        if not CashMovement.objects.filter(school=payment.school, reference_type='payment', reference_id=payment.id).exists():
+            _create_cash_movement(
+                school=payment.school,
+                movement_type='IN',
+                amount=payment.amount,
+                currency=payment.currency,
+                payment_method='CARD',
+                source='PAYMENT',
+                description=f'Paiement {payment.payment_id}',
+                reference_type='payment',
+                reference_id=payment.id,
+                created_by=request.user,
+            )
+        try:
+            from apps.communication.notifications import notify_payment_made
+            notify_payment_made(payment)
+        except Exception as e:
+            logger.exception("notify_payment_made: %s", e)
+        return Response(PaymentSerializer(payment).data)
+
+    @action(detail=True, methods=['post'], url_path='confirm-mobile')
+    def confirm_mobile(self, request, pk=None):
+        """
+        Marque un paiement Mobile Money comme complété (appelé après confirmation utilisateur ou webhook).
+        En mode mock, le frontend peut appeler cette action pour simuler la confirmation.
+        """
+        payment = self.get_object()
+        if payment.status not in ('PENDING', 'PROCESSING'):
+            return Response(
+                {'error': 'Ce paiement n\'est pas en attente de confirmation'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if payment.payment_method not in ('MOBILE_MONEY_ORANGE', 'MOBILE_MONEY_MPESA', 'MOBILE_MONEY_AIRTEL'):
+            return Response(
+                {'error': 'Méthode non Mobile Money'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        payment.status = 'COMPLETED'
+        payment.payment_date = timezone.now()
+        payment.save()
+        receipt_number = f"REC-{uuid.uuid4().hex[:12].upper()}"
+        PaymentReceipt.objects.get_or_create(payment=payment, defaults={'receipt_number': receipt_number})
+        if not CashMovement.objects.filter(school=payment.school, reference_type='payment', reference_id=payment.id).exists():
+            _create_cash_movement(
+                school=payment.school,
+                movement_type='IN',
+                amount=payment.amount,
+                currency=payment.currency,
+                payment_method=payment.payment_method,
+                source='PAYMENT',
+                description=f'Paiement {payment.payment_id}',
+                reference_type='payment',
+                reference_id=payment.id,
+                created_by=request.user,
+            )
+        try:
+            from apps.communication.notifications import notify_payment_made
+            notify_payment_made(payment)
+        except Exception as e:
+            logger.exception("notify_payment_made: %s", e)
+        return Response(PaymentSerializer(payment).data)
+
     @action(detail=True, methods=['post'])
     def process(self, request, pk=None):
         """Process a payment"""
@@ -301,8 +508,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
             else:
                 payment.status = 'FAILED'
         elif payment_method == 'ONLINE':
-            # Integrate with Stripe or other payment gateway
-            # For now, simulate
+            # Paiement en ligne (Flutterwave carte ou autre)
             payment.status = 'COMPLETED'
             payment.payment_date = timezone.now()
         elif payment_method == 'CASH':
@@ -451,6 +657,73 @@ class PaymentReceiptViewSet(viewsets.ReadOnlyModelViewSet):
         if not (self.request.user.is_admin or self.request.user.is_accountant):
             queryset = queryset.filter(payment__user=self.request.user)
         return queryset
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def flutterwave_webhook(request):
+    """
+    Webhook Flutterwave pour confirmer les paiements (charge.completed).
+    Vérification par verif-hash ; multi-tenant : le paiement est identifié par tx_ref (payment_id).
+    """
+    from django.conf import settings
+    from .gateways import verify_flutterwave_transaction
+    verif_hash = getattr(settings, 'FLUTTERWAVE_WEBHOOK_HASH', None) or ''
+    if not verif_hash:
+        logger.warning("FLUTTERWAVE_WEBHOOK_HASH non configuré")
+        return HttpResponse(status=500)
+    incoming_hash = request.META.get('HTTP_VERIF_HASH', '')
+    if incoming_hash != verif_hash:
+        logger.warning("Flutterwave webhook: verif-hash invalide")
+        return HttpResponse(status=401)
+    try:
+        import json
+        payload = json.loads(request.body)
+    except Exception as e:
+        logger.warning("Flutterwave webhook invalid JSON: %s", e)
+        return HttpResponse(status=400)
+    event = payload.get('event')
+    data = payload.get('data', {})
+    if event != 'charge.completed':
+        return JsonResponse({'received': True})
+    status_val = data.get('status')
+    if status_val != 'successful':
+        return JsonResponse({'received': True})
+    tx_ref = data.get('tx_ref')
+    transaction_id = str(data.get('id', ''))
+    if not tx_ref:
+        return JsonResponse({'received': True})
+    payment = Payment.objects.filter(payment_id=tx_ref).first()
+    if not payment or payment.status == 'COMPLETED':
+        return JsonResponse({'received': True})
+    success, _, _ = verify_flutterwave_transaction(transaction_id, payment.school_id)
+    if not success:
+        return JsonResponse({'received': True})
+    payment.status = 'COMPLETED'
+    payment.payment_date = timezone.now()
+    payment.transaction_id = transaction_id
+    payment.save()
+    receipt_number = f"REC-{uuid.uuid4().hex[:12].upper()}"
+    PaymentReceipt.objects.get_or_create(payment=payment, defaults={'receipt_number': receipt_number})
+    if not CashMovement.objects.filter(school=payment.school, reference_type='payment', reference_id=payment.id).exists():
+        _create_cash_movement(
+            school=payment.school,
+            movement_type='IN',
+            amount=payment.amount,
+            currency=payment.currency,
+            payment_method='CARD',
+            source='PAYMENT',
+            description=f'Paiement {payment.payment_id}',
+            reference_type='payment',
+            reference_id=payment.id,
+            created_by=None,
+        )
+    try:
+        from apps.communication.notifications import notify_payment_made
+        notify_payment_made(payment)
+    except Exception as e:
+        logger.exception("notify_payment_made: %s", e)
+    return JsonResponse({'received': True})
 
 
 def _create_cash_movement(school, movement_type, amount, currency, payment_method, source, description, reference_type, reference_id, created_by):

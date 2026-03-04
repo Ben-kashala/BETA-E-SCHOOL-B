@@ -4,6 +4,7 @@ from .views import (
     FeeTypeViewSet, PaymentViewSet, FeePaymentViewSet,
     PaymentPlanViewSet, PaymentReceiptViewSet, SchoolExpenseViewSet,
     CashMovementViewSet,
+    flutterwave_webhook,
 )
 
 router = DefaultRouter()
@@ -17,4 +18,5 @@ router.register(r'caisse', CashMovementViewSet, basename='caisse')
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('webhook/flutterwave/', flutterwave_webhook),
 ]

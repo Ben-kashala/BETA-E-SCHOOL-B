@@ -124,13 +124,12 @@ export default function Sidebar({ user, currentPath, isOpen = false, onClose }: 
 
   return (
     <>
-      {/* Sidebar pour desktop - toujours visible */}
-      <aside className="hidden lg:flex lg:w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 min-h-[calc(100vh-73px)] transition-colors flex-shrink-0">
+      {/* Sidebar pour desktop - même style que entête/pied */}
+      <aside className="hidden lg:flex lg:w-64 bg-eschool-header border-r border-eschool-header-text/20 min-h-[calc(100vh-73px)] transition-colors flex-shrink-0">
         <nav className="p-4 space-y-2 w-full">
           {menu.map((item) => {
             const Icon = item.icon
             const isActive = currentPath === item.path || currentPath.startsWith(item.path + '/')
-            
             return (
               <NavLink
                 key={item.path}
@@ -138,8 +137,8 @@ export default function Sidebar({ user, currentPath, isOpen = false, onClose }: 
                 className={cn(
                   'flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors',
                   isActive
-                    ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 font-medium'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    ? 'bg-eschool-body/15 text-eschool-header-text font-medium'
+                    : 'text-eschool-header-text/80 hover:bg-eschool-header-text/10'
                 )}
               >
                 <Icon className="w-5 h-5 flex-shrink-0" />
@@ -153,16 +152,16 @@ export default function Sidebar({ user, currentPath, isOpen = false, onClose }: 
       {/* Sidebar pour mobile - overlay */}
       <aside
         className={cn(
-          'fixed top-[65px] sm:top-[73px] left-0 h-[calc(100vh-65px)] sm:h-[calc(100vh-73px)] w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 z-50 transition-transform duration-300 ease-in-out lg:hidden overflow-y-auto',
+          'fixed top-[65px] sm:top-[73px] left-0 h-[calc(100vh-65px)] sm:h-[calc(100vh-73px)] w-64 bg-eschool-header border-r border-eschool-header-text/20 z-50 transition-transform duration-300 ease-in-out lg:hidden overflow-y-auto',
           isOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Menu</h2>
+        <div className="p-4 border-b border-eschool-header-text/20 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-eschool-header-text">Menu</h2>
           {onClose && (
             <button
               onClick={onClose}
-              className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+              className="p-2 text-eschool-header-text hover:opacity-80 transition-colors"
               aria-label="Fermer le menu"
             >
               <X className="w-5 h-5" />
@@ -173,7 +172,6 @@ export default function Sidebar({ user, currentPath, isOpen = false, onClose }: 
           {menu.map((item) => {
             const Icon = item.icon
             const isActive = currentPath === item.path || currentPath.startsWith(item.path + '/')
-            
             return (
               <NavLink
                 key={item.path}
@@ -182,8 +180,8 @@ export default function Sidebar({ user, currentPath, isOpen = false, onClose }: 
                 className={cn(
                   'flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors',
                   isActive
-                    ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 font-medium'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    ? 'bg-eschool-body/15 text-eschool-header-text font-medium'
+                    : 'text-eschool-header-text/80 hover:bg-eschool-header-text/10'
                 )}
               >
                 <Icon className="w-5 h-5 flex-shrink-0" />

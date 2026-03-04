@@ -4,7 +4,7 @@ import api from '@/services/api'
 import { Card } from '@/components/ui/Card'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { Plus, CheckCircle, Eye, XCircle, X } from 'lucide-react'
+import { CheckCircle, Eye, X, XCircle } from 'lucide-react'
 import { showErrorToast, showSuccessToast } from '@/utils/toast'
 import { cn } from '@/utils/cn'
 
@@ -33,21 +33,11 @@ interface DisciplineRecord {
 
 export default function TeacherDiscipline() {
   const queryClient = useQueryClient()
-  const [showForm, setShowForm] = useState(false)
   const [selectedRecord, setSelectedRecord] = useState<DisciplineRecord | null>(null)
   const [showDetails, setShowDetails] = useState(false)
   const [showResolveModal, setShowResolveModal] = useState(false)
   const [recordToResolve, setRecordToResolve] = useState<DisciplineRecord | null>(null)
   const [resolutionNotes, setResolutionNotes] = useState('')
-  const [formData, setFormData] = useState({
-    student: '',
-    school_class: '',
-    type: 'NEGATIVE' as 'POSITIVE' | 'NEGATIVE',
-    severity: 'LOW' as 'LOW' | 'MEDIUM' | 'HIGH',
-    description: '',
-    action_taken: '',
-    date: new Date().toISOString().split('T')[0],
-  })
 
   // Récupérer les fiches de discipline
   const { data: records, isLoading, error } = useQuery({
@@ -57,46 +47,6 @@ export default function TeacherDiscipline() {
       return response.data
     },
     retry: 1,
-  })
-
-  // Récupérer les élèves
-  const { data: students } = useQuery({
-    queryKey: ['students'],
-    queryFn: async () => {
-      const response = await api.get('/accounts/students/')
-      return response.data
-    },
-  })
-
-  // Récupérer les classes
-  const { data: classes } = useQuery({
-    queryKey: ['classes'],
-    queryFn: async () => {
-      const response = await api.get('/schools/classes/')
-      return response.data
-    },
-  })
-
-  // Créer une fiche
-  const createMutation = useMutation({
-    mutationFn: (data: any) => api.post('/academics/discipline/', data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['discipline-records'] })
-      showSuccessToast('Fiche de discipline créée avec succès')
-      setShowForm(false)
-      setFormData({
-        student: '',
-        school_class: '',
-        type: 'NEGATIVE',
-        severity: 'LOW',
-        description: '',
-        action_taken: '',
-        date: new Date().toISOString().split('T')[0],
-      })
-    },
-    onError: (error: any) => {
-      showErrorToast(error, 'Erreur lors de la création de la fiche')
-    },
   })
 
   // Résoudre une fiche
@@ -139,11 +89,6 @@ export default function TeacherDiscipline() {
     return badges[severity] || 'bg-gray-100 dark:bg-gray-900/30 text-gray-800 dark:text-gray-300'
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    createMutation.mutate(formData)
-  }
-
   const handleResolve = (id: number, resolutionNotes: string) => {
     resolveMutation.mutate({ id, resolution_notes: resolutionNotes })
   }
@@ -174,139 +119,8 @@ export default function TeacherDiscipline() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Fiches de Discipline</h1>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="btn btn-primary flex items-center space-x-2"
-        >
-          <Plus className="w-5 h-5" />
-          <span>Nouvelle fiche</span>
-        </button>
+        <p className="text-sm text-gray-500 dark:text-gray-400">Consultation uniquement — le chargé de discipline gère les fiches.</p>
       </div>
-
-      {/* Formulaire de création */}
-      {showForm && (
-        <Card className="mb-6">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">Créer une fiche de discipline</h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Élève *
-                </label>
-                <select
-                  required
-                  value={formData.student}
-                  onChange={(e) => setFormData({ ...formData, student: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                >
-                  <option value="">Sélectionner un élève</option>
-                  {students?.results?.map((student: any) => (
-                    <option key={student.id} value={student.id}>
-                      {[student.user?.first_name, student.user?.last_name, student.user?.middle_name].filter(Boolean).join(' ')} - {student.student_id}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Classe *
-                </label>
-                <select
-                  required
-                  value={formData.school_class}
-                  onChange={(e) => setFormData({ ...formData, school_class: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                >
-                  <option value="">Sélectionner une classe</option>
-                  {classes?.results?.map((cls: any) => (
-                    <option key={cls.id} value={cls.id}>
-                      {cls.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Type *
-                </label>
-                <select
-                  required
-                  value={formData.type}
-                  onChange={(e) => setFormData({ ...formData, type: e.target.value as 'POSITIVE' | 'NEGATIVE' })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                >
-                  <option value="POSITIVE">Comportement positif</option>
-                  <option value="NEGATIVE">Comportement négatif</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Sévérité *
-                </label>
-                <select
-                  required
-                  value={formData.severity}
-                  onChange={(e) => setFormData({ ...formData, severity: e.target.value as 'LOW' | 'MEDIUM' | 'HIGH' })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                >
-                  <option value="LOW">Faible</option>
-                  <option value="MEDIUM">Moyen</option>
-                  <option value="HIGH">Élevé</option>
-                </select>
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Description *
-              </label>
-              <textarea
-                required
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                rows={4}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Action prise
-              </label>
-              <textarea
-                value={formData.action_taken}
-                onChange={(e) => setFormData({ ...formData, action_taken: e.target.value })}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Date *
-              </label>
-              <input
-                type="date"
-                required
-                value={formData.date}
-                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-              />
-            </div>
-            <div className="flex space-x-2">
-              <button type="submit" className="btn btn-primary" disabled={createMutation.isPending}>
-                {createMutation.isPending ? 'Création...' : 'Créer'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="btn btn-secondary"
-              >
-                Annuler
-              </button>
-            </div>
-          </form>
-        </Card>
-      )}
 
       {/* Liste des fiches */}
       <Card>

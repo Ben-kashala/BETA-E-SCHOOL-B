@@ -73,6 +73,7 @@ import DisciplineOfficerCommunication from './pages/discipline-officer/Communica
 
 // Shared pages
 import BookReader from './pages/shared/BookReader'
+import PaymentReturnPage from './pages/payments/PaymentReturnPage'
 
 // Layout
 import Layout from './components/layout/Layout'
@@ -104,6 +105,7 @@ function App() {
       />
       
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+        <Route path="payments/return" element={<PaymentReturnPage />} />
         {/* Admin Routes */}
         <Route path="/admin" element={<RoleRoute allowedRoles={['ADMIN']} />}>
           <Route index element={<AdminDashboard />} />

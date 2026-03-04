@@ -20,6 +20,15 @@ export default {
           800: '#3730a3',
           900: '#312e81',
         },
+        /* Charte E-School */
+        eschool: {
+          header: '#ededed',      /* fond entête / pied */
+          'header-text': '#21335c',
+          body: '#21335c',        /* fond corps */
+          'body-text': '#ededed',
+          avatar: '#ca9d1e',      /* fond avatar */
+          'avatar-text': '#ededed',
+        },
       },
     },
   },

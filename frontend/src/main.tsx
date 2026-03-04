@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
 import App from './App'
 import './index.css'
-import favicon from './images/logo.png'
+import favicon from './images/icone.png'
 
 // Initialiser le thème au chargement depuis localStorage
 const initializeTheme = () => {
@@ -62,7 +62,7 @@ const setFavicon = () => {
     const link = existingLink ?? document.createElement('link')
 
     link.rel = 'icon'
-    link.type = 'image/png'
+    link.type = 'icone/png'
     link.href = favicon
 
     if (!existingLink) {

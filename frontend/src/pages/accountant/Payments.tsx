@@ -97,12 +97,9 @@ export default function AccountantPayments() {
   })
 
   const createPaymentMutation = useMutation({
-    mutationFn: (payload: any) => api.post('/payments/payments/', payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['payments'] })
-      queryClient.invalidateQueries({ queryKey: ['payments-summary-by-fee-type'] })
-      showSuccessToast('Paiement enregistré')
-      setShowPaymentForm(false)
+    mutationFn: async (payload: Record<string, unknown>) => {
+      const response = await api.post('/payments/payments/', payload)
+      return response.data
     },
     onError: (error: any) => {
       showErrorToast(error, 'Erreur lors de l\'enregistrement du paiement')
@@ -323,7 +320,16 @@ export default function AccountantPayments() {
               parents={parents ?? []}
               students={students}
               feeTypes={feeTypes ?? []}
-              onSubmit={(payload) => createPaymentMutation.mutate(payload as any)}
+              onCreatePayment={async (payload) => {
+                const data = await createPaymentMutation.mutateAsync(payload)
+                return { id: data.id, payment_id: data.payment_id }
+              }}
+              onSuccess={() => {
+                queryClient.invalidateQueries({ queryKey: ['payments'] })
+                queryClient.invalidateQueries({ queryKey: ['payments-summary-by-fee-type'] })
+                showSuccessToast('Paiement enregistré')
+                setShowPaymentForm(false)
+              }}
               onCancel={() => setShowPaymentForm(false)}
               isPending={createPaymentMutation.isPending}
               title="Effectuer un paiement"
