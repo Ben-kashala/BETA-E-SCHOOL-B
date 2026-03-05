@@ -5,11 +5,15 @@ import { Card } from '@/components/ui/Card'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { cn } from '@/utils/cn'
-import { Plus, FileText, Pencil } from 'lucide-react'
+import { Plus, FileText, Pencil as PencilIcon } from 'lucide-react'
 import toast from 'react-hot-toast'
 import PaymentForm from '@/components/payment/PaymentForm'
 
-const PAYMENT_METHODS_EDITABLE = ['CARD', 'MOBILE_MONEY_ORANGE', 'MOBILE_MONEY_MPESA', 'MOBILE_MONEY_AIRTEL', 'MOBILE_MONEY']
+const EDITABLE_METHODS: string[] = ['CARD', 'MOBILE_MONEY_ORANGE', 'MOBILE_MONEY_MPESA', 'MOBILE_MONEY_AIRTEL', 'MOBILE_MONEY']
+
+function canEditPayment(payment: { status: string; payment_method: string }): boolean {
+  return payment.status !== 'COMPLETED' && EDITABLE_METHODS.includes(payment.payment_method)
+}
 
 export default function ParentPayments() {
   const [showPaymentForm, setShowPaymentForm] = useState(false)
@@ -125,58 +129,80 @@ export default function ParentPayments() {
                   </td>
                 </tr>
               ) : (
-                payments.results.map((payment: any) => (
-                  <tr key={payment.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900 dark:text-gray-100">
-                      {payment.payment_id}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {payment.amount} {payment.currency}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                      {payment.payment_method}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={cn('badge', getStatusBadge(payment.status))}>
-                        {payment.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                      {payment.payment_date
-                        ? format(new Date(payment.payment_date), 'dd MMM yyyy', { locale: fr })
-                        : '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      {payment.status === 'COMPLETED' && (
-                        <button
-                          onClick={async () => {
-                            try {
-                              const response = await api.get(`/payments/payments/${payment.id}/download_receipt/`, {
-                                responseType: 'blob',
-                              })
-                              const url = window.URL.createObjectURL(new Blob([response.data]))
-                              const link = document.createElement('a')
-                              link.href = url
-                              link.setAttribute('download', `receipt_${payment.payment_id}.pdf`)
-                              document.body.appendChild(link)
-                              link.click()
-                              link.remove()
-                              window.URL.revokeObjectURL(url)
-                              toast.success('Reçu téléchargé avec succès')
-                            } catch (error: any) {
-                              toast.error(error?.response?.data?.error || 'Erreur lors du téléchargement du reçu')
-                            }
-                          }}
-                          className="text-primary-600 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 flex items-center space-x-1"
-                          title="Télécharger le reçu"
-                        >
-                          <FileText className="w-4 h-4" />
-                          <span>Reçu</span>
-                        </button>
+                payments.results.map((payment: any) => {
+                  const canEdit = canEditPayment(payment)
+                  return (
+                    <tr
+                      key={payment.id}
+                      className={cn(
+                        'hover:bg-gray-50 dark:hover:bg-gray-700/50',
+                        canEdit && 'cursor-pointer'
                       )}
-                    </td>
-                  </tr>
-                ))
+                      onClick={canEdit ? () => setEditingPayment(payment) : undefined}
+                      role={canEdit ? 'button' : undefined}
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900 dark:text-gray-100">
+                        {payment.payment_id}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {payment.amount} {payment.currency}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                        {payment.payment_method}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={cn('badge', getStatusBadge(payment.status))}>
+                          {payment.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                        {payment.payment_date
+                          ? format(new Date(payment.payment_date), 'dd MMM yyyy', { locale: fr })
+                          : '-'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm" onClick={(e) => canEdit && e.stopPropagation()}>
+                        {payment.status === 'COMPLETED' && (
+                          <button
+                            onClick={async () => {
+                              try {
+                                const response = await api.get(`/payments/payments/${payment.id}/download_receipt/`, {
+                                  responseType: 'blob',
+                                })
+                                const url = window.URL.createObjectURL(new Blob([response.data]))
+                                const link = document.createElement('a')
+                                link.href = url
+                                link.setAttribute('download', `receipt_${payment.payment_id}.pdf`)
+                                document.body.appendChild(link)
+                                link.click()
+                                link.remove()
+                                window.URL.revokeObjectURL(url)
+                                toast.success('Reçu téléchargé avec succès')
+                              } catch (error: any) {
+                                toast.error(error?.response?.data?.error || 'Erreur lors du téléchargement du reçu')
+                              }
+                            }}
+                            className="text-primary-600 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 flex items-center space-x-1"
+                            title="Télécharger le reçu"
+                          >
+                            <FileText className="w-4 h-4" />
+                            <span>Reçu</span>
+                          </button>
+                        )}
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => setEditingPayment(payment)}
+                            className="text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 flex items-center space-x-1"
+                            title="Modifier / Relancer le paiement"
+                          >
+                            <PencilIcon className="w-4 h-4" />
+                            <span>Modifier</span>
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })
               )}
             </tbody>
           </table>
