@@ -63,6 +63,7 @@ class FeeType(models.Model):
         verbose_name = "Type de frais"
         verbose_name_plural = "Types de frais"
         unique_together = ['school', 'name']
+        ordering = ['school', 'name']
     
     def __str__(self):
         return f"{self.name} - {self.school.name}"

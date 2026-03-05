@@ -288,7 +288,13 @@ class PaymentViewSet(viewsets.ModelViewSet):
     def initiate_mobile(self, request):
         """Initie un paiement Mobile Money (Orange Money, M-Pesa, Airtel Money)."""
         serializer = InitiateMobileSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+            err_msg = '; '.join(
+                f"{k}: {v[0]}" if isinstance(v, list) else f"{k}: {v}"
+                for k, v in serializer.errors.items()
+            )
+            logger.warning("initiate-mobile validation error: %s (payload keys: %s)", err_msg, list(request.data.keys()))
+            return Response({'error': err_msg}, status=status.HTTP_400_BAD_REQUEST)
         data = serializer.validated_data
         payment_id = data['payment_id']
         phone_number = data['phone_number']
@@ -296,11 +302,17 @@ class PaymentViewSet(viewsets.ModelViewSet):
 
         payment = Payment.objects.filter(id=payment_id).first()
         if not payment:
-            return Response({'error': 'Paiement introuvable'}, status=status.HTTP_404_NOT_FOUND)
+            err = 'Paiement introuvable'
+            logger.warning("initiate-mobile 400: %s (payment_id=%s)", err, payment_id)
+            return Response({'error': err}, status=status.HTTP_404_NOT_FOUND)
         if payment.status != 'PENDING':
-            return Response({'error': 'Seuls les paiements en attente peuvent être initiés'}, status=status.HTTP_400_BAD_REQUEST)
+            err = 'Seuls les paiements en attente peuvent être initiés'
+            logger.warning("initiate-mobile 400: %s (payment_id=%s status=%s)", err, payment_id, payment.status)
+            return Response({'error': err}, status=status.HTTP_400_BAD_REQUEST)
         if payment.payment_method not in ('MOBILE_MONEY_ORANGE', 'MOBILE_MONEY_MPESA', 'MOBILE_MONEY_AIRTEL'):
-            return Response({'error': 'Méthode de paiement non supportée pour Mobile Money'}, status=status.HTTP_400_BAD_REQUEST)
+            err = 'Méthode de paiement non supportée pour Mobile Money'
+            logger.warning("initiate-mobile 400: %s (payment_id=%s method=%s)", err, payment_id, payment.payment_method)
+            return Response({'error': err}, status=status.HTTP_400_BAD_REQUEST)
         if request.user.school and payment.school_id != request.user.school_id:
             return Response({'error': 'Accès refusé'}, status=status.HTTP_403_FORBIDDEN)
         if not (request.user.is_admin or request.user.is_accountant) and payment.user_id != request.user.id:
@@ -319,6 +331,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
             school_id=payment.school_id,
         )
         if not result.success:
+            logger.warning("initiate-mobile 400 gateway: %s (payment_id=%s)", result.message, payment_id)
             payment.status = 'PENDING'
             payment.save()
             return Response({'error': result.message}, status=status.HTTP_400_BAD_REQUEST)

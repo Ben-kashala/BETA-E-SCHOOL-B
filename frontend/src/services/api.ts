@@ -85,7 +85,7 @@ api.interceptors.response.use(
     
     if (error.response) {
       const data = error.response.data as any
-      let message = data?.detail || data?.message || 'Une erreur est survenue'
+      let message = data?.error || data?.detail || data?.message || 'Une erreur est survenue'
       
       // Extract field-specific errors
       if (data?.non_field_errors && Array.isArray(data.non_field_errors)) {

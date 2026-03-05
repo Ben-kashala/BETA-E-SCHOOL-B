@@ -115,8 +115,13 @@ MOBILE_MONEY_METHODS = [
 class InitiateMobileSerializer(serializers.Serializer):
     """Corps de la requête pour initier un paiement Mobile Money."""
     payment_id = serializers.IntegerField(help_text="ID du paiement (PENDING)")
-    phone_number = serializers.CharField(max_length=20, trim_whitespace=True)
+    phone_number = serializers.CharField(max_length=30, trim_whitespace=True, allow_blank=False)
     payment_method = serializers.ChoiceField(choices=[(m, m) for m in MOBILE_MONEY_METHODS])
+
+    def validate_phone_number(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("Le numéro de téléphone est requis.")
+        return value.strip()
 
 
 class InitiateCardSerializer(serializers.Serializer):
