@@ -44,7 +44,10 @@ export default function LoginPage() {
       
       const redirectPath = roleRoutes[user?.role || ''] || '/admin'
       showSuccessToast('Connexion réussie')
-      navigate(redirectPath, { replace: true })
+      // Laisser le store (Zustand) et la persistance se mettre à jour avant la navigation
+      window.requestAnimationFrame(() => {
+        navigate(redirectPath, { replace: true })
+      })
     } catch (error: any) {
       // Gérer les erreurs spécifiques de connexion
       const errorData = error.response?.data

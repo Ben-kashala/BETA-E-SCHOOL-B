@@ -9,10 +9,11 @@ import Footer from './Footer'
 const INACTIVITY_CHECK_INTERVAL_MS = 60_000
 
 export default function Layout() {
-  const { user, logout, checkInactivity } = useAuthStore()
+  const { user, isAuthenticated, logout, checkInactivity, checkAuth } = useAuthStore()
   const navigate = useNavigate()
   const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [userLoaded, setUserLoaded] = useState(false)
 
   const handleLogout = () => {
     logout()
@@ -41,6 +42,33 @@ export default function Layout() {
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [])
+
+  // Si on est authentifié mais user pas encore dispo (ex. après login, rehydration retardée), charger le profil
+  useEffect(() => {
+    if (user) {
+      setUserLoaded(true)
+      return
+    }
+    const token = localStorage.getItem('access_token')
+    if (!token || !isAuthenticated) {
+      setUserLoaded(true)
+      return
+    }
+    let cancelled = false
+    checkAuth().finally(() => {
+      if (!cancelled) setUserLoaded(true)
+    })
+    return () => { cancelled = true }
+  }, [user, isAuthenticated, checkAuth])
+
+  // Éviter une page blanche : afficher un chargement si user pas encore prêt
+  if (!user && isAuthenticated && !userLoaded) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600" aria-label="Chargement" />
+      </div>
+    )
+  }
 
   if (!user) return null
 
