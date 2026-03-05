@@ -1,14 +1,10 @@
-import { useEffect, useRef } from 'react'
 import { Card } from '@/components/ui/Card'
 
-declare global {
-  interface Window {
-    FlutterwaveCheckout?: (options: FlutterwaveCheckoutOptions) => void
-  }
-}
+const FLUTTERWAVE_HOSTED_URL = 'https://checkout.flutterwave.com/v3/hosted/pay'
 
 export interface FlutterwaveCheckoutOptions {
   public_key: string
+  PBFPubKey?: string
   tx_ref: string
   amount: number
   currency: string
@@ -32,51 +28,49 @@ type CardPaymentFormProps = {
   onError: (message: string) => void
 }
 
-const SCRIPT_URL = 'https://checkout.flutterwave.com/v3.js'
-
+/**
+ * Soumet le paiement via formulaire POST vers Flutterwave Hosted Pay.
+ * Ouvre la page de paiement dans un nouvel onglet du navigateur.
+ */
 export default function CardPaymentForm({ config, onError }: CardPaymentFormProps) {
-  const loaded = useRef(false)
-
-  useEffect(() => {
-    if (loaded.current || typeof window === 'undefined') return
-    const existing = document.querySelector(`script[src="${SCRIPT_URL}"]`)
-    if (existing) {
-      loaded.current = true
-      return
-    }
-    const script = document.createElement('script')
-    script.src = SCRIPT_URL
-    script.async = true
-    script.onload = () => {
-      loaded.current = true
-    }
-    script.onerror = () => onError('Impossible de charger Flutterwave.')
-    document.body.appendChild(script)
-  }, [onError])
-
   const handlePay = () => {
-    if (!window.FlutterwaveCheckout) {
-      onError('Flutterwave n\'est pas encore chargé. Réessayez dans un instant.')
+    const pubKey = (config.public_key || (config as { PBFPubKey?: string }).PBFPubKey || '').trim()
+    if (!pubKey) {
+      onError('Clé publique Flutterwave manquante. Configurez FLUTTERWAVE_PUBLIC_KEY sur Railway ou dans l\'admin (Configuration paiement de l\'école).')
       return
     }
-    if (!config.public_key) {
-      onError('Paiement carte non configuré (Flutterwave).')
+    const c = config.customer
+    if (!c?.email || !c?.name) {
+      onError('Données client manquantes pour Flutterwave.')
       return
     }
     try {
-      window.FlutterwaveCheckout!({
-        public_key: config.public_key,
-        tx_ref: config.tx_ref,
-        amount: config.amount,
-        currency: config.currency,
-        redirect_url: config.redirect_url,
-        payment_options: 'card',
-        customer: config.customer,
-        customizations: {
-          title: 'E-School',
-          description: `Paiement ${config.tx_ref}`,
-        },
+      const form = document.createElement('form')
+      form.method = 'POST'
+      form.action = FLUTTERWAVE_HOSTED_URL
+      form.target = '_blank'
+      form.rel = 'noopener noreferrer'
+      const fields: [string, string][] = [
+        ['public_key', pubKey],
+        ['tx_ref', config.tx_ref],
+        ['amount', String(config.amount)],
+        ['currency', config.currency],
+        ['redirect_url', config.redirect_url],
+        ['payment_options', config.payment_options || 'card'],
+        ['customer[name]', c.name],
+        ['customer[email]', c.email],
+      ]
+      if (c.phone_number) fields.push(['customer[phone_number]', c.phone_number])
+      fields.forEach(([name, value]) => {
+        const input = document.createElement('input')
+        input.type = 'hidden'
+        input.name = name
+        input.value = value
+        form.appendChild(input)
       })
+      document.body.appendChild(form)
+      form.submit()
+      document.body.removeChild(form)
     } catch (err) {
       onError(err instanceof Error ? err.message : 'Erreur Flutterwave')
     }
@@ -88,7 +82,7 @@ export default function CardPaymentForm({ config, onError }: CardPaymentFormProp
         Paiement par carte (VISA / Mastercard) — Flutterwave
       </h3>
       <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-        Montant : <strong>{config.amount} {config.currency}</strong>. Vous serez redirigé vers la page sécurisée Flutterwave.
+        Montant : <strong>{config.amount} {config.currency}</strong>. Un nouvel onglet s&apos;ouvrira sur la page sécurisée Flutterwave pour finaliser le paiement.
       </p>
       <button
         type="button"

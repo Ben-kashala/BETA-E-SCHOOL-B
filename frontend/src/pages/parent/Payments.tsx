@@ -5,12 +5,15 @@ import { Card } from '@/components/ui/Card'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { cn } from '@/utils/cn'
-import { Plus, FileText } from 'lucide-react'
+import { Plus, FileText, Pencil } from 'lucide-react'
 import toast from 'react-hot-toast'
 import PaymentForm from '@/components/payment/PaymentForm'
 
+const PAYMENT_METHODS_EDITABLE = ['CARD', 'MOBILE_MONEY_ORANGE', 'MOBILE_MONEY_MPESA', 'MOBILE_MONEY_AIRTEL', 'MOBILE_MONEY']
+
 export default function ParentPayments() {
   const [showPaymentForm, setShowPaymentForm] = useState(false)
+  const [editingPayment, setEditingPayment] = useState<any | null>(null)
   const queryClient = useQueryClient()
 
   const { data: payments, isLoading, error } = useQuery({
@@ -66,11 +69,12 @@ export default function ParentPayments() {
         </button>
       </div>
 
-      {showPaymentForm && (
+      {(showPaymentForm || editingPayment) && (
         <PaymentForm
           mode="parent"
           children={children}
           feeTypes={feeTypes?.results ?? feeTypes ?? []}
+          existingPayment={editingPayment}
           onCreatePayment={async (payload) => {
             const data = await createPaymentMutation.mutateAsync(payload)
             return { id: data.id, payment_id: data.payment_id }
@@ -78,11 +82,15 @@ export default function ParentPayments() {
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ['parent-payments'] })
             setShowPaymentForm(false)
-            toast.success('Paiement enregistré avec succès')
+            setEditingPayment(null)
+            toast.success(editingPayment ? 'Paiement mis à jour' : 'Paiement enregistré avec succès')
           }}
-          onCancel={() => setShowPaymentForm(false)}
+          onCancel={() => {
+            setShowPaymentForm(false)
+            setEditingPayment(null)
+          }}
           isPending={createPaymentMutation.isPending}
-          title="Nouveau paiement"
+          title={editingPayment ? 'Modifier / Relancer le paiement' : 'Nouveau paiement'}
         />
       )}
 

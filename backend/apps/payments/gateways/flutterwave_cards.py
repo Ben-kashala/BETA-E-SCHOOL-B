@@ -28,10 +28,9 @@ def get_flutterwave_keys(school_id: Optional[int] = None):
                 return (config.flutterwave_public_key.strip(), config.flutterwave_secret_key.strip())
         except Exception as e:
             logger.warning("SchoolPaymentConfig lookup failed for school_id=%s: %s", school_id, e)
-    return (
-        getattr(settings, 'FLUTTERWAVE_PUBLIC_KEY', '') or '',
-        getattr(settings, 'FLUTTERWAVE_SECRET_KEY', '') or '',
-    )
+    pub = (getattr(settings, 'FLUTTERWAVE_PUBLIC_KEY', '') or '').strip()
+    sec = (getattr(settings, 'FLUTTERWAVE_SECRET_KEY', '') or '').strip()
+    return (pub, sec)
 
 
 def prepare_card_payment(

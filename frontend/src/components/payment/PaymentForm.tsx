@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X, Smartphone, CheckCircle } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import api from '@/services/api'
@@ -25,6 +25,17 @@ const PAYMENT_METHODS = [
 
 const MOBILE_MONEY_METHODS = ['MOBILE_MONEY_ORANGE', 'MOBILE_MONEY_MPESA', 'MOBILE_MONEY_AIRTEL']
 
+/** Paiement existant (pour modification / relance d'un paiement non approuvé). */
+export type ExistingPayment = {
+  id: number
+  payment_id: string
+  amount: number
+  currency: string
+  payment_method: string
+  status?: string
+  [key: string]: unknown
+}
+
 interface PaymentFormProps {
   mode: PaymentFormMode
   children?: ChildOption[]
@@ -38,6 +49,8 @@ interface PaymentFormProps {
   onCancel: () => void
   isPending?: boolean
   title?: string
+  /** Si fourni, affiche directement l'étape carte ou mobile pour relancer ce paiement (pas de formulaire de création). */
+  existingPayment?: ExistingPayment | null
 }
 
 export default function PaymentForm({
@@ -51,6 +64,7 @@ export default function PaymentForm({
   onCancel,
   isPending = false,
   title = 'Nouveau paiement',
+  existingPayment = null,
 }: PaymentFormProps) {
   const [selectedParentId, setSelectedParentId] = useState('')
   const [step, setStep] = useState<'form' | 'mobile_wait' | 'card'>('form')
@@ -59,6 +73,7 @@ export default function PaymentForm({
   const [cardConfig, setCardConfig] = useState<Record<string, unknown> | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [selectedMethod, setSelectedMethod] = useState('')
+  const [existingPaymentLoaded, setExistingPaymentLoaded] = useState(false)
 
   const studentOptions =
     mode === 'parent'
@@ -67,6 +82,36 @@ export default function PaymentForm({
 
   const isMobileMoney = (method: string) => MOBILE_MONEY_METHODS.includes(method)
   const isCard = (method: string) => method === 'CARD'
+
+  // Flux "modifier" : ouvrir directement l'étape carte ou mobile pour un paiement existant
+  useEffect(() => {
+    if (!existingPayment || existingPaymentLoaded) return
+    setExistingPaymentLoaded(true)
+    const method = existingPayment.payment_method || ''
+    if (isCard(method)) {
+      setSubmitting(true)
+      api
+        .post('/payments/payments/initiate-card/', { payment_id: existingPayment.id })
+        .then(({ data }) => {
+          if (data.public_key && data.tx_ref && data.redirect_url) {
+            setCardConfig(data)
+            setStep('card')
+          } else {
+            toast.error(data.error || 'Impossible de relancer le paiement carte.')
+          }
+        })
+        .catch((err: { response?: { data?: { error?: string } } }) => {
+          toast.error(err?.response?.data?.error || 'Erreur lors de l\'initialisation du paiement.')
+        })
+        .finally(() => setSubmitting(false))
+      return
+    }
+    if (isMobileMoney(method)) {
+      setCreatedPayment({ id: existingPayment.id, payment_id: existingPayment.payment_id })
+      setMobileMessage('Confirmez le paiement sur votre téléphone ou relancez la demande.')
+      setStep('mobile_wait')
+    }
+  }, [existingPayment, existingPaymentLoaded])
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -188,18 +233,20 @@ export default function PaymentForm({
 
   if (step === 'card' && cardConfig) {
     return (
-      <Card className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Paiement par carte (Flutterwave)</h2>
-          <button type="button" onClick={onCancel} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
-            <X className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-          </button>
-        </div>
-        <CardPaymentForm
-          config={cardConfig as unknown as Parameters<typeof CardPaymentForm>[0]['config']}
-          onError={(msg) => toast.error(msg)}
-        />
-      </Card>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" aria-modal="true" role="dialog">
+        <Card className="w-full max-w-md shadow-xl">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Paiement par carte (Flutterwave)</h2>
+            <button type="button" onClick={onCancel} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+              <X className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+            </button>
+          </div>
+          <CardPaymentForm
+            config={cardConfig as unknown as Parameters<typeof CardPaymentForm>[0]['config']}
+            onError={(msg) => toast.error(msg)}
+          />
+        </Card>
+      </div>
     )
   }
 

@@ -87,10 +87,14 @@ def _flutterwave_initiate(
                 message="Confirmez le paiement sur votre téléphone.",
                 requires_action=True,
             )
-        return GatewayResult(
-            success=False,
-            message=data.get('message', 'Erreur Flutterwave') or resp.text[:200],
-        )
+        msg = data.get('message', 'Erreur Flutterwave') or resp.text[:200] or 'Erreur Flutterwave'
+        if 'authorization' in msg.lower() or 'invalid' in msg.lower() and 'key' in msg.lower():
+            msg = (
+                "Clé secrète Flutterwave invalide. Vérifiez la « Clé secrète » (Secret key) "
+                "dans l'admin Django (Configuration paiement de l'école) ou dans les variables "
+                "d'environnement (FLUTTERWAVE_SECRET_KEY) sur Railway. Utilisez la clé « Secret » du tableau de bord Flutterwave, pas le Client ID."
+            )
+        return GatewayResult(success=False, message=msg)
     except Exception as e:
         logger.exception("Flutterwave mobile money error: %s", e)
         return GatewayResult(success=False, message=str(e))

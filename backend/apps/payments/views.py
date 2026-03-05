@@ -381,10 +381,13 @@ class PaymentViewSet(viewsets.ModelViewSet):
             customer_email=customer_email,
             customer_name=customer_name,
         )
-        if not config:
+        if not config or not (config.get('public_key') or '').strip():
             payment.status = 'PENDING'
             payment.save()
-            return Response({'error': 'Paiement carte non configuré (Flutterwave).'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {'error': 'Clé publique Flutterwave non configurée. Ajoutez FLUTTERWAVE_PUBLIC_KEY (Railway) ou la clé publique dans Configuration paiement de l\'école (admin Django).'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         return Response({
             **config,
             'payment_id': payment.id,
