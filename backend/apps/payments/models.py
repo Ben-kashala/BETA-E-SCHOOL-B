@@ -32,11 +32,11 @@ class SchoolPaymentConfig(models.Model):
     flutterwave_secret_key = models.CharField(
         max_length=255, blank=True, verbose_name='Clé secrète Flutterwave'
     )
-    # Mobile Money : mock ou flutterwave pour cette école
+    # Mobile Money : Flutterwave par défaut (Orange, M-Pesa, Airtel) ou mock pour démo
     mobile_money_provider = models.CharField(
         max_length=20,
         choices=MOBILE_PROVIDER_CHOICES,
-        default='mock',
+        default='flutterwave',
         verbose_name='Provider Mobile Money',
     )
     created_at = models.DateTimeField(auto_now_add=True)

@@ -46,7 +46,9 @@ export function getNotificationTargetPath(
 
   switch (notificationType) {
     case 'MESSAGE':
+      return `${comm}?tab=messages`
     case 'ANNOUNCEMENT':
+      return `${comm}?tab=announcements`
     case 'GENERAL':
       return comm
     case 'PAYMENT':

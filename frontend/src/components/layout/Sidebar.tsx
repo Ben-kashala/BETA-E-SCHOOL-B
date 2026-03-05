@@ -124,8 +124,8 @@ export default function Sidebar({ user, currentPath, isOpen = false, onClose }: 
 
   return (
     <>
-      {/* Sidebar pour desktop - même style que entête/pied */}
-      <aside className="hidden lg:flex lg:w-64 bg-eschool-header border-r border-eschool-header-text/20 min-h-[calc(100vh-73px)] transition-colors flex-shrink-0">
+      {/* Sidebar pour desktop : fond #21335c, texte blanc */}
+      <aside className="hidden lg:flex lg:w-64 bg-eschool-body border-r border-eschool-body-text/20 min-h-[calc(100vh-73px)] transition-colors flex-shrink-0">
         <nav className="p-4 space-y-2 w-full">
           {menu.map((item) => {
             const Icon = item.icon
@@ -135,10 +135,10 @@ export default function Sidebar({ user, currentPath, isOpen = false, onClose }: 
                 key={item.path}
                 to={item.path}
                 className={cn(
-                  'flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors',
+                  'flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors text-eschool-body-text',
                   isActive
-                    ? 'bg-eschool-body/15 text-eschool-header-text font-medium'
-                    : 'text-eschool-header-text/80 hover:bg-eschool-header-text/10'
+                    ? 'bg-eschool-body-text/15 text-eschool-body-text font-medium'
+                    : 'text-eschool-body-text/90 hover:bg-eschool-body-text/10'
                 )}
               >
                 <Icon className="w-5 h-5 flex-shrink-0" />
@@ -149,19 +149,19 @@ export default function Sidebar({ user, currentPath, isOpen = false, onClose }: 
         </nav>
       </aside>
 
-      {/* Sidebar pour mobile - overlay */}
+      {/* Sidebar pour mobile - overlay : même couleurs */}
       <aside
         className={cn(
-          'fixed top-[65px] sm:top-[73px] left-0 h-[calc(100vh-65px)] sm:h-[calc(100vh-73px)] w-64 bg-eschool-header border-r border-eschool-header-text/20 z-50 transition-transform duration-300 ease-in-out lg:hidden overflow-y-auto',
+          'fixed top-[65px] sm:top-[73px] left-0 h-[calc(100vh-65px)] sm:h-[calc(100vh-73px)] w-64 bg-eschool-body border-r border-eschool-body-text/20 z-50 transition-transform duration-300 ease-in-out lg:hidden overflow-y-auto',
           isOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        <div className="p-4 border-b border-eschool-header-text/20 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-eschool-header-text">Menu</h2>
+        <div className="p-4 border-b border-eschool-body-text/20 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-eschool-body-text">Menu</h2>
           {onClose && (
             <button
               onClick={onClose}
-              className="p-2 text-eschool-header-text hover:opacity-80 transition-colors"
+              className="p-2 text-eschool-body-text hover:bg-eschool-body-text/10 rounded-lg transition-colors"
               aria-label="Fermer le menu"
             >
               <X className="w-5 h-5" />
@@ -178,10 +178,10 @@ export default function Sidebar({ user, currentPath, isOpen = false, onClose }: 
                 to={item.path}
                 onClick={onClose}
                 className={cn(
-                  'flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors',
+                  'flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors text-eschool-body-text',
                   isActive
-                    ? 'bg-eschool-body/15 text-eschool-header-text font-medium'
-                    : 'text-eschool-header-text/80 hover:bg-eschool-header-text/10'
+                    ? 'bg-eschool-body-text/15 text-eschool-body-text font-medium'
+                    : 'text-eschool-body-text/90 hover:bg-eschool-body-text/10'
                 )}
               >
                 <Icon className="w-5 h-5 flex-shrink-0" />

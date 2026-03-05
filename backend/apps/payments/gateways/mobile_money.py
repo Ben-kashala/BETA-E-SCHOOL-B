@@ -14,18 +14,18 @@ logger = logging.getLogger(__name__)
 
 
 def get_mobile_money_provider(school_id: Optional[int] = None) -> str:
-    """Retourne le provider Mobile Money pour l'école (config ou global)."""
+    """Retourne le provider Mobile Money pour l'école (config ou global). Par défaut : Flutterwave."""
     if school_id:
         try:
             from apps.payments.models import SchoolPaymentConfig
             config = SchoolPaymentConfig.objects.filter(
                 school_id=school_id, is_active=True
             ).first()
-            if config:
-                return (config.mobile_money_provider or 'mock').lower()
+            if config and (config.mobile_money_provider or '').strip():
+                return (config.mobile_money_provider or 'flutterwave').strip().lower()
         except Exception as e:
             logger.warning("SchoolPaymentConfig lookup failed for school_id=%s: %s", school_id, e)
-    return (getattr(settings, 'MOBILE_MONEY_PROVIDER', 'mock') or 'mock').lower()
+    return (getattr(settings, 'MOBILE_MONEY_PROVIDER', 'flutterwave') or 'flutterwave').strip().lower()
 
 # Méthodes backend -> identifiants opérateur (pour agrégateurs)
 PROVIDER_CODES = {

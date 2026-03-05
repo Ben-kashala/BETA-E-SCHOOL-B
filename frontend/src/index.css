@@ -37,12 +37,36 @@
   @apply bg-eschool-body-text/10;
 }
 
-/* Champs et labels dans le corps : rester lisibles sur fond bleu */
+/* Champs dans le corps : fond bleu, texte blanc pour lisibilité */
 .layout-main .input,
 .layout-main input[type="text"],
+.layout-main input[type="email"],
+.layout-main input[type="number"],
+.layout-main input[type="password"],
 .layout-main input[type="search"],
-.layout-main select {
-  @apply bg-eschool-body-text/15 border-eschool-body-text/40 text-eschool-body-text placeholder:text-eschool-body-text/60 focus:ring-eschool-avatar focus:border-eschool-avatar;
+.layout-main textarea {
+  @apply bg-eschool-body border-eschool-body-text/40 text-eschool-body-text placeholder:text-eschool-body-text/60 focus:ring-eschool-avatar focus:border-eschool-avatar;
+}
+
+/* Select : fond bleu, texte blanc, options lisibles (priorité sur bg-white etc.) */
+.layout-main select,
+.layout-main select.bg-white,
+.layout-main select[class*="bg-gray"],
+.layout-main select[class*="bg-white"] {
+  background-color: #21335c !important;
+  color: #ededed !important;
+  border-color: rgba(237, 237, 237, 0.4);
+}
+
+.layout-main select:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px #ca9d1e;
+  border-color: #ca9d1e;
+}
+
+.layout-main select option {
+  background-color: #21335c;
+  color: #ededed;
 }
 
 .layout-main label,

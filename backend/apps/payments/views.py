@@ -443,7 +443,8 @@ class PaymentViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='confirm-mobile')
     def confirm_mobile(self, request, pk=None):
         """
-        Marque un paiement Mobile Money comme complété (appelé après confirmation utilisateur ou webhook).
+        Marque un paiement Mobile Money comme complété.
+        Si le provider est Flutterwave, vérifie d'abord la transaction via l'API Flutterwave.
         En mode mock, le frontend peut appeler cette action pour simuler la confirmation.
         """
         payment = self.get_object()
@@ -457,6 +458,24 @@ class PaymentViewSet(viewsets.ModelViewSet):
                 {'error': 'Méthode non Mobile Money'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        from apps.payments.gateways.mobile_money import get_mobile_money_provider
+        from apps.payments.gateways.flutterwave_cards import verify_flutterwave_transaction
+
+        provider = get_mobile_money_provider(payment.school_id)
+        if provider == 'flutterwave' and payment.transaction_id:
+            success, message, _ = verify_flutterwave_transaction(
+                str(payment.transaction_id), payment.school_id
+            )
+            if not success:
+                payment.status = 'FAILED'
+                payment.notes = (payment.notes or '') + f" Flutterwave: {message}"
+                payment.save()
+                return Response(
+                    {'error': message or 'Transaction non réussie. Vérifiez sur votre téléphone.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         payment.status = 'COMPLETED'
         payment.payment_date = timezone.now()
         payment.save()

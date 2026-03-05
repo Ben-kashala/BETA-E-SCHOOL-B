@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/services/api'
 import { Card } from '@/components/ui/Card'
@@ -56,9 +56,17 @@ const TARGET_LABELS: Record<string, string> = {
 export default function DisciplineOfficerCommunication() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { user } = useAuthStore()
   const [activeTab, setActiveTab] = useState<'messages' | 'announcements' | 'notifications'>('announcements')
   const [showMessageForm, setShowMessageForm] = useState(false)
+
+  useEffect(() => {
+    const tab = searchParams.get('tab')
+    if (tab === 'messages' || tab === 'announcements' || tab === 'notifications') {
+      setActiveTab(tab)
+    }
+  }, [searchParams])
   const [showAnnouncementForm, setShowAnnouncementForm] = useState(false)
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null)
   const [messageFilter, setMessageFilter] = useState<'all' | 'sent' | 'received'>('received')
@@ -270,7 +278,7 @@ export default function DisciplineOfficerCommunication() {
       {/* Onglets */}
       <div className="flex space-x-1 mb-6 border-b border-gray-200 dark:border-gray-700">
         <button
-          onClick={() => setActiveTab('messages')}
+          onClick={() => { setActiveTab('messages'); setSearchParams({ tab: 'messages' }) }}
           className={cn(
             'px-4 py-2 font-medium text-sm transition-colors relative',
             activeTab === 'messages'
@@ -289,7 +297,7 @@ export default function DisciplineOfficerCommunication() {
           </div>
         </button>
         <button
-          onClick={() => setActiveTab('announcements')}
+          onClick={() => { setActiveTab('announcements'); setSearchParams({ tab: 'announcements' }) }}
           className={cn(
             'px-4 py-2 font-medium text-sm transition-colors',
             activeTab === 'announcements'
@@ -303,7 +311,7 @@ export default function DisciplineOfficerCommunication() {
           </div>
         </button>
         <button
-          onClick={() => setActiveTab('notifications')}
+          onClick={() => { setActiveTab('notifications'); setSearchParams({ tab: 'notifications' }) }}
           className={cn(
             'px-4 py-2 font-medium text-sm transition-colors',
             activeTab === 'notifications'
