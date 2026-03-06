@@ -16,16 +16,17 @@ class OrangeService:
     """Service Orange Money. Clés lues depuis la configuration globale."""
 
     @staticmethod
-    def _get_config() -> tuple[str, str, str]:
+    def _get_config() -> tuple[str, str, str, str]:
         api_key = (getattr(settings, 'ORANGE_API_KEY', '') or '').strip()
         api_secret = (getattr(settings, 'ORANGE_API_SECRET', '') or '').strip()
         callback_url = (getattr(settings, 'ORANGE_CALLBACK_URL', '') or '').strip()
-        return api_key, api_secret, callback_url
+        api_base = (getattr(settings, 'ORANGE_API_BASE_URL', '') or '').strip()
+        return api_key, api_secret, callback_url, api_base
 
     @classmethod
     def is_configured(cls) -> bool:
-        api_key, api_secret, _ = cls._get_config()
-        return bool(api_key and api_secret)
+        api_key, api_secret, _, api_base = cls._get_config()
+        return bool(api_key and api_secret and api_base)
 
     @classmethod
     def initiate_payment(
@@ -39,18 +40,23 @@ class OrangeService:
         """
         Initie un paiement Orange Money vers le numéro marchand de l'école.
         """
-        api_key, api_secret, callback_url = cls._get_config()
+        api_key, api_secret, callback_url, api_base = cls._get_config()
         if not api_key or not api_secret:
             logger.warning("Orange Money non configuré (ORANGE_API_KEY / ORANGE_API_SECRET)")
             return GatewayResult(
                 success=False,
                 message="Orange Money non configuré. Configurez ORANGE_API_KEY et ORANGE_API_SECRET.",
             )
+        if not api_base:
+            logger.warning("Orange Money : ORANGE_API_BASE_URL non configuré")
+            return GatewayResult(
+                success=False,
+                message="Orange Money : configurez ORANGE_API_BASE_URL avec l’URL de l’API fournie par Orange.",
+            )
 
         phone_clean = phone.lstrip('+').replace(' ', '')
         try:
             import requests
-            # Exemple d'appel API Orange Money (à adapter selon la doc officielle)
             payload = {
                 "reference": reference,
                 "subscriber_msisdn": phone_clean,
@@ -59,7 +65,6 @@ class OrangeService:
                 "merchant_msisdn": merchant_number.lstrip('+').replace(' ', ''),
                 "callback_url": callback_url or None,
             }
-            api_base = (getattr(settings, 'ORANGE_API_BASE_URL', '') or '').strip() or 'https://api.orange.com'
             url = f"{api_base.rstrip('/')}/orange-money/v1/payment"
             resp = requests.post(
                 url,

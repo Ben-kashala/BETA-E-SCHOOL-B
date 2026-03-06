@@ -16,16 +16,17 @@ class MpesaService:
     """Service M-Pesa. Clés lues depuis la configuration globale."""
 
     @staticmethod
-    def _get_config() -> tuple[str, str, str]:
+    def _get_config() -> tuple[str, str, str, str]:
         api_key = (getattr(settings, 'MPESA_API_KEY', '') or '').strip()
         api_secret = (getattr(settings, 'MPESA_API_SECRET', '') or '').strip()
         callback_url = (getattr(settings, 'MPESA_CALLBACK_URL', '') or '').strip()
-        return api_key, api_secret, callback_url
+        api_base = (getattr(settings, 'MPESA_API_BASE_URL', '') or '').strip()
+        return api_key, api_secret, callback_url, api_base
 
     @classmethod
     def is_configured(cls) -> bool:
-        api_key, api_secret, _ = cls._get_config()
-        return bool(api_key and api_secret)
+        api_key, api_secret, _, api_base = cls._get_config()
+        return bool(api_key and api_secret and api_base)
 
     @classmethod
     def initiate_payment(
@@ -39,18 +40,23 @@ class MpesaService:
         """
         Initie un paiement M-Pesa vers le numéro marchand de l'école.
         """
-        api_key, api_secret, callback_url = cls._get_config()
+        api_key, api_secret, callback_url, api_base = cls._get_config()
         if not api_key or not api_secret:
             logger.warning("M-Pesa non configuré (MPESA_API_KEY / MPESA_API_SECRET)")
             return GatewayResult(
                 success=False,
                 message="M-Pesa non configuré. Configurez MPESA_API_KEY et MPESA_API_SECRET.",
             )
+        if not api_base:
+            logger.warning("M-Pesa : MPESA_API_BASE_URL non configuré")
+            return GatewayResult(
+                success=False,
+                message="M-Pesa : configurez MPESA_API_BASE_URL avec l’URL de l’API fournie par Vodacom/M-Pesa.",
+            )
 
         phone_clean = phone.lstrip('+').replace(' ', '')
         try:
             import requests
-            # Exemple d'appel API M-Pesa (à adapter selon la doc officielle Vodacom/Safaricom)
             payload = {
                 "reference": reference,
                 "customer_msisdn": phone_clean,
@@ -59,7 +65,6 @@ class MpesaService:
                 "receiver_msisdn": merchant_number.lstrip('+').replace(' ', ''),
                 "callback_url": callback_url or None,
             }
-            api_base = (getattr(settings, 'MPESA_API_BASE_URL', '') or '').strip() or 'https://api.mpesa.vodacom.cd'
             url = f"{api_base.rstrip('/')}/v1/payment/request"
             resp = requests.post(
                 url,
