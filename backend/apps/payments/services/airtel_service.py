@@ -47,15 +47,33 @@ class AirtelService:
 
         import requests
         url = f"{api_base.rstrip('/')}/auth/oauth2/token"
-        headers = {"Content-Type": "application/json", "Accept": "*/*"}
-        payload = {
+        # Beaucoup d'APIs OAuth2 attendent form-urlencoded, pas JSON
+        headers = {"Accept": "*/*"}
+        # Essai 1 : body en application/x-www-form-urlencoded (standard OAuth2)
+        body_form = {
             "client_id": client_id,
             "client_secret": client_secret,
             "grant_type": "client_credentials",
         }
         try:
-            resp = requests.post(url, json=payload, headers=headers, timeout=15)
-            data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+            # Essai 1 : form-urlencoded (standard OAuth2, souvent requis par Airtel)
+            resp = requests.post(
+                url,
+                data=body_form,
+                headers={**headers, "Content-Type": "application/x-www-form-urlencoded"},
+                timeout=15,
+            )
+            if resp.status_code != 200:
+                # Essai 2 : JSON (certaines instances Airtel l’acceptent)
+                resp2 = requests.post(
+                    url,
+                    json=body_form,
+                    headers={**headers, "Content-Type": "application/json"},
+                    timeout=15,
+                )
+                if resp2.status_code == 200:
+                    resp = resp2
+            data = resp.json() if (resp.headers.get("content-type") or "").startswith("application/json") else {}
             if resp.status_code == 200:
                 token = (data.get("access_token") or data.get("accessToken") or "").strip()
                 if token:
