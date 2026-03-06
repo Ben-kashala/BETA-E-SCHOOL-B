@@ -144,8 +144,17 @@ export default function PaymentForm({
 
       onSuccess()
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
-      toast.error(msg || 'Erreur lors de la création du paiement')
+      const res = (err as { response?: { data?: unknown; status?: number } })?.response
+      const data = res?.data
+      const msg =
+        typeof data === 'object' && data !== null && 'error' in data
+          ? String((data as { error?: string }).error)
+          : typeof data === 'string'
+            ? data
+            : res?.status === 400
+              ? 'Requête invalide (vérifiez le numéro, le montant et la config Mobile Money de l’école).'
+              : 'Erreur lors de la création du paiement'
+      toast.error(msg)
     }
     setSubmitting(false)
   }

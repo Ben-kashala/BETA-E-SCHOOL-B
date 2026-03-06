@@ -74,10 +74,11 @@ class AirtelService:
                 if resp2.status_code == 200:
                     resp = resp2
             data = resp.json() if (resp.headers.get("content-type") or "").startswith("application/json") else {}
+            # Réponse Airtel : { "access_token": "...", "expires_in": "180", "token_type": "bearer" }
             if resp.status_code == 200:
                 token = (data.get("access_token") or data.get("accessToken") or "").strip()
                 if token:
-                    # expires_in en secondes (ex. "180" ou 180) ; on met en cache un peu moins pour anticiper
+                    # expires_in en secondes (ex. "180" ou 180) ; cache un peu moins pour anticiper
                     expires_in = data.get("expires_in", 0)
                     if isinstance(expires_in, str):
                         try:
