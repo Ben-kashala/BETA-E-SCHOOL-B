@@ -1,36 +1,32 @@
 from django.contrib import admin
 from django.utils.translation import gettext_lazy as _
-from .models import SchoolPaymentConfig, FeeType, Payment, FeePayment, PaymentPlan, PaymentReceipt
+from .models import SchoolPaymentConfig, SchoolPaymentMethod, PaymentTransaction, FeeType, Payment, FeePayment, PaymentPlan, PaymentReceipt
 from apps.schools.admin_base import SchoolScopedAdminMixin
 
 
 @admin.register(SchoolPaymentConfig)
 class SchoolPaymentConfigAdmin(SchoolScopedAdminMixin, admin.ModelAdmin):
-    """Moyens de paiement par école. Admin école : sa config uniquement. Superadmin : toutes les écoles."""
-    list_display = ['school', 'is_active', 'has_flutterwave', 'mobile_money_provider', 'updated_at']
-    list_filter = ['is_active', 'mobile_money_provider', 'school']
+    """Configuration paiement par école. Active/désactive les paiements en ligne. Moyens de paiement dans SchoolPaymentMethod."""
+    list_display = ['school', 'is_active', 'updated_at']
+    list_filter = ['is_active', 'school']
     search_fields = ['school__name', 'school__code']
-    raw_id_fields = []  # school géré par le mixin
-    fieldsets = (
-        (None, {
-            'fields': ('school', 'is_active'),
-        }),
-        (_('Flutterwave (cartes VISA/Mastercard + Mobile Money)'), {
-            'fields': ('flutterwave_public_key', 'flutterwave_secret_key'),
-            'description': _(
-                'Laissez vides pour utiliser les clés globales (paramètres Django / .env). '
-                'Sinon, saisissez les clés de l\'école pour que les paiements soient encaissés sur son compte Flutterwave.'
-            ),
-        }),
-        (_('Mobile Money (Orange, M-Pesa, Airtel)'), {
-            'fields': ('mobile_money_provider',),
-        }),
-    )
 
-    def has_flutterwave(self, obj):
-        return bool(obj.flutterwave_public_key and obj.flutterwave_secret_key)
-    has_flutterwave.short_description = _('Flutterwave configuré')
-    has_flutterwave.boolean = True
+
+@admin.register(SchoolPaymentMethod)
+class SchoolPaymentMethodAdmin(SchoolScopedAdminMixin, admin.ModelAdmin):
+    """Moyens de paiement Mobile Money par école : Airtel, Orange, M-Pesa + numéro de réception."""
+    list_display = ['school', 'provider', 'merchant_number', 'status', 'updated_at']
+    list_filter = ['provider', 'status', 'school']
+    search_fields = ['school__name', 'merchant_number']
+
+
+@admin.register(PaymentTransaction)
+class PaymentTransactionAdmin(SchoolScopedAdminMixin, admin.ModelAdmin):
+    """Transactions Mobile Money (traçabilité et callbacks)."""
+    list_display = ['reference', 'school', 'provider', 'phone', 'amount', 'status', 'created_at']
+    list_filter = ['provider', 'status', 'school']
+    search_fields = ['reference', 'phone', 'provider_transaction_id']
+    readonly_fields = ['created_at', 'updated_at']
 
 
 @admin.register(FeeType)

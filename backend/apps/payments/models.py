@@ -1,5 +1,6 @@
 """
-Payment models for school fees and content purchases
+Payment models for school fees and content purchases.
+Paiement Mobile Money : Airtel Money, Orange Money, M-Pesa (clés API globales, numéro marchand par école).
 """
 from django.db import models
 from apps.accounts.models import User, Student
@@ -8,15 +9,10 @@ from apps.schools.models import School
 
 class SchoolPaymentConfig(models.Model):
     """
-    Configuration des moyens de paiement par école (multi-tenant).
-    Une même clé Flutterwave peut être utilisée pour toutes les écoles (clés globales en .env)
-    ou chaque école peut avoir ses propres clés (remplir ici).
-    Admin école : ne voit/édite que la config de son école. Superadmin : toutes les écoles.
+    Configuration globale paiement par école (multi-tenant).
+    Active/désactive les paiements en ligne pour l'école.
+    Les moyens de paiement (Airtel, Orange, M-Pesa) et numéros Mobile Money sont dans SchoolPaymentMethod.
     """
-    MOBILE_PROVIDER_CHOICES = [
-        ('mock', 'Mock (démo)'),
-        ('flutterwave', 'Flutterwave (Orange, M-Pesa, Airtel)'),
-    ]
     school = models.OneToOneField(
         School,
         on_delete=models.CASCADE,
@@ -25,20 +21,6 @@ class SchoolPaymentConfig(models.Model):
         unique=True,
     )
     is_active = models.BooleanField(default=True, verbose_name='Actif')
-    # Flutterwave : cartes (VISA/Mastercard) + Mobile Money. Vide = utiliser les clés globales (.env)
-    flutterwave_public_key = models.CharField(
-        max_length=255, blank=True, verbose_name='Clé publique Flutterwave'
-    )
-    flutterwave_secret_key = models.CharField(
-        max_length=255, blank=True, verbose_name='Clé secrète Flutterwave'
-    )
-    # Mobile Money : Flutterwave par défaut (Orange, M-Pesa, Airtel) ou mock pour démo
-    mobile_money_provider = models.CharField(
-        max_length=20,
-        choices=MOBILE_PROVIDER_CHOICES,
-        default='flutterwave',
-        verbose_name='Provider Mobile Money',
-    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -48,6 +30,123 @@ class SchoolPaymentConfig(models.Model):
 
     def __str__(self):
         return f"Paiement — {self.school.name}"
+
+
+class SchoolPaymentMethod(models.Model):
+    """
+    Configuration des moyens de paiement Mobile Money par école.
+    Chaque école configure son propre numéro pour recevoir les paiements (Airtel, Orange, M-Pesa).
+    Les clés API des opérateurs sont globales (variables d'environnement).
+    """
+    PROVIDER_CHOICES = [
+        ('airtel', 'Airtel Money'),
+        ('orange', 'Orange Money'),
+        ('mpesa', 'M-Pesa'),
+    ]
+    STATUS_CHOICES = [
+        ('active', 'Actif'),
+        ('inactive', 'Inactif'),
+    ]
+    school = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name='payment_methods',
+        verbose_name='École',
+    )
+    provider = models.CharField(
+        max_length=20,
+        choices=PROVIDER_CHOICES,
+        verbose_name='Opérateur',
+    )
+    merchant_number = models.CharField(
+        max_length=30,
+        verbose_name='Numéro Mobile Money (réception)',
+        help_text='Ex: +243810000000',
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='active',
+        verbose_name='Statut',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Moyen de paiement (école)'
+        verbose_name_plural = 'Moyens de paiement (écoles)'
+        unique_together = ['school', 'provider']
+        ordering = ['school', 'provider']
+
+    def __str__(self):
+        return f"{self.school.name} — {self.get_provider_display()} ({self.merchant_number})"
+
+
+class PaymentTransaction(models.Model):
+    """
+    Transaction Mobile Money (Airtel, Orange, M-Pesa) pour traçabilité et callbacks.
+    Liée à un Payment et mise à jour par les webhooks opérateurs.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'En attente'),
+        ('processing', 'En cours'),
+        ('completed', 'Complété'),
+        ('failed', 'Échoué'),
+        ('cancelled', 'Annulé'),
+    ]
+    school = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name='payment_transactions',
+        verbose_name='École',
+    )
+    student = models.ForeignKey(
+        Student,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='payment_transactions',
+        verbose_name='Élève',
+    )
+    provider = models.CharField(max_length=20, verbose_name='Opérateur (airtel, orange, mpesa)')
+    phone = models.CharField(max_length=30, verbose_name='Téléphone du payeur')
+    amount = models.DecimalField(max_digits=12, decimal_places=2, verbose_name='Montant')
+    reference = models.CharField(
+        max_length=100,
+        unique=True,
+        verbose_name='Référence',
+        help_text='Format SCH{id}-STU{id}-INV{id} pour identifier école, élève, facture/paiement',
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending',
+        verbose_name='Statut',
+    )
+    provider_transaction_id = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        verbose_name='ID transaction opérateur',
+    )
+    payment = models.OneToOneField(
+        'Payment',
+        on_delete=models.CASCADE,
+        related_name='mobile_money_transaction',
+        null=True,
+        blank=True,
+        verbose_name='Paiement lié',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Transaction Mobile Money'
+        verbose_name_plural = 'Transactions Mobile Money'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.reference} — {self.provider} — {self.status}"
 
 
 class FeeType(models.Model):

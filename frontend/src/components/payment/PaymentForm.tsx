@@ -3,7 +3,6 @@ import { X, Smartphone, CheckCircle } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import api from '@/services/api'
 import toast from 'react-hot-toast'
-import CardPaymentForm from './CardPaymentForm'
 
 type PaymentFormMode = 'parent' | 'accountant'
 
@@ -19,7 +18,6 @@ const PAYMENT_METHODS = [
   { value: 'MOBILE_MONEY_ORANGE', label: 'Orange Money' },
   { value: 'MOBILE_MONEY_AIRTEL', label: 'Airtel Money' },
   { value: 'BANK_TRANSFER', label: 'Virement bancaire' },
-  { value: 'CARD', label: 'Carte bancaire (VISA / Mastercard)' },
   { value: 'ONLINE', label: 'Paiement en ligne' },
 ]
 
@@ -49,7 +47,7 @@ interface PaymentFormProps {
   onCancel: () => void
   isPending?: boolean
   title?: string
-  /** Si fourni, affiche directement l'étape carte ou mobile pour relancer ce paiement (pas de formulaire de création). */
+  /** Si fourni, affiche directement l'étape mobile pour relancer ce paiement (pas de formulaire de création). */
   existingPayment?: ExistingPayment | null
 }
 
@@ -67,10 +65,9 @@ export default function PaymentForm({
   existingPayment = null,
 }: PaymentFormProps) {
   const [selectedParentId, setSelectedParentId] = useState('')
-  const [step, setStep] = useState<'form' | 'mobile_wait' | 'card'>('form')
+  const [step, setStep] = useState<'form' | 'mobile_wait'>('form')
   const [createdPayment, setCreatedPayment] = useState<{ id: number; payment_id: string } | null>(null)
   const [mobileMessage, setMobileMessage] = useState('')
-  const [cardConfig, setCardConfig] = useState<Record<string, unknown> | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [selectedMethod, setSelectedMethod] = useState('')
   const [existingPaymentLoaded, setExistingPaymentLoaded] = useState(false)
@@ -81,31 +78,12 @@ export default function PaymentForm({
       : students.filter((s) => !selectedParentId || s.parent === Number(selectedParentId))
 
   const isMobileMoney = (method: string) => MOBILE_MONEY_METHODS.includes(method)
-  const isCard = (method: string) => method === 'CARD'
 
-  // Flux "modifier" : ouvrir directement l'étape carte ou mobile pour un paiement existant
+  // Flux "modifier" : ouvrir directement l'étape mobile pour un paiement existant
   useEffect(() => {
     if (!existingPayment || existingPaymentLoaded) return
     setExistingPaymentLoaded(true)
     const method = existingPayment.payment_method || ''
-    if (isCard(method)) {
-      setSubmitting(true)
-      api
-        .post('/payments/payments/initiate-card/', { payment_id: existingPayment.id })
-        .then(({ data }) => {
-          if (data.public_key && data.tx_ref && data.redirect_url) {
-            setCardConfig(data)
-            setStep('card')
-          } else {
-            toast.error(data.error || 'Impossible de relancer le paiement carte.')
-          }
-        })
-        .catch((err: { response?: { data?: { error?: string } } }) => {
-          toast.error(err?.response?.data?.error || 'Erreur lors de l\'initialisation du paiement.')
-        })
-        .finally(() => setSubmitting(false))
-      return
-    }
     if (isMobileMoney(method)) {
       setCreatedPayment({ id: existingPayment.id, payment_id: existingPayment.payment_id })
       setMobileMessage('Confirmez le paiement sur votre téléphone ou relancez la demande.')
@@ -143,7 +121,7 @@ export default function PaymentForm({
       }
       payload.payer_phone = phone
     }
-    if (isCard(paymentMethod) || isMobileMoney(paymentMethod)) {
+    if (isMobileMoney(paymentMethod)) {
       payload.status = 'PENDING'
     }
 
@@ -160,20 +138,6 @@ export default function PaymentForm({
         })
         setMobileMessage(data.message || 'Confirmez le paiement sur votre téléphone.')
         setStep('mobile_wait')
-        setSubmitting(false)
-        return
-      }
-
-      if (isCard(paymentMethod)) {
-        const { data } = await api.post('/payments/payments/initiate-card/', {
-          payment_id: payment.id,
-        })
-        if (data.public_key && data.tx_ref && data.redirect_url) {
-          setCardConfig(data)
-          setStep('card')
-        } else {
-          toast.error(data.error || 'Impossible d\'initialiser le paiement carte (Flutterwave).')
-        }
         setSubmitting(false)
         return
       }
@@ -228,25 +192,6 @@ export default function PaymentForm({
           </button>
         </div>
       </Card>
-    )
-  }
-
-  if (step === 'card' && cardConfig) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" aria-modal="true" role="dialog">
-        <Card className="w-full max-w-md shadow-xl">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Paiement par carte (Flutterwave)</h2>
-            <button type="button" onClick={onCancel} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
-              <X className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-            </button>
-          </div>
-          <CardPaymentForm
-            config={cardConfig as unknown as Parameters<typeof CardPaymentForm>[0]['config']}
-            onError={(msg) => toast.error(msg)}
-          />
-        </Card>
-      </div>
     )
   }
 

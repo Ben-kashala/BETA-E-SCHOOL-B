@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import FeeType, Payment, FeePayment, PaymentPlan, PaymentReceipt, SchoolExpense, CashMovement
+from .models import FeeType, Payment, FeePayment, PaymentPlan, PaymentReceipt, SchoolExpense, CashMovement, SchoolPaymentMethod
 
 
 class FeeTypeSerializer(serializers.ModelSerializer):
@@ -106,7 +106,18 @@ class CashMovementCreateSerializer(serializers.Serializer):
     document = serializers.FileField(required=False, allow_null=True)
 
 
-# --- Paiement Mobile Money & Carte (gateways) ---
+# --- Moyens de paiement par école (dashboard admin) ---
+class SchoolPaymentMethodSerializer(serializers.ModelSerializer):
+    provider_display = serializers.CharField(source='get_provider_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+
+    class Meta:
+        model = SchoolPaymentMethod
+        fields = ['id', 'school', 'provider', 'provider_display', 'merchant_number', 'status', 'status_display', 'created_at', 'updated_at']
+        read_only_fields = ['school', 'created_at', 'updated_at']
+
+
+# --- Paiement Mobile Money ---
 MOBILE_MONEY_METHODS = [
     'MOBILE_MONEY_ORANGE', 'MOBILE_MONEY_MPESA', 'MOBILE_MONEY_AIRTEL',
 ]
@@ -124,6 +135,3 @@ class InitiateMobileSerializer(serializers.Serializer):
         return value.strip()
 
 
-class InitiateCardSerializer(serializers.Serializer):
-    """Corps de la requête pour initier un paiement par carte (Stripe)."""
-    payment_id = serializers.IntegerField(help_text="ID du paiement (PENDING)")

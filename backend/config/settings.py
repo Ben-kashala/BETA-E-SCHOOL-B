@@ -329,17 +329,24 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
 CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='redis://localhost:6379/0')
 
-# Payment Gateway — Flutterwave (RDC, multi-tenant par école)
-# Cartes VISA / Mastercard + Mobile Money (Orange, M-Pesa, Airtel)
-FLUTTERWAVE_PUBLIC_KEY = config('FLUTTERWAVE_PUBLIC_KEY', default='')
-FLUTTERWAVE_SECRET_KEY = config('FLUTTERWAVE_SECRET_KEY', default='')
-FLUTTERWAVE_WEBHOOK_HASH = config('FLUTTERWAVE_WEBHOOK_HASH', default='')
-# Optionnel : clés par école via modèle SchoolPaymentConfig (voir gateways/flutterwave_cards.get_flutterwave_keys)
+# Payment — Mobile Money (Airtel, Orange, M-Pesa). Clés API globales (jamais hardcodées).
+# Chaque école configure son numéro de réception dans SchoolPaymentMethod (admin).
+AIRTEL_API_KEY = config('AIRTEL_API_KEY', default='')
+AIRTEL_API_SECRET = config('AIRTEL_API_SECRET', default='')
+AIRTEL_CALLBACK_URL = config('AIRTEL_CALLBACK_URL', default='')
+AIRTEL_API_BASE_URL = config('AIRTEL_API_BASE_URL', default='')
 
-# Mobile Money (Orange Money, M-Pesa, Airtel) — même compte Flutterwave ou mock
-MOBILE_MONEY_PROVIDER = config('MOBILE_MONEY_PROVIDER', default='mock')
+ORANGE_API_KEY = config('ORANGE_API_KEY', default='')
+ORANGE_API_SECRET = config('ORANGE_API_SECRET', default='')
+ORANGE_CALLBACK_URL = config('ORANGE_CALLBACK_URL', default='')
+ORANGE_API_BASE_URL = config('ORANGE_API_BASE_URL', default='')
 
-# URL du frontend (pour redirect_url après paiement carte Flutterwave)
+MPESA_API_KEY = config('MPESA_API_KEY', default='')
+MPESA_API_SECRET = config('MPESA_API_SECRET', default='')
+MPESA_CALLBACK_URL = config('MPESA_CALLBACK_URL', default='')
+MPESA_API_BASE_URL = config('MPESA_API_BASE_URL', default='')
+
+# URL du frontend (redirections, liens dans les mails)
 FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:5173')
 
 # SMS/WhatsApp (Twilio)
