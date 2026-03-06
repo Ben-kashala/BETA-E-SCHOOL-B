@@ -146,14 +146,21 @@ export default function PaymentForm({
     } catch (err: unknown) {
       const res = (err as { response?: { data?: unknown; status?: number } })?.response
       const data = res?.data
-      const msg =
-        typeof data === 'object' && data !== null && 'error' in data
-          ? String((data as { error?: string }).error)
-          : typeof data === 'string'
-            ? data
-            : res?.status === 400
-              ? 'Requête invalide (vérifiez le numéro, le montant et la config Mobile Money de l’école).'
-              : 'Erreur lors de la création du paiement'
+      // Log détaillé pour débogage (F12 → Console)
+      console.error('[initiate-mobile]', res?.status, data, err)
+
+      let msg = 'Erreur lors de la création du paiement'
+      if (typeof data === 'string') msg = data
+      else if (data && typeof data === 'object') {
+        if ('error' in data && (data as { error?: string }).error) msg = String((data as { error: string }).error)
+        else if ('detail' in data && (data as { detail?: string }).detail) msg = String((data as { detail: string }).detail)
+        else if (res?.status === 400) {
+          const obj = data as Record<string, unknown>
+          const first = Object.values(obj)[0]
+          if (Array.isArray(first) && first[0]) msg = String(first[0])
+          else if (typeof first === 'string') msg = first
+        }
+      }
       toast.error(msg)
     }
     setSubmitting(false)

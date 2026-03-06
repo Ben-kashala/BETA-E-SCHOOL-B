@@ -45,30 +45,42 @@ class AirtelService:
         if cached:
             return True, cached
 
+        import base64
         import requests
         url = f"{api_base.rstrip('/')}/auth/oauth2/token"
-        # Beaucoup d'APIs OAuth2 attendent form-urlencoded, pas JSON
-        headers = {"Accept": "*/*"}
-        # Essai 1 : body en application/x-www-form-urlencoded (standard OAuth2)
+        headers_base = {"Accept": "*/*"}
         body_form = {
             "client_id": client_id,
             "client_secret": client_secret,
             "grant_type": "client_credentials",
         }
         try:
-            # Essai 1 : form-urlencoded (standard OAuth2, souvent requis par Airtel)
+            # Essai 1 : Basic Auth (client_id:client_secret en en-tête) + body grant_type seulement
+            basic_b64 = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
             resp = requests.post(
                 url,
-                data=body_form,
-                headers={**headers, "Content-Type": "application/x-www-form-urlencoded"},
+                data={"grant_type": "client_credentials"},
+                headers={
+                    **headers_base,
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Authorization": f"Basic {basic_b64}",
+                },
                 timeout=15,
             )
             if resp.status_code != 200:
-                # Essai 2 : JSON (certaines instances Airtel l’acceptent)
+                # Essai 2 : client_id et client_secret dans le body (form-urlencoded)
+                resp = requests.post(
+                    url,
+                    data=body_form,
+                    headers={**headers_base, "Content-Type": "application/x-www-form-urlencoded"},
+                    timeout=15,
+                )
+            if resp.status_code != 200:
+                # Essai 3 : JSON
                 resp2 = requests.post(
                     url,
                     json=body_form,
-                    headers={**headers, "Content-Type": "application/json"},
+                    headers={**headers_base, "Content-Type": "application/json"},
                     timeout=15,
                 )
                 if resp2.status_code == 200:
