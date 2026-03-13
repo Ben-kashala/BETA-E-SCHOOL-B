@@ -791,15 +791,12 @@ class ReportCardViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['get'])
     def download_pdf(self, request, pk=None):
-        """Télécharge le bulletin en PDF. Régénération à chaque téléchargement. Format RDC si term='AN', sinon format trimestriel."""
+        """Télécharge le bulletin en PDF. Régénération à chaque téléchargement. Format annuel RDC pour toutes les périodes (T1, T2, T3, AN)."""
         report_card = self.get_object()
-        from .utils import generate_report_card_pdf, generate_bulletin_rdc_pdf
+        from .utils import generate_bulletin_rdc_pdf
         from django.http import FileResponse
         try:
-            if getattr(report_card, 'term', None) == 'AN':
-                pdf_file = generate_bulletin_rdc_pdf(report_card)
-            else:
-                pdf_file = generate_report_card_pdf(report_card)
+            pdf_file = generate_bulletin_rdc_pdf(report_card)
             report_card.pdf_file = pdf_file
             report_card.save(update_fields=['pdf_file'])
         except Exception as e:
