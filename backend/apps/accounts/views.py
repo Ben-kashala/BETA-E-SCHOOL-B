@@ -19,7 +19,7 @@ from apps.schools.models import StudentClassEnrollment, SchoolClass, School
 from apps.schools.serializers import StudentClassEnrollmentSerializer
 from apps.academics.models import Attendance, GradeBulletin, ReportCard
 from apps.academics.serializers import GradeBulletinSerializer
-from apps.academics.utils import get_class_ranking_map, generate_bulletin_grade_pdf
+from apps.academics.utils import get_class_ranking_map, generate_bulletin_grade_pdf, generate_bulletin_rdc_pdf
 from apps.payments.models import Payment
 
 User = get_user_model()
@@ -468,7 +468,9 @@ class StudentViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'], url_path='bulletin_pdf')
     def bulletin_pdf(self, request, pk=None):
         """
-        Télécharge le bulletin PDF (notes RDC) pour une classe et une année scolaire.
+        Télécharge le bulletin PDF pour une classe et une année scolaire.
+        Si un bulletin de décision (ReportCard annuel) existe pour cette année, on sert ce PDF officiel.
+        Sinon, on génère le bulletin « notes par matière » (generate_bulletin_grade_pdf).
         Query params: school_class (id), academic_year (obligatoires).
         """
         school_class_id = request.query_params.get('school_class')
@@ -482,6 +484,21 @@ class StudentViewSet(viewsets.ModelViewSet):
         school_class = get_object_or_404(SchoolClass, pk=school_class_id)
         if request.user.school and school_class.school_id != request.user.school_id:
             raise PermissionDenied('Classe non accessible.')
+        # Préférer le bulletin de décision (officiel RDC) si existant pour cette année (régénéré à chaque fois)
+        report_card = ReportCard.objects.filter(
+            student=student, academic_year=academic_year, term='AN'
+        ).first()
+        if report_card:
+            try:
+                report_card.pdf_file = generate_bulletin_rdc_pdf(report_card)
+                report_card.save(update_fields=['pdf_file'])
+            except Exception as e:
+                return Response(
+                    {'error': 'Échec de la génération du PDF', 'detail': str(e)},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            fn = f'bulletin_{student.id}_{school_class.id}_{academic_year.replace("/", "-")}.pdf'
+            return FileResponse(report_card.pdf_file.open(), content_type='application/pdf', as_attachment=True, filename=fn)
         buffer = generate_bulletin_grade_pdf(student, school_class, academic_year)
         fn = f'bulletin_{student.id}_{school_class.id}_{academic_year.replace("/", "-")}.pdf'
         return FileResponse(buffer, content_type='application/pdf', as_attachment=True, filename=fn)
@@ -522,6 +539,21 @@ def bulletin_pdf_download(request, pk):
         )
     if request.user.school and school_class.school_id != request.user.school_id:
         raise PermissionDenied('Classe non accessible.')
+    report_card = ReportCard.objects.filter(
+        student=student, academic_year=academic_year, term='AN'
+    ).first()
+    if report_card:
+        try:
+            from apps.academics.utils import generate_bulletin_rdc_pdf
+            report_card.pdf_file = generate_bulletin_rdc_pdf(report_card)
+            report_card.save(update_fields=['pdf_file'])
+        except Exception as e:
+            return Response(
+                {'error': 'Échec de la génération du PDF', 'detail': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        fn = f'bulletin_{student.id}_{school_class.id}_{academic_year.replace("/", "-")}.pdf'
+        return FileResponse(report_card.pdf_file.open(), content_type='application/pdf', as_attachment=True, filename=fn)
     buffer = generate_bulletin_grade_pdf(student, school_class, academic_year)
     fn = f'bulletin_{student.id}_{school_class.id}_{academic_year.replace("/", "-")}.pdf'
     return FileResponse(buffer, content_type='application/pdf', as_attachment=True, filename=fn)

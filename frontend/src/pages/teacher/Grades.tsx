@@ -307,6 +307,112 @@ export default function TeacherGrades() {
     return m
   }, [evalsData])
 
+  type EvalGroup = {
+    key: string
+    title: string
+    subjectName: string
+    className: string
+    academicYear: string
+    semester: string
+    period: number
+    evalType: string
+    maxScore: number
+    count: number
+    source: string
+    items: any[]
+  }
+
+  const evalGroups: EvalGroup[] = useMemo(() => {
+    const groups: Record<string, EvalGroup> = {}
+    const list = evalsData?.results ?? []
+    list.forEach((e: any) => {
+      const key = [
+        e.academic_year,
+        e.school_class,
+        e.subject,
+        e.semester,
+        e.period,
+        e.eval_type,
+        e.title || '',
+      ].join('::')
+      if (!groups[key]) {
+        groups[key] = {
+          key,
+          title: e.title || '(Sans titre)',
+          subjectName: e.subject_name || '',
+          className: e.class_name || '',
+          academicYear: e.academic_year,
+          semester: e.semester,
+          period: e.period,
+          evalType: e.eval_type,
+          maxScore: Number(e.max_score) || 0,
+          count: 0,
+          source: e.source || 'MANUAL',
+          items: [],
+        }
+      }
+      const g = groups[key]
+      g.items.push(e)
+      g.count += 1
+      const mScore = Number(e.max_score)
+      if (!isNaN(mScore) && mScore > g.maxScore) {
+        g.maxScore = mScore
+      }
+    })
+    return Object.values(groups)
+  }, [evalsData])
+
+  const [selectedEvalKey, setSelectedEvalKey] = useState<string | null>(null)
+
+  const selectedEvalGroup = useMemo(
+    () => evalGroups.find((g) => g.key === selectedEvalKey) || null,
+    [evalGroups, selectedEvalKey]
+  )
+
+  useEffect(() => {
+    if (!selectedEvalKey && evalGroups.length > 0) {
+      setSelectedEvalKey(evalGroups[0].key)
+    }
+  }, [evalGroups, selectedEvalKey])
+
+  const aggregateFromEvaluations = async (showToastMessages: boolean) => {
+    if (!selectedClass || !subject || !academicYear.trim()) return
+    const period =
+      semester === 'S1'
+        ? periodField === 's1_p1'
+          ? 1
+          : periodField === 's1_p2'
+          ? 2
+          : 1
+        : periodField === 's2_p3'
+        ? 3
+        : periodField === 's2_p4'
+        ? 4
+        : 3
+    const eval_types = evalType === 'EXAM' ? ['EXAM'] : ['HOMEWORK', 'QUIZ']
+    try {
+      await api.post('/academics/evaluations/aggregate-to-bulletin/', {
+        academic_year: academicYear.trim(),
+        school_class: selectedClass,
+        subject,
+        semester,
+        period,
+        target_field: periodField,
+        eval_types,
+      })
+      queryClient.invalidateQueries({ queryKey: ['grade-bulletins'] })
+      if (showToastMessages) {
+        showSuccessToast('Bulletin mis à jour à partir des évaluations.')
+      }
+    } catch (err) {
+      if (showToastMessages) {
+        showErrorToast(err, "Erreur lors de l'agrégation vers le bulletin")
+      } else {
+        console.error('Erreur agrégation automatique vers bulletin', err)
+      }
+    }
+  }
+
   const saveEvalMutation = useMutation({
     mutationFn: async ({
       studentId,
@@ -337,16 +443,22 @@ export default function TeacherGrades() {
       }
       return api.post('/academics/evaluations/', payload)
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ['evaluation-grades'] })
       setEvalOverrides({})
       showSuccessToast('Évaluation enregistrée')
+      // Agrégation automatique vers le bulletin RDC pour mettre à jour la moyenne
+      await aggregateFromEvaluations(false)
     },
     onError: (err: any) => {
       if (err?.response?.data) console.error('POST/PATCH evaluations:', err.response.data)
       showErrorToast(err, "Erreur lors de l'enregistrement de l'évaluation")
     },
   })
+
+  // Pour l'évaluation en cours : ligne existante correspondant au titre saisi (permet d'ajouter plusieurs évaluations)
+  const getExistingEvalForCurrentTitle = (studentId: number) =>
+    (evalsByStudent[studentId] ?? []).find((e: any) => (e.title || '') === (evalTitle || '')) ?? null
 
   const handleEvalBlur = (studentId: number) => {
     if (!subject || !selectedClass) return
@@ -359,7 +471,7 @@ export default function TeacherGrades() {
     const num = parseFloat(raw)
     if (isNaN(num)) return
     const value = Math.max(0, Math.min(evalBase || 20, num))
-    const existing = (evalsByStudent[studentId] ?? [])[0]
+    const existing = getExistingEvalForCurrentTitle(studentId)
     saveEvalMutation.mutate({
       studentId,
       existingId: existing?.id,
@@ -375,24 +487,7 @@ export default function TeacherGrades() {
     if (!selectedClass || !subject || !academicYear.trim()) return
     setAggregating(true)
     try {
-      const period = semester === 'S1'
-        ? (periodField === 's1_p1' ? 1 : periodField === 's1_p2' ? 2 : 1)
-        : (periodField === 's2_p3' ? 3 : periodField === 's2_p4' ? 4 : 3)
-      const eval_types =
-        evalType === 'EXAM' ? ['EXAM'] : ['HOMEWORK', 'QUIZ']
-      await api.post('/academics/evaluations/aggregate-to-bulletin/', {
-        academic_year: academicYear.trim(),
-        school_class: selectedClass,
-        subject,
-        semester,
-        period,
-        target_field: periodField,
-        eval_types,
-      })
-      showSuccessToast('Bulletin mis à jour à partir des évaluations.')
-      queryClient.invalidateQueries({ queryKey: ['grade-bulletins'] })
-    } catch (err) {
-      showErrorToast(err, "Erreur lors de l'agrégation vers le bulletin")
+      await aggregateFromEvaluations(true)
     } finally {
       setAggregating(false)
     }
@@ -532,72 +627,74 @@ export default function TeacherGrades() {
         )}
       </Card>
 
-      <Card>
-        {(classes?.results || []).length === 0 ? (
-          <div className="py-12 text-center text-amber-700 dark:text-amber-300">
-            <p className="font-medium">Vous n&apos;avez accès à aucune classe pour la saisie des notes.</p>
-            <p className="text-sm mt-2">Vous pouvez saisir les notes si vous êtes <strong>titulaire</strong> d&apos;une classe ou si le titulaire vous a <strong>assigné au moins une matière</strong> dans « Matières par classe ». L&apos;administrateur peut vous désigner comme titulaire ; le titulaire peut vous attribuer une matière dans la gestion des matières de sa classe.</p>
-          </div>
-        ) : !selectedClass ? (
-          <div className="py-12 text-center text-gray-500 dark:text-gray-400">
-            Sélectionnez une classe pour afficher les élèves et saisir les notes.
-          </div>
-        ) : loadingStudents ? (
-          <div className="py-12 flex justify-center">
-            <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
-          </div>
-        ) : students.length === 0 ? (
-          <div className="py-12 text-center text-gray-500 dark:text-gray-400">
-            Aucun élève dans cette classe {searchDebounced ? 'pour cette recherche' : ''}.
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-800">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Élève</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                    Note ({periodOpt?.label ?? periodField}) /{inputMax}
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                    Total {semester === 'S1' ? 'S1' : 'S2'}
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-                {students.map((student: any) => {
-                  const val = getDisplayValue(student.id)
-                  const totalSem = getTotalSemester(student.id)
-                  const saving = savingStudentId === student.id
-                  return (
-                    <tr key={student.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                      <td className="px-6 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                        {studentName(student)}
-                      </td>
-                      <td className="px-6 py-2 whitespace-nowrap">
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          max={inputMax}
-                          value={val}
-                          onChange={(e) => handleChange(student.id, e.target.value)}
-                          onBlur={() => handleBlur(student.id)}
-                          disabled={!canEdit || saving}
-                          className="input w-24 py-1.5 text-center"
-                        />
-                      </td>
-                      <td className="px-6 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                        {saving ? <Loader2 className="w-4 h-4 animate-spin inline" /> : totalSem}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+      {activeTab === 'bulletin' && (
+        <Card>
+          {(classes?.results || []).length === 0 ? (
+            <div className="py-12 text-center text-amber-700 dark:text-amber-300">
+              <p className="font-medium">Vous n&apos;avez accès à aucune classe pour la saisie des notes.</p>
+              <p className="text-sm mt-2">Vous pouvez saisir les notes si vous êtes <strong>titulaire</strong> d&apos;une classe ou si le titulaire vous a <strong>assigné au moins une matière</strong> dans « Matières par classe ». L&apos;administrateur peut vous désigner comme titulaire ; le titulaire peut vous attribuer une matière dans la gestion des matières de sa classe.</p>
+            </div>
+          ) : !selectedClass ? (
+            <div className="py-12 text-center text-gray-500 dark:text-gray-400">
+              Sélectionnez une classe pour afficher les élèves et saisir les notes.
+            </div>
+          ) : loadingStudents ? (
+            <div className="py-12 flex justify-center">
+              <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
+            </div>
+          ) : students.length === 0 ? (
+            <div className="py-12 text-center text-gray-500 dark:text-gray-400">
+              Aucun élève dans cette classe {searchDebounced ? 'pour cette recherche' : ''}.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 dark:bg-gray-800">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Élève</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                      Note ({periodOpt?.label ?? periodField}) /{inputMax}
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                      Total {semester === 'S1' ? 'S1' : 'S2'}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                  {students.map((student: any) => {
+                    const val = getDisplayValue(student.id)
+                    const totalSem = getTotalSemester(student.id)
+                    const saving = savingStudentId === student.id
+                    return (
+                      <tr key={student.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                        <td className="px-6 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                          {studentName(student)}
+                        </td>
+                        <td className="px-6 py-2 whitespace-nowrap">
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max={inputMax}
+                            value={val}
+                            onChange={(e) => handleChange(student.id, e.target.value)}
+                            onBlur={() => handleBlur(student.id)}
+                            disabled={!canEdit || saving}
+                            className="input w-24 py-1.5 text-center"
+                          />
+                        </td>
+                        <td className="px-6 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                          {saving ? <Loader2 className="w-4 h-4 animate-spin inline" /> : totalSem}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
 
       {activeTab === 'evaluations' && (
         <Card className="mt-6">
@@ -636,6 +733,16 @@ export default function TeacherGrades() {
                 />
               </div>
               <button
+                type="button"
+                className="btn btn-secondary mt-6"
+                onClick={() => {
+                  setEvalTitle('')
+                  setEvalOverrides({})
+                }}
+              >
+                Nouvelle évaluation
+              </button>
+              <button
                 className="btn btn-secondary mt-6"
                 onClick={handleAggregate}
                 disabled={aggregating || !subject || !selectedClass}
@@ -673,50 +780,136 @@ export default function TeacherGrades() {
                 Sélectionnez une classe et une matière pour saisir les évaluations.
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50 dark:bg-gray-800">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                        Élève
-                      </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                        Note /20
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {students.map((s: any) => {
-                      const existing = (evalsByStudent[s.id] ?? [])[0]
-                      const display =
-                        evalOverrides[s.id] !== undefined
-                          ? evalOverrides[s.id]
-                          : existing
-                          ? String(existing.score)
-                          : ''
-                      return (
-                        <tr key={s.id}>
-                          <td className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">
-                            {studentName(s)}
-                          </td>
-                          <td className="px-4 py-2">
-                            <input
-                              type="number"
-                              min={0}
-                              max={evalBase || 20}
-                              step={0.1}
-                              className="input w-24"
-                              value={display}
-                              onChange={(e) => handleEvalChange(s.id, e.target.value)}
-                              onBlur={() => handleEvalBlur(s.id)}
-                            />
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 dark:bg-gray-800">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                          Élève
+                        </th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                          Note /{evalBase || 20}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                      {students.map((s: any) => {
+                        const existing = getExistingEvalForCurrentTitle(s.id)
+                        const display =
+                          evalOverrides[s.id] !== undefined
+                            ? evalOverrides[s.id]
+                            : existing
+                            ? String(existing.score)
+                            : ''
+                        return (
+                          <tr key={s.id}>
+                            <td className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">
+                              {studentName(s)}
+                            </td>
+                            <td className="px-4 py-2">
+                              <input
+                                type="number"
+                                min={0}
+                                max={evalBase || 20}
+                                step={0.1}
+                                className="input w-24"
+                                value={display}
+                                onChange={(e) => handleEvalChange(s.id, e.target.value)}
+                                onBlur={() => handleEvalBlur(s.id)}
+                              />
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="mt-6">
+                  <h3 className="text-md font-semibold text-gray-900 dark:text-white mb-2">
+                    Évaluations enregistrées (historique)
+                  </h3>
+                  {evalGroups.length === 0 ? (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      Aucune évaluation enregistrée pour cette combinaison (classe, matière, année, semestre, période, type).
+                    </p>
+                  ) : (
+                    <div className="grid md:grid-cols-3 gap-4">
+                      <div className="md:col-span-1 max-h-64 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-md">
+                        {evalGroups.map((g) => (
+                          <button
+                            key={g.key}
+                            type="button"
+                            onClick={() => setSelectedEvalKey(g.key)}
+                            className={`w-full text-left px-3 py-2 text-sm border-b border-gray-100 dark:border-gray-800 ${
+                              selectedEvalKey === g.key
+                                ? 'bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200'
+                                : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-200'
+                            }`}
+                          >
+                            <div className="font-medium truncate">
+                              {g.title}
+                              {(g.source === 'ASSIGNMENT' || g.source === 'QUIZ') && (
+                                <span className="ml-1 text-[10px] bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 px-1 rounded">En ligne</span>
+                              )}
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                              {g.subjectName || 'Matière inconnue'} — {g.className || 'Classe'}
+                            </div>
+                            <div className="text-[11px] text-gray-400 dark:text-gray-500">
+                              {g.academicYear} · {g.semester} · Période {g.period} · {g.evalType}
+                            </div>
+                            <div className="text-[11px] text-gray-400 dark:text-gray-500">
+                              {g.count} note(s) · base {g.maxScore}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                      <div className="md:col-span-2">
+                        {selectedEvalGroup ? (
+                          <div className="overflow-x-auto">
+                            <p className="text-sm text-gray-700 dark:text-gray-200 mb-2">
+                              Détails pour <span className="font-semibold">{selectedEvalGroup.title}</span> —{' '}
+                              {selectedEvalGroup.subjectName || 'Matière'} · {selectedEvalGroup.className || 'Classe'} ·{' '}
+                              {selectedEvalGroup.academicYear} · {selectedEvalGroup.semester} · Période{' '}
+                              {selectedEvalGroup.period}
+                            </p>
+                            <table className="w-full">
+                              <thead className="bg-gray-50 dark:bg-gray-800">
+                                <tr>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                                    Élève
+                                  </th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                                    Note obtenue / Note max
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                {selectedEvalGroup.items.map((e: any) => (
+                                  <tr key={e.id}>
+                                    <td className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">
+                                      {e.student_name || `Élève #${e.student}`}
+                                    </td>
+                                    <td className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">
+                                      {e.score} / {e.max_score}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                            Sélectionnez une évaluation dans la liste pour voir le détail des notes.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
             )}
           </div>
         </Card>

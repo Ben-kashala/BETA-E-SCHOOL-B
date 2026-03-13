@@ -791,18 +791,17 @@ class ReportCardViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['get'])
     def download_pdf(self, request, pk=None):
-        """Télécharge le bulletin en PDF. Format RDC si term='AN', sinon format trimestriel."""
+        """Télécharge le bulletin en PDF. Régénération à chaque téléchargement. Format RDC si term='AN', sinon format trimestriel."""
         report_card = self.get_object()
-        if not hasattr(report_card, 'pdf_file') or not report_card.pdf_file:
-            from .utils import generate_report_card_pdf, generate_bulletin_rdc_pdf
-            try:
-                if getattr(report_card, 'term', None) == 'AN':
-                    pdf_file = generate_bulletin_rdc_pdf(report_card)
-                else:
-                    pdf_file = generate_report_card_pdf(report_card)
-                report_card.pdf_file = pdf_file
-                report_card.save(update_fields=['pdf_file'])
-            except Exception as e:
-                return Response({'error': 'Échec de la génération du PDF', 'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        from .utils import generate_report_card_pdf, generate_bulletin_rdc_pdf
         from django.http import FileResponse
+        try:
+            if getattr(report_card, 'term', None) == 'AN':
+                pdf_file = generate_bulletin_rdc_pdf(report_card)
+            else:
+                pdf_file = generate_report_card_pdf(report_card)
+            report_card.pdf_file = pdf_file
+            report_card.save(update_fields=['pdf_file'])
+        except Exception as e:
+            return Response({'error': 'Échec de la génération du PDF', 'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return FileResponse(report_card.pdf_file.open(), content_type='application/pdf')

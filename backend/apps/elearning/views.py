@@ -14,6 +14,24 @@ from .serializers import (
 )
 
 
+def _sync_submission_to_evaluation(submission):
+    """Récupération automatique : envoie la note du devoir vers EvaluationGrade (bulletin)."""
+    try:
+        from apps.academics.elearning_sync import sync_assignment_submission_to_evaluation
+        sync_assignment_submission_to_evaluation(submission)
+    except Exception:
+        pass
+
+
+def _sync_quiz_attempt_to_evaluation(attempt):
+    """Récupération automatique : envoie la note du quiz vers EvaluationGrade (bulletin)."""
+    try:
+        from apps.academics.elearning_sync import sync_quiz_attempt_to_evaluation
+        sync_quiz_attempt_to_evaluation(attempt)
+    except Exception:
+        pass
+
+
 def _evaluate_answer(question_type, student_answer, correct_answer, points):
     """Évalue une réponse (quiz ou devoir). Utilise la similarité pour TEXT/SHORT_ANSWER/ESSAY."""
     ans = (student_answer or '').strip()
@@ -325,6 +343,7 @@ class AssignmentSubmissionViewSet(viewsets.ModelViewSet):
         submission.graded_at = timezone.now()
         submission.status = 'GRADED'
         submission.save()
+        _sync_submission_to_evaluation(submission)
         return Response(AssignmentSubmissionSerializer(submission).data)
 
     @action(detail=True, methods=['post'])
@@ -556,6 +575,7 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
         if hasattr(attempt, 'is_completed'):
             attempt.is_completed = True
         attempt.save()
+        _sync_quiz_attempt_to_evaluation(attempt)
 
         return Response(QuizAttemptSerializer(attempt).data)
 
@@ -601,5 +621,6 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
         percentage = (total_score / total_points * 100) if total_points > 0 else 0
         attempt.is_passed = attempt.quiz.passing_score is None or float(percentage) >= float(attempt.quiz.passing_score or 0)
         attempt.save()
+        _sync_quiz_attempt_to_evaluation(attempt)
 
         return Response(QuizAttemptSerializer(attempt).data)

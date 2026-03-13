@@ -37,6 +37,9 @@ class Course(models.Model):
         return f"{self.title} - {self.school_class.name}"
 
 
+SEMESTER_CHOICES = [('S1', 'Premier semestre'), ('S2', 'Second semestre')]
+
+
 class Assignment(models.Model):
     """Model for assignments/homework"""
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='assignments', 
@@ -47,6 +50,8 @@ class Assignment(models.Model):
     school_class = models.ForeignKey(SchoolClass, on_delete=models.CASCADE, related_name='assignments', verbose_name="Classe")
     teacher = models.ForeignKey(Teacher, on_delete=models.CASCADE, related_name='assignments', verbose_name="Enseignant")
     academic_year = models.CharField(max_length=20, verbose_name="Année scolaire")
+    semester = models.CharField(max_length=2, choices=SEMESTER_CHOICES, default='S1', verbose_name="Semestre (pour bulletin)")
+    period = models.PositiveSmallIntegerField(default=1, verbose_name="Période (1 à 4, pour bulletin)")
     
     # Files
     assignment_file = models.FileField(upload_to='assignments/', null=True, blank=True, verbose_name="Fichier du devoir")
@@ -156,6 +161,8 @@ class Quiz(models.Model):
     school_class = models.ForeignKey(SchoolClass, on_delete=models.CASCADE, related_name='quizzes', verbose_name="Classe")
     teacher = models.ForeignKey(Teacher, on_delete=models.CASCADE, related_name='quizzes', verbose_name="Enseignant")
     academic_year = models.CharField(max_length=20, verbose_name="Année scolaire")
+    semester = models.CharField(max_length=2, choices=SEMESTER_CHOICES, default='S1', verbose_name="Semestre (pour bulletin)")
+    period = models.PositiveSmallIntegerField(default=1, verbose_name="Période (1 à 4, pour bulletin)")
     
     # Settings
     total_points = models.DecimalField(max_digits=5, decimal_places=2, default=20, verbose_name="Points totaux")

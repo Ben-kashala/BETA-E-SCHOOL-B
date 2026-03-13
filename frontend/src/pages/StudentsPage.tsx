@@ -475,18 +475,26 @@ function ParcoursTab({
                     <td className="px-3 py-2">{e.enrolled_at ? new Date(e.enrolled_at).toLocaleDateString('fr-FR') : '-'}</td>
                     <td className="px-3 py-2 text-center">
                       {studentId && e.school_class && e.academic_year ? (
-                        <button
-                          type="button"
-                          onClick={() => downloadPdf(
-                            `accounts/students/${studentId}/bulletin_pdf/?school_class=${e.school_class}&academic_year=${encodeURIComponent(e.academic_year)}`,
-                            `bulletin_${String(e.school_class_name || e.school_class).replace(/[/\\?%*:|"<>]/g, '-')}_${String(e.academic_year).replace(/[/\\?%*:|"<>]/g, '-')}.pdf`
-                          )}
-                          className="inline-flex items-center gap-1 text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 font-medium"
-                          title="Télécharger ou imprimer le bulletin PDF"
-                        >
-                          <FileDown className="w-4 h-4" />
-                          PDF
-                        </button>
+                        (() => {
+                          const reportCardForYear = reportCards.find(
+                            (r: any) => r.academic_year === e.academic_year && r.term === 'AN'
+                          )
+                          const url = reportCardForYear
+                            ? `academics/report-cards/${reportCardForYear.id}/download_pdf/`
+                            : `accounts/students/${studentId}/bulletin_pdf/?school_class=${e.school_class}&academic_year=${encodeURIComponent(e.academic_year)}`
+                          const filename = `bulletin_${String(e.school_class_name || e.school_class).replace(/[/\\?%*:|"<>]/g, '-')}_${String(e.academic_year).replace(/[/\\?%*:|"<>]/g, '-')}.pdf`
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => downloadPdf(url, filename)}
+                              className="inline-flex items-center gap-1 text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 font-medium"
+                              title={reportCardForYear ? 'Télécharger le bulletin officiel (décision)' : 'Télécharger le bulletin PDF (notes)'}
+                            >
+                              <FileDown className="w-4 h-4" />
+                              PDF
+                            </button>
+                          )
+                        })()
                       ) : (
                         '-'
                       )}
@@ -651,7 +659,7 @@ function TransferStudentModal({
     const loadSchools = async () => {
       try {
         setLoadingSchools(true)
-        const res = await api.get('/schools/schools/all-for-transfer/')
+        const res = await api.get('/schools/all-for-transfer/')
         const data = res.data?.results ?? res.data ?? []
         setSchools(data)
       } catch (e) {
