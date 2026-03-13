@@ -22,6 +22,7 @@ export function RoleRoute({ allowedRoles }: RoleRouteProps) {
       STUDENT: '/student',
       ACCOUNTANT: '/accountant',
       DISCIPLINE_OFFICER: '/discipline-officer',
+      PROMOTER: '/promoter',
     }
     return <Navigate to={roleRoutes[user.role] || '/login'} replace />
   }

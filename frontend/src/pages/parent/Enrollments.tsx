@@ -50,7 +50,7 @@ export default function ParentEnrollments() {
       parent_name: `${user?.first_name ?? ''} ${user?.last_name ?? ''}`.trim() || '',
       parent_phone: user?.phone ?? '',
       parent_email: user?.email ?? '',
-      parent_address: user?.address ?? '',
+      parent_address: user?.school?.address ?? '',
     },
   })
 
