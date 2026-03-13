@@ -78,14 +78,23 @@ def _build_bulletin_header_with_logos(story, styles):
     )
     title = Paragraph(title_text, styles["Title"])
 
-    static_root = getattr(settings, "STATIC_ROOT", None) or os.path.join(
-        settings.BASE_DIR, "static"
-    )
-    left_path = os.path.join(static_root, "bulletins", "rdc_flag.png")
-    right_path = os.path.join(static_root, "bulletins", "rdc_arms.png")
+    static_root = getattr(settings, "STATIC_ROOT", None) or os.path.join(settings.BASE_DIR, "static")
+    bulletins_dir = os.path.join(static_root, "bulletins")
+
+    # On supporte plusieurs noms possibles pour limiter les manipulations manuelles.
+    # Priorité : rdc_flag.png / rdc_arms.png, repli : Drapeau.png / Armoirie.png
+    def _first_existing(*candidates):
+        for name in candidates:
+            path = os.path.join(bulletins_dir, name)
+            if os.path.exists(path):
+                return path
+        return None
+
+    left_path = _first_existing("rdc_flag.png", "Drapeau.png")
+    right_path = _first_existing("rdc_arms.png", "Armoirie.png")
 
     def _img_or_spacer(path):
-        if os.path.exists(path):
+        if path and os.path.exists(path):
             return Image(path, width=1.4 * inch, height=0.9 * inch)
         return Spacer(1.4 * inch, 0.9 * inch)
 
