@@ -8,12 +8,13 @@ from rest_framework.pagination import PageNumberPagination
 from datetime import date as date_type, timedelta
 from django.db.models import Avg, Count, F, Q
 from django.shortcuts import get_object_or_404
-from .models import AcademicYear, Grade, GradeBulletin, Attendance, DisciplineRecord, DisciplineRequest, ReportCard
+from .models import AcademicYear, Grade, GradeBulletin, Attendance, DisciplineRecord, DisciplineRequest, ReportCard, EvaluationGrade
 from apps.accounts.models import Student
 from .filters import GradeBulletinFilterSet, AttendanceFilterSet
 from .serializers import (
     AcademicYearSerializer, GradeSerializer, GradeBulletinSerializer,
-    AttendanceSerializer, DisciplineRecordSerializer, DisciplineRequestSerializer, ReportCardSerializer
+    AttendanceSerializer, DisciplineRecordSerializer, DisciplineRequestSerializer, ReportCardSerializer,
+    EvaluationGradeSerializer,
 )
 from apps.schools.models import SchoolClass, ClassSubject, StudentClassEnrollment
 

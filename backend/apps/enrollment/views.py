@@ -7,6 +7,7 @@ from .models import EnrollmentApplication, ReEnrollment
 from .serializers import EnrollmentApplicationSerializer, ReEnrollmentSerializer
 from apps.accounts.models import User, Student, Parent
 from apps.schools.models import SchoolClass
+from django.db.models import Q
 
 
 def _parse_parent_name(parent_name):
@@ -101,10 +102,18 @@ class EnrollmentApplicationViewSet(viewsets.ModelViewSet):
     search_fields = ['first_name', 'last_name', 'middle_name', 'parent_name', 'mother_name', 'parent_phone', 'phone']
     
     def get_queryset(self):
+        """
+        - Admin / staff : toutes les demandes de leur école.
+        - Parent : uniquement les demandes soumises par lui-même (pour inscrire ses enfants).
+        """
         try:
+            user = self.request.user
             queryset = EnrollmentApplication.objects.select_related('school', 'requested_class', 'submitted_by', 'reviewed_by').all()
-            if self.request.user.school:
-                queryset = queryset.filter(school=self.request.user.school)
+            if user.school:
+                queryset = queryset.filter(school=user.school)
+            # Les parents ne voient que leurs propres demandes
+            if getattr(user, 'is_parent', False):
+                queryset = queryset.filter(submitted_by=user)
             return queryset
         except Exception as e:
             print(f"DEBUG ENROLLMENT GET_QUERYSET: ERREUR: {type(e).__name__}: {str(e)}")
@@ -182,6 +191,44 @@ class EnrollmentApplicationViewSet(viewsets.ModelViewSet):
         application = self.get_object()
         if application.status != 'PENDING':
             return Response({'error': 'Application already processed'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Gestion des doublons : vérifier s'il existe déjà un élève avec le même
+        # prénom, nom et postnom dans la même classe (et école) avant de créer un nouvel élève.
+        confirm_duplicate = str(request.data.get('confirm_duplicate', '')).lower() in ['1', 'true', 'yes', 'on']
+        if application.requested_class and not confirm_duplicate:
+            duplicates_qs = Student.objects.filter(
+                school_class=application.requested_class,
+                user__school=application.school,
+                user__first_name__iexact=application.first_name.strip(),
+                user__last_name__iexact=application.last_name.strip(),
+            )
+            # middle_name peut être null/blank, on fait une comparaison tolérante
+            if application.middle_name:
+                duplicates_qs = duplicates_qs.filter(
+                    Q(user__middle_name__iexact=application.middle_name.strip()) |
+                    Q(user__middle_name__isnull=True) |
+                    Q(user__middle_name__exact='')
+                )
+            if duplicates_qs.exists():
+                # Retourner une erreur structurée pour que le frontend puisse proposer
+                # à l'utilisateur de confirmer ou de modifier les informations.
+                duplicates = []
+                for s in duplicates_qs.select_related('user', 'school_class')[:5]:
+                    u = s.user
+                    duplicates.append({
+                        'student_id': s.student_id,
+                        'full_name': u.get_full_name() if u else '',
+                        'class_name': s.school_class.name if s.school_class else '',
+                    })
+                return Response(
+                    {
+                        'code': 'duplicate_student',
+                        'detail': "Un élève avec le même nom existe déjà dans cette classe. "
+                                  "Voulez-vous confirmer l'inscription malgré tout ou modifier les informations ?",
+                        'duplicates': duplicates,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         
         # Generate unique student ID
         from datetime import datetime

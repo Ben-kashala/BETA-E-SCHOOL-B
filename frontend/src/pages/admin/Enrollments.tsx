@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/authStore'
 import { showErrorToast, showSuccessToast } from '@/utils/toast'
 import { Check, X, Eye, Plus, Camera, Upload, X as XIcon, Edit2, Save, Search, Calendar } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
+import { useAcademicYears } from '@/hooks/useAcademicYears'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -61,6 +62,7 @@ export default function AdminEnrollments() {
   const editFileInputRef = useRef<HTMLInputElement>(null)
   const editCameraInputRef = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
+  const { years: academicYears, current: currentAcademicYear } = useAcademicYears()
   
   const { register, handleSubmit, formState: { errors }, reset, setValue } = useForm<EnrollmentForm>({
     resolver: zodResolver(enrollmentSchema),
@@ -70,6 +72,7 @@ export default function AdminEnrollments() {
   const { register: registerEdit, handleSubmit: handleSubmitEdit, formState: { errors: errorsEdit }, reset: resetEdit, setValue: setValueEdit } = useForm<EnrollmentForm>({
     resolver: zodResolver(enrollmentSchema),
   })
+  const [lastParentData, setLastParentData] = useState<Pick<EnrollmentForm, 'parent_name' | 'mother_name' | 'parent_phone' | 'parent_email' | 'parent_profession' | 'parent_address'> | null>(null)
   
 
   // Cleanup camera on unmount
@@ -136,14 +139,55 @@ export default function AdminEnrollments() {
         },
       })
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['enrollment-applications'] })
       showSuccessToast('Demande d\'inscription créée avec succès')
-      setShowForm(false)
-      setPhotoPreview(null)
-      setShowCamera(false)
-      stopCamera()
-      reset()
+      // Proposer d'inscrire un autre élève pour le même parent
+      if (variables) {
+        const parentBlock: Pick<EnrollmentForm, 'parent_name' | 'mother_name' | 'parent_phone' | 'parent_email' | 'parent_profession' | 'parent_address'> = {
+          parent_name: variables.parent_name,
+          mother_name: variables.mother_name,
+          parent_phone: variables.parent_phone,
+          parent_email: variables.parent_email,
+          parent_profession: variables.parent_profession,
+          parent_address: variables.parent_address,
+        }
+        setLastParentData(parentBlock)
+      }
+      const wantsAnother = window.confirm('Voulez-vous inscrire un autre élève pour le même parent ?')
+      if (wantsAnother && lastParentData) {
+        // Réinitialiser uniquement les informations de l\'élève, conserver les infos du parent
+        reset({
+          first_name: '',
+          last_name: '',
+          middle_name: '',
+          date_of_birth: '',
+          gender: 'M',
+          place_of_birth: '',
+          phone: '',
+          email: '',
+          address: '',
+          academic_year: '',
+          requested_class: undefined,
+          previous_school: '',
+          photo: undefined,
+          parent_name: lastParentData.parent_name,
+          mother_name: lastParentData.mother_name,
+          parent_phone: lastParentData.parent_phone,
+          parent_email: lastParentData.parent_email,
+          parent_profession: lastParentData.parent_profession,
+          parent_address: lastParentData.parent_address,
+        })
+        setPhotoPreview(null)
+        setShowCamera(false)
+        stopCamera()
+      } else {
+        setShowForm(false)
+        setPhotoPreview(null)
+        setShowCamera(false)
+        stopCamera()
+        reset()
+      }
     },
     onError: (error: any) => {
       showErrorToast(error, 'Erreur lors de la création de la demande d\'inscription')
@@ -152,9 +196,19 @@ export default function AdminEnrollments() {
 
   const onSubmit = (data: EnrollmentForm) => {
     const currentYear = new Date().getFullYear()
+    const fullAddress = [
+      data.address, // champ texte existant (au cas où)
+    ]
+      .filter(Boolean)
+      .join(' ')
+
     createMutation.mutate({
       ...data,
-      academic_year: data.academic_year || `${currentYear}-${currentYear + 1}`,
+      address: fullAddress,
+      academic_year:
+        data.academic_year ||
+        currentAcademicYear ||
+        `${currentYear}-${currentYear + 1}`,
     })
   }
 
@@ -314,7 +368,8 @@ export default function AdminEnrollments() {
   }
 
   const approveMutation = useMutation({
-    mutationFn: (id: number) => api.post(`/enrollment/applications/${id}/approve/`),
+    mutationFn: ({ id, confirmDuplicate }: { id: number; confirmDuplicate?: boolean }) =>
+      api.post(`/enrollment/applications/${id}/approve/`, confirmDuplicate ? { confirm_duplicate: true } : {}),
     onSuccess: (res: any) => {
       queryClient.invalidateQueries({ queryKey: ['enrollment-applications'] })
       const data = res?.data || {}
@@ -327,7 +382,19 @@ export default function AdminEnrollments() {
       showSuccessToast(message)
       setSelectedId(null)
     },
-    onError: (error: any) => {
+    onError: (error: any, variables) => {
+      const response = error?.response
+      const data = response?.data
+      if (data?.code === 'duplicate_student' && variables?.id) {
+        const confirm = window.confirm(
+          `${data.detail || 'Un élève avec le même nom existe déjà dans cette classe.'}\n` +
+          'Cliquez sur "OK" pour confirmer malgré tout, ou sur "Annuler" pour modifier les informations.'
+        )
+        if (confirm) {
+          approveMutation.mutate({ id: variables.id, confirmDuplicate: true })
+          return
+        }
+      }
       showErrorToast(error, 'Erreur lors de l\'approbation de l\'inscription')
     },
   })
@@ -562,11 +629,26 @@ export default function AdminEnrollments() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Année scolaire <span className="text-red-500">*</span>
                 </label>
-                <input
-                  {...register('academic_year')}
-                  className="input"
-                  placeholder="2024-2025"
-                />
+                {academicYears.length > 0 ? (
+                  <select {...register('academic_year')} className="input">
+                    <option value="">
+                      {currentAcademicYear
+                        ? `Sélectionner (par défaut ${currentAcademicYear})`
+                        : 'Sélectionner une année'}
+                    </option>
+                    {academicYears.map((year) => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    {...register('academic_year')}
+                    className="input"
+                    placeholder="2024-2025"
+                  />
+                )}
                 {errors.academic_year && (
                   <p className="mt-1 text-sm text-red-600">{errors.academic_year.message}</p>
                 )}
@@ -714,12 +796,57 @@ export default function AdminEnrollments() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Adresse <span className="text-red-500">*</span>
               </label>
-              <textarea
-                {...register('address')}
-                className="input"
-                rows={3}
-                placeholder="Adresse complète"
-              />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Numéro N°</label>
+                  <input
+                    className="input"
+                    placeholder="Ex: 12"
+                    onChange={(e) => setValue('address', `${e.target.value} ${''}`)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Avenue</label>
+                  <input
+                    className="input"
+                    placeholder="Ex: Boulevard du 30 Juin"
+                    onChange={(e) => setValue('address', `${''} ${e.target.value}`)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Quartier</label>
+                  <input
+                    className="input"
+                    placeholder="Ex: Quartier"
+                    onChange={(e) => setValue('address', `${''} ${e.target.value}`)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Commune</label>
+                  <input
+                    className="input"
+                    placeholder="Ex: Gombe"
+                    onChange={(e) => setValue('address', `${''} ${e.target.value}`)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Ville / Province</label>
+                  <input
+                    className="input"
+                    placeholder="Ex: Kinshasa"
+                    onChange={(e) => setValue('address', `${''} ${e.target.value}`)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Pays</label>
+                  <input
+                    className="input"
+                    placeholder="Ex: RDC"
+                    onChange={(e) => setValue('address', `${''} ${e.target.value}`)}
+                  />
+                </div>
+              </div>
+              <textarea {...register('address')} className="hidden" />
               {errors.address && (
                 <p className="mt-1 text-sm text-red-600">{errors.address.message}</p>
               )}
@@ -742,7 +869,7 @@ export default function AdminEnrollments() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Nom de la mère <span className="text-red-500">*</span>
+                  Nom de la mère (optionnel)
                   </label>
                   <input
                     {...register('mother_name')}

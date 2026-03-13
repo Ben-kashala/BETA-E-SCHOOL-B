@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import AcademicYear, Grade, GradeBulletin, Attendance, DisciplineRecord, DisciplineRequest, ReportCard
+from .models import AcademicYear, Grade, GradeBulletin, Attendance, DisciplineRecord, DisciplineRequest, ReportCard, EvaluationGrade
 from apps.accounts.serializers import StudentSerializer
 from apps.schools.models import ClassSubject
 
@@ -264,6 +264,35 @@ class DisciplineRequestSerializer(serializers.ModelSerializer):
             return obj.parent.user.get_full_name() if obj.parent and obj.parent.user else ''
         except Exception:
             return ''
+
+
+class EvaluationGradeSerializer(serializers.ModelSerializer):
+  student_name = serializers.SerializerMethodField()
+  subject_name = serializers.SerializerMethodField()
+  class_name = serializers.SerializerMethodField()
+
+  class Meta:
+      model = EvaluationGrade
+      fields = '__all__'
+      read_only_fields = ['created_at', 'updated_at']
+
+  def get_student_name(self, obj):
+      try:
+          return obj.student.user.get_full_name() if obj.student and obj.student.user else ''
+      except Exception:
+          return ''
+
+  def get_subject_name(self, obj):
+      try:
+          return obj.subject.name if obj.subject else ''
+      except Exception:
+          return ''
+
+  def get_class_name(self, obj):
+      try:
+          return obj.school_class.name if obj.school_class else ''
+      except Exception:
+          return ''
     
     def get_discipline_record_detail(self, obj):
         try:

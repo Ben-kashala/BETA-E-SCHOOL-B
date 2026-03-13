@@ -3,10 +3,16 @@ School models for multi-tenant architecture
 """
 from django.db import models
 from django.core.validators import RegexValidator
+from django.conf import settings
 
 
 class School(models.Model):
     """Model representing a school (tenant)"""
+    SCHOOL_TYPE_CHOICES = [
+        ('MATERNELLE', 'Maternelle'),
+        ('PRIMAIRE', 'Primaire'),
+        ('HUMANITAIRE', 'Humanitaire'),
+    ]
     name = models.CharField(max_length=200, verbose_name="Nom de l'école")
     code = models.CharField(
         max_length=20,
@@ -23,9 +29,25 @@ class School(models.Model):
     website = models.URLField(null=True, blank=True, verbose_name="Site web")
     
     # Configuration
+    school_type = models.CharField(
+        max_length=20,
+        choices=SCHOOL_TYPE_CHOICES,
+        default='PRIMAIRE',
+        verbose_name="Type d'école",
+        help_text="Détermine les classes disponibles : Maternelle (1ère-3ème), Primaire (1ère-6ème), Humanitaire (7ème-8ème, 1ère-4ème).",
+    )
     academic_year = models.CharField(max_length=20, default="2024-2025", verbose_name="Année scolaire")
     currency = models.CharField(max_length=3, default="CDF", verbose_name="Devise")
     language = models.CharField(max_length=10, default="fr", verbose_name="Langue")
+
+    # Promoteurs (propriétaires) de l'école
+    promoters = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        related_name='promoted_schools',
+        blank=True,
+        limit_choices_to={'role': 'PROMOTER'},
+        verbose_name="Promoteurs",
+    )
     
     # Status
     is_active = models.BooleanField(default=True, verbose_name="Actif")

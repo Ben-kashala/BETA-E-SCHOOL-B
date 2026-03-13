@@ -3,11 +3,14 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
 from django.db import models
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from .models import Notification, Message, SMSLog, WhatsAppLog, Announcement, ParentMeeting
 from .serializers import (
     NotificationSerializer, MessageSerializer, SMSLogSerializer,
     WhatsAppLogSerializer, AnnouncementSerializer, ParentMeetingSerializer
 )
+from apps.schools.models import School
+from apps.accounts.models import User
 # from .tasks import send_sms, send_whatsapp  # Uncomment when Celery is configured
 
 
@@ -49,11 +52,13 @@ class MessageViewSet(viewsets.ModelViewSet):
     search_fields = ['subject', 'message']
     
     def get_queryset(self):
+        user = self.request.user
         queryset = Message.objects.filter(
-            models.Q(sender=self.request.user) | models.Q(recipient=self.request.user)
+            models.Q(sender=user) | models.Q(recipient=user)
         )
-        if self.request.user.school:
-            queryset = queryset.filter(school=self.request.user.school)
+        # Pour les rôles non-admin, on limite aux messages de leur école
+        if user.school and not getattr(user, 'is_admin', False):
+            queryset = queryset.filter(school=user.school)
         return queryset
     
     def create(self, request, *args, **kwargs):
@@ -104,6 +109,52 @@ class MessageViewSet(viewsets.ModelViewSet):
             message.read_at = timezone.now()
             message.save()
         return Response(MessageSerializer(message).data)
+
+    @action(detail=False, methods=['post'], url_path='inter-school')
+    def inter_school(self, request):
+        """
+        Collaboration inter-école : l'admin de l'école A envoie un message
+        aux administrateurs d'une école B (plateforme).
+        """
+        user = request.user
+        if not getattr(user, 'is_admin', False):
+            raise PermissionDenied("Réservé aux administrateurs d'école.")
+
+        target_school_id = request.data.get('target_school')
+        subject = (request.data.get('subject') or '').strip()
+        body = (request.data.get('message') or '').strip()
+
+        if not target_school_id:
+            raise ValidationError({'target_school': "L'école cible est obligatoire."})
+        if not subject:
+            raise ValidationError({'subject': "Le sujet est obligatoire."})
+        if not body:
+            raise ValidationError({'message': "Le message est obligatoire."})
+
+        target_school = School.objects.filter(pk=target_school_id, is_active=True).first()
+        if not target_school:
+            raise ValidationError({'target_school': "École cible introuvable."})
+
+        admins_b = User.objects.filter(school=target_school, role='ADMIN', is_active=True)
+        if not admins_b.exists():
+            raise ValidationError({'target_school': "Aucun administrateur trouvé dans l'école cible."})
+
+        created = []
+        for admin in admins_b:
+            msg = Message.objects.create(
+                sender=user,
+                recipient=admin,
+                school=user.school or target_school,
+                subject=subject,
+                message=body,
+            )
+            created.append(msg)
+
+        from .notifications import notify_message_received
+        for msg in created:
+            notify_message_received(msg)
+
+        return Response({'created': len(created)}, status=status.HTTP_201_CREATED)
 
 
 class SMSLogViewSet(viewsets.ReadOnlyModelViewSet):

@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 from django.db.models import Count, Q
+from django.utils import timezone
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, status, permissions
@@ -14,7 +15,7 @@ from .serializers import (
     ChangePasswordSerializer,
     TeacherSerializer, ParentSerializer, StudentSerializer
 )
-from apps.schools.models import StudentClassEnrollment, SchoolClass
+from apps.schools.models import StudentClassEnrollment, SchoolClass, School
 from apps.schools.serializers import StudentClassEnrollmentSerializer
 from apps.academics.models import Attendance, GradeBulletin, ReportCard
 from apps.academics.serializers import GradeBulletinSerializer
@@ -38,11 +39,20 @@ class UserViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         queryset = User.objects.all()
-        
-        # Filter by school if user has a school
+
+        # Promoteur : voit uniquement les utilisateurs de SES écoles (multi-écoles)
+        if getattr(user, 'is_promoter', False):
+            school_ids = list(user.promoted_schools.values_list('id', flat=True))
+            if school_ids:
+                queryset = queryset.filter(school_id__in=school_ids)
+            else:
+                queryset = queryset.none()
+            return queryset
+
+        # Autres rôles : filtrage classique par école unique
         if user.school:
             queryset = queryset.filter(school=user.school)
-        
+
         # Admins can see all users in their school
         # Discipline officers can see all users in their school
         # Teachers can see students and parents in their school
@@ -163,17 +173,28 @@ class StudentViewSet(viewsets.ModelViewSet):
     search_fields = ['user__username', 'student_id', 'user__first_name', 'user__last_name', 'user__middle_name']
     
     def get_queryset(self):
+        user = self.request.user
         queryset = Student.objects.select_related(
             'user', 'school_class', 'school_class__titulaire', 'school_class__titulaire__user', 'parent'
         ).all()
-        if self.request.user.school:
-            queryset = queryset.filter(user__school=self.request.user.school)
+
+        # Promoteur : élèves dans toutes ses écoles
+        if getattr(user, 'is_promoter', False):
+            school_ids = list(user.promoted_schools.values_list('id', flat=True))
+            if school_ids:
+                queryset = queryset.filter(user__school_id__in=school_ids)
+            else:
+                queryset = queryset.none()
+            return queryset
+
+        if user.school:
+            queryset = queryset.filter(user__school=user.school)
         # Parents can only see their children
-        if self.request.user.is_parent:
-            queryset = queryset.filter(parent=self.request.user)
+        if user.is_parent:
+            queryset = queryset.filter(parent=user)
         # Students can only see themselves
-        elif self.request.user.is_student:
-            queryset = queryset.filter(user=self.request.user)
+        elif user.is_student:
+            queryset = queryset.filter(user=user)
         # Admin and Teacher see all students of the school (filter above)
         return queryset
 
@@ -194,6 +215,78 @@ class StudentViewSet(viewsets.ModelViewSet):
                 student=inst, school_class=inst.school_class,
                 defaults={'status': 'active'},
             )
+    
+    @action(detail=True, methods=['post'], url_path='transfer')
+    def transfer(self, request, pk=None):
+        """
+        Transférer le dossier d'un élève vers une autre école de la plateforme.
+        Réservé à l'ADMIN de l'école actuelle.
+        """
+        student = self.get_object()
+        user = request.user
+
+        if not getattr(user, 'is_admin', False):
+            raise PermissionDenied("Seul l'administrateur d'école peut transférer un élève.")
+        if not user.school or user.school_id != getattr(student.user, 'school_id', None):
+            raise PermissionDenied("Vous ne pouvez transférer que les élèves de votre école.")
+
+        target_school_id = request.data.get('target_school')
+        target_class_id = request.data.get('target_class')
+        if not target_school_id:
+            raise ValidationError({'target_school': "L'école cible est obligatoire."})
+        if str(target_school_id) == str(user.school_id):
+            raise ValidationError({'target_school': "L'école cible doit être différente de l'école actuelle."})
+
+        target_school = School.objects.filter(pk=target_school_id, is_active=True).first()
+        if not target_school:
+            raise ValidationError({'target_school': "École cible introuvable."})
+
+        target_class = None
+        if target_class_id:
+            target_class = SchoolClass.objects.filter(pk=target_class_id, school=target_school).first()
+            if not target_class:
+                raise ValidationError({'target_class': "Classe cible introuvable dans l'école sélectionnée."})
+
+        # Clôturer l'inscription courante dans l'école A
+        if student.school_class_id:
+            StudentClassEnrollment.objects.filter(
+                student=student,
+                school_class=student.school_class,
+                status='active',
+            ).update(status='withdrawn', left_at=timezone.now())
+
+        # Changer l'école de l'utilisateur élève
+        student.user.school = target_school
+        student.user.save(update_fields=['school'])
+
+        # Rattacher éventuellement à une classe de l'école B
+        if target_class:
+            student.school_class = target_class
+            student.academic_year = target_class.academic_year
+            student.save(update_fields=['school_class', 'academic_year'])
+            StudentClassEnrollment.objects.get_or_create(
+                student=student,
+                school_class=target_class,
+                defaults={'status': 'active'},
+            )
+        else:
+            student.school_class = None
+            student.save(update_fields=['school_class'])
+
+        # Notifier les admins de l'école B
+        admins_b = User.objects.filter(school=target_school, role='ADMIN', is_active=True)
+        from apps.communication.notifications import notify_users
+        notify_users(
+            target_school,
+            admins_b,
+            'GENERAL',
+            "Nouveau dossier élève transféré",
+            f"L'élève {student.user.get_full_name()} a été transféré depuis l'école {user.school.name}.",
+            related_object_type='student',
+            related_object_id=student.id,
+        )
+
+        return Response({'detail': 'Transfert effectué avec succès.'}, status=status.HTTP_200_OK)
     
     @action(detail=False, methods=['get'], url_path='parent_dashboard')
     def parent_dashboard(self, request):

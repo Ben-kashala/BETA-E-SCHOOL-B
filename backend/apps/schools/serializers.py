@@ -8,6 +8,10 @@ class SchoolSerializer(serializers.ModelSerializer):
         model = School
         fields = '__all__'
         read_only_fields = ['created_at', 'updated_at']
+        extra_kwargs = {
+            # Le type d'école est requis à la création dans l'API, mais a une valeur par défaut
+            'school_type': {'required': False},
+        }
     
     def to_representation(self, instance):
         """Override to return full URL for logo"""
@@ -65,6 +69,53 @@ class SchoolClassSerializer(serializers.ModelSerializer):
         if obj.titulaire and obj.titulaire.user:
             return obj.titulaire.user.get_full_name() or obj.titulaire.user.username
         return None
+
+    def validate(self, attrs):
+        """
+        Valide la cohérence entre le type d'école et la classe (grade) saisie.
+        - Maternelle : 1ère à 3ème
+        - Primaire : 1ère à 6ème
+        - Humanitaire : 7ème, 8ème, 1ère à 4ème
+        """
+        attrs = super().validate(attrs)
+        request = self.context.get('request')
+        school = getattr(request.user, 'school', None) if request else None
+        # Si on est en mise à jour sans request.school (ex: admin Django), récupérer depuis l'instance
+        if not school and self.instance is not None:
+            school = getattr(self.instance, 'school', None)
+        if not school:
+            return attrs
+
+        school_type = getattr(school, 'school_type', None)
+        if not school_type:
+            return attrs
+
+        grade = (attrs.get('grade') or getattr(self.instance, 'grade', '') or '').strip()
+        if not grade:
+          return attrs
+
+        normalized = grade.replace('ème', '').replace('ère', '').strip().lower()
+
+        if school_type == 'MATERNELLE':
+            allowed = {'1', '2', '3'}
+            if normalized not in allowed:
+                raise serializers.ValidationError({
+                    'grade': "Pour une école maternelle, la classe doit être comprise entre 1ère et 3ème."
+                })
+        elif school_type == 'PRIMAIRE':
+            allowed = {'1', '2', '3', '4', '5', '6'}
+            if normalized not in allowed:
+                raise serializers.ValidationError({
+                    'grade': "Pour une école primaire, la classe doit être comprise entre 1ère et 6ème."
+                })
+        elif school_type == 'HUMANITAIRE':
+            allowed = {'7', '8', '1', '2', '3', '4'}
+            if normalized not in allowed:
+                raise serializers.ValidationError({
+                    'grade': "Pour une école humanitaire, la classe doit être 7ème, 8ème ou entre 1ère et 4ème."
+                })
+
+        return attrs
 
 
 class SubjectSerializer(serializers.ModelSerializer):

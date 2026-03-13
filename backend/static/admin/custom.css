@@ -1,0 +1,96 @@
+:root {
+  --eschool-blue: #21335C;
+  --eschool-white: #EDEDED;
+  --eschool-yellow: #CA9D1E;
+}
+
+/* En-tête principal */
+#header {
+  background: var(--eschool-blue);
+  color: var(--eschool-white);
+  border-bottom: 3px solid var(--eschool-yellow);
+}
+
+#branding h1,
+#branding h1 a:link,
+#branding h1 a:visited {
+  color: var(--eschool-white);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+#user-tools,
+#user-tools a {
+  color: var(--eschool-white);
+}
+
+/* Fond global */
+body {
+  background: var(--eschool-white);
+}
+
+#content {
+  background: #ffffff;
+}
+
+/* Tableaux & modules */
+.module caption,
+.module h2,
+.inline-group h2 {
+  background: var(--eschool-blue);
+  color: var(--eschool-white);
+}
+
+.module,
+.inline-group {
+  border-color: var(--eschool-blue);
+}
+
+/* Fil d’Ariane */
+div.breadcrumbs {
+  background: #ffffff;
+  border-bottom: 1px solid #d9d9d9;
+  color: var(--eschool-blue);
+}
+
+div.breadcrumbs a {
+  color: var(--eschool-blue);
+}
+
+/* Boutons principaux */
+input[type=submit],
+input[type=button],
+button,
+.button,
+.submit-row input {
+  background: var(--eschool-blue);
+  color: var(--eschool-white);
+  border: 1px solid var(--eschool-blue);
+}
+
+input[type=submit]:hover,
+input[type=button]:hover,
+button:hover,
+.button:hover,
+.submit-row input:hover {
+  background: var(--eschool-yellow);
+  border-color: var(--eschool-yellow);
+  color: #000000;
+}
+
+/* Liens principaux */
+a {
+  color: var(--eschool-blue);
+}
+
+a:focus,
+a:hover {
+  color: var(--eschool-yellow);
+}
+
+/* Masquer le footer "Django" */
+#footer {
+  display: none !important;
+}
+

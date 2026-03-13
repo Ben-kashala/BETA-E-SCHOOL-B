@@ -20,6 +20,7 @@ const ROLE_COMMUNICATION_PATH: Record<string, string> = {
   STUDENT: '/student/communication',
   ACCOUNTANT: '/accountant',
   DISCIPLINE_OFFICER: '/discipline-officer/communication',
+  PROMOTER: '/promoter',
 }
 
 const ROLE_BASE_PATH: Record<string, string> = {
@@ -29,6 +30,7 @@ const ROLE_BASE_PATH: Record<string, string> = {
   STUDENT: '/student',
   ACCOUNTANT: '/accountant',
   DISCIPLINE_OFFICER: '/discipline-officer',
+  PROMOTER: '/promoter',
 }
 
 /**

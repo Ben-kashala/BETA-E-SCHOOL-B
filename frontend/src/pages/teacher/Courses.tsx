@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { showErrorToast, showSuccessToast } from '@/utils/toast'
+import { useAcademicYears } from '@/hooks/useAcademicYears'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
@@ -43,6 +44,7 @@ export default function TeacherCourses() {
   const [importFile, setImportFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
+  const { years: academicYears, current: currentAcademicYear } = useAcademicYears()
 
   const { register, handleSubmit, formState: { errors }, reset, setValue, watch } = useForm<CourseForm>({
     resolver: zodResolver(courseSchema),
@@ -266,11 +268,26 @@ export default function TeacherCourses() {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Année scolaire <span className="text-red-500">*</span>
                 </label>
-                <input
-                  {...register('academic_year')}
-                  className="input"
-                  placeholder="Ex: 2024-2025"
-                />
+                {academicYears.length > 0 ? (
+                  <select {...register('academic_year')} className="input">
+                    <option value="">
+                      {currentAcademicYear
+                        ? `Sélectionner (par défaut ${currentAcademicYear})`
+                        : 'Sélectionner une année'}
+                    </option>
+                    {academicYears.map((year) => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    {...register('academic_year')}
+                    className="input"
+                    placeholder="Ex: 2024-2025"
+                  />
+                )}
                 {errors.academic_year && (
                   <p className="mt-1 text-sm text-red-600">{errors.academic_year.message}</p>
                 )}

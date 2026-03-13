@@ -1,5 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
-import { useState, useMemo } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState, useMemo, useEffect } from 'react'
 import api from '@/services/api'
 import { Card } from '@/components/ui/Card'
 import {
@@ -13,6 +13,9 @@ import {
   Filter,
   FileDown,
 } from 'lucide-react'
+import { useAcademicYears } from '@/hooks/useAcademicYears'
+import { useAuthStore } from '@/store/authStore'
+import toast from 'react-hot-toast'
 
 type StatusFilter = 'all' | 'actifs' | 'anciens' | 'sortants'
 
@@ -23,6 +26,10 @@ export default function StudentsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [detailTab, setDetailTab] = useState<'identity' | 'parcours' | 'payments'>('identity')
+  const [showTransferModal, setShowTransferModal] = useState(false)
+  const { user } = useAuthStore()
+  const queryClient = useQueryClient()
+  const { years: academicYearNames, current: currentAcademicYear } = useAcademicYears()
 
   // Params pour l'API
   const params = useMemo(() => {
@@ -57,12 +64,14 @@ export default function StudentsPage() {
     },
   })
 
+  // Fallback pour les anciennes API: on garde l'appel /academics/academic-years/ si le hook ne retourne rien.
   const { data: academicYearsData } = useQuery({
     queryKey: ['academic-years'],
     queryFn: async () => {
       const res = await api.get('/academics/academic-years/', { params: { page_size: 100 } })
       return res.data
     },
+    enabled: !academicYearNames.length,
   })
 
   const { data: detailData, isLoading: detailLoading } = useQuery({
@@ -76,15 +85,26 @@ export default function StudentsPage() {
 
   const list = useMemo(() => (studentsData?.results ?? []) as any[], [studentsData])
   const classes = useMemo(() => (classesData?.results ?? classesData ?? []) as any[], [classesData])
-  const academicYears = useMemo(() => (academicYearsData?.results ?? academicYearsData ?? []) as any[], [academicYearsData])
+  const academicYears = useMemo(
+    () => (academicYearsData?.results ?? academicYearsData ?? []) as any[],
+    [academicYearsData],
+  )
 
   // Années distinctes depuis les classes si academic-years est vide
   const yearOptions = useMemo(() => {
+    if (academicYearNames.length > 0) {
+      return academicYearNames.map((name) => ({ id: name, name }))
+    }
     if (academicYears.length > 0) return academicYears
     const years = new Set<string>()
-    classes.forEach((c: any) => { if (c.academic_year) years.add(c.academic_year) })
-    return Array.from(years).sort().reverse().map((name) => ({ id: name, name }))
-  }, [academicYears, classes])
+    classes.forEach((c: any) => {
+      if (c.academic_year) years.add(c.academic_year)
+    })
+    return Array.from(years)
+      .sort()
+      .reverse()
+      .map((name) => ({ id: name, name }))
+  }, [academicYearNames, academicYears, classes])
 
   const getStatusLabel = (s: any) => {
     if (s.is_former_student) return { label: 'Ancien', className: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' }
@@ -134,9 +154,15 @@ export default function StudentsPage() {
               onChange={(e) => setAcademicYear(e.target.value)}
               className="input w-full"
             >
-              <option value="">Toutes</option>
+              <option value="">
+                {currentAcademicYear
+                  ? `Toutes (par défaut ${currentAcademicYear})`
+                  : 'Toutes'}
+              </option>
               {yearOptions.map((y: any) => (
-                <option key={y.id || y.name} value={y.name || y.id}>{y.name || y.id}</option>
+                <option key={y.id || y.name} value={y.name || y.id}>
+                  {y.name || y.id}
+                </option>
               ))}
             </select>
           </div>
@@ -252,12 +278,22 @@ export default function StudentsPage() {
               <h2 className="text-xl font-bold text-gray-900 dark:text-white">
                 Fiche élève {detailData?.identity?.user_name || detailData?.identity?.student_id || `#${selectedId}`}
               </h2>
-              <button
-                onClick={() => setSelectedId(null)}
-                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                {user?.role === 'ADMIN' && (
+                  <button
+                    onClick={() => setShowTransferModal(true)}
+                    className="btn btn-secondary px-3 py-1 text-xs sm:text-sm"
+                  >
+                    Transférer vers une autre école
+                  </button>
+                )}
+                <button
+                  onClick={() => setSelectedId(null)}
+                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Onglets */}
@@ -302,6 +338,17 @@ export default function StudentsPage() {
             </div>
           </div>
         </div>
+      )}
+      {showTransferModal && selectedId && user?.role === 'ADMIN' && (
+        <TransferStudentModal
+          studentId={selectedId}
+          onClose={() => setShowTransferModal(false)}
+          onTransferred={() => {
+            queryClient.invalidateQueries({ queryKey: ['students'] })
+            setShowTransferModal(false)
+            setSelectedId(null)
+          }}
+        />
       )}
     </div>
   )
@@ -579,6 +626,161 @@ function PaymentsTab({ payments }: { payments: any[] }) {
           </table>
         </div>
       )}
+    </div>
+  )
+}
+
+function TransferStudentModal({
+  studentId,
+  onClose,
+  onTransferred,
+}: {
+  studentId: number
+  onClose: () => void
+  onTransferred: () => void
+}) {
+  const [schools, setSchools] = useState<any[]>([])
+  const [classes, setClasses] = useState<any[]>([])
+  const [loadingSchools, setLoadingSchools] = useState(false)
+  const [loadingClasses, setLoadingClasses] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [selectedSchoolId, setSelectedSchoolId] = useState<string>('')
+  const [selectedClassId, setSelectedClassId] = useState<string>('')
+
+  useEffect(() => {
+    const loadSchools = async () => {
+      try {
+        setLoadingSchools(true)
+        const res = await api.get('/schools/schools/all-for-transfer/')
+        const data = res.data?.results ?? res.data ?? []
+        setSchools(data)
+      } catch (e) {
+        toast.error('Erreur lors du chargement des écoles.')
+      } finally {
+        setLoadingSchools(false)
+      }
+    }
+    loadSchools()
+  }, [])
+
+  const handleChangeSchool = async (value: string) => {
+    setSelectedSchoolId(value)
+    setSelectedClassId('')
+    if (!value) {
+      setClasses([])
+      return
+    }
+    try {
+      setLoadingClasses(true)
+      const res = await api.get('/schools/classes/', { params: { school: value } })
+      const data = res.data?.results ?? res.data ?? []
+      setClasses(data)
+    } catch (e) {
+      toast.error('Erreur lors du chargement des classes de l’école cible.')
+    } finally {
+      setLoadingClasses(false)
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (!selectedSchoolId) {
+      toast.error("Veuillez choisir l'école cible.")
+      return
+    }
+    try {
+      setSubmitting(true)
+      await api.post(`/accounts/students/${studentId}/transfer/`, {
+        target_school: selectedSchoolId,
+        target_class: selectedClassId || null,
+      })
+      toast.success('Transfert effectué avec succès.')
+      onTransferred()
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.detail ||
+        err?.response?.data?.non_field_errors?.join(', ') ||
+        'Erreur lors du transfert.'
+      toast.error(msg)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">Transférer l&apos;élève</h2>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Sélectionnez l&apos;école de destination et éventuellement une classe dans cette école.
+          </p>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              École cible <span className="text-red-500">*</span>
+            </label>
+            {loadingSchools ? (
+              <div className="input">Chargement des écoles...</div>
+            ) : (
+              <select
+                className="input"
+                value={selectedSchoolId}
+                onChange={(e) => handleChangeSchool(e.target.value)}
+                required
+              >
+                <option value="">Sélectionner une école</option>
+                {schools.map((s: any) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} {s.city ? `(${s.city})` : ''} {s.code ? `- ${s.code}` : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Classe cible (optionnel)
+            </label>
+            {loadingClasses ? (
+              <div className="input">Chargement des classes...</div>
+            ) : (
+              <select
+                className="input"
+                value={selectedClassId}
+                onChange={(e) => setSelectedClassId(e.target.value)}
+                disabled={!selectedSchoolId || classes.length === 0}
+              >
+                <option value="">Sans classe (à affecter plus tard)</option>
+                {classes.map((c: any) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} {c.academic_year ? `(${c.academic_year})` : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn btn-secondary">
+              Annuler
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="btn btn-primary"
+            >
+              {submitting ? 'Transfert...' : 'Confirmer le transfert'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }

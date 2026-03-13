@@ -32,6 +32,7 @@ def create_default_school():
             country="RDC",
             phone="+243000000000",
             email="admin@ecole.com",
+            school_type="PRIMAIRE",
             academic_year="2024-2025",
             currency="CDF",
             language="fr",

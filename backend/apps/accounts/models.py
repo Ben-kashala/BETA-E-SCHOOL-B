@@ -17,6 +17,7 @@ class User(AbstractUser):
         ('STUDENT', 'Élève'),
         ('ACCOUNTANT', 'Comptable'),
         ('DISCIPLINE_OFFICER', 'Chargé de discipline'),
+        ('PROMOTER', 'Promoteur'),
     ]
     
     # Basic info (first_name, last_name hérités d'AbstractUser; postnom pour élève)
@@ -77,6 +78,10 @@ class User(AbstractUser):
     @property
     def is_discipline_officer(self):
         return self.role == 'DISCIPLINE_OFFICER'
+
+    @property
+    def is_promoter(self):
+        return self.role == 'PROMOTER'
 
 
 class Teacher(models.Model):

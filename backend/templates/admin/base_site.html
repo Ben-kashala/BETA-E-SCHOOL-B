@@ -1,0 +1,19 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% block title %}E-SCHOOL ADMIN{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" type="text/css" href="{% static 'admin/custom.css' %}">
+{% endblock %}
+
+{% block branding %}
+<div id="site-name-wrapper">
+    <h1 id="site-name">
+        <a href="{% url 'admin:index' %}">E-SCHOOL ADMIN</a>
+    </h1>
+</div>
+{% endblock %}
+
+{% block nav-global %}{% endblock %}

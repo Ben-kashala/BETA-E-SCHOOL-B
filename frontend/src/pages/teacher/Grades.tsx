@@ -32,6 +32,7 @@ const defaultAcademicYear = `${currentYear}-${currentYear + 1}`
 
 export default function TeacherGrades() {
   const queryClient = useQueryClient()
+  const [activeTab, setActiveTab] = useState<'bulletin' | 'evaluations'>('bulletin')
   const [selectedClass, setSelectedClass] = useState<number | null>(null)
   const [searchStudent, setSearchStudent] = useState('')
   const [searchDebounced, setSearchDebounced] = useState('')
@@ -41,6 +42,9 @@ export default function TeacherGrades() {
   const [subject, setSubject] = useState<number | null>(null)
   const [overrides, setOverrides] = useState<Record<number, Record<string, string>>>({})
   const [savingStudentId, setSavingStudentId] = useState<number | null>(null)
+  const [evalType, setEvalType] = useState<'HOMEWORK' | 'QUIZ' | 'EXAM'>('HOMEWORK')
+  const [evalOverrides, setEvalOverrides] = useState<Record<number, string>>({})
+  const [aggregating, setAggregating] = useState(false)
 
   useEffect(() => {
     const t = setTimeout(() => setSearchDebounced(searchStudent), 300)
@@ -268,11 +272,153 @@ export default function TeacherGrades() {
   const studentName = (s: any) =>
     s.user_name || [s.user?.first_name, s.user?.last_name, s.user?.middle_name].filter(Boolean).join(' ') || `Élève #${s.id}`
 
+  // Evaluations (devoirs / interros / examens)
+  const { data: evalsData } = useQuery({
+    queryKey: ['evaluation-grades', selectedClass, subject, academicYear, semester, periodField, evalType],
+    queryFn: async () => {
+      if (!selectedClass || !subject) return { results: [] }
+      const period = semester === 'S1'
+        ? (periodField === 's1_p1' ? 1 : periodField === 's1_p2' ? 2 : 1)
+        : (periodField === 's2_p3' ? 3 : periodField === 's2_p4' ? 4 : 3)
+      const params: Record<string, string> = {
+        school_class: String(selectedClass),
+        subject: String(subject),
+        academic_year: academicYear.trim(),
+        semester,
+        period: String(period),
+        eval_type: evalType,
+        page_size: '200',
+      }
+      const res = await api.get('/academics/evaluations/', { params })
+      return res.data
+    },
+    enabled: activeTab === 'evaluations' && !!(selectedClass && subject && academicYear.trim()),
+  })
+
+  const evalsByStudent = useMemo(() => {
+    const m: Record<number, any[]> = {}
+    const list = evalsData?.results ?? []
+    list.forEach((e: any) => {
+      if (!m[e.student]) m[e.student] = []
+      m[e.student].push(e)
+    })
+    return m
+  }, [evalsData])
+
+  const saveEvalMutation = useMutation({
+    mutationFn: async ({
+      studentId,
+      existingId,
+      score,
+    }: {
+      studentId: number
+      existingId?: number
+      score: number
+    }) => {
+      const period = semester === 'S1'
+        ? (periodField === 's1_p1' ? 1 : periodField === 's1_p2' ? 2 : 1)
+        : (periodField === 's2_p3' ? 3 : periodField === 's2_p4' ? 4 : 3)
+      const payload = {
+        student: studentId,
+        subject: subject!,
+        school_class: selectedClass!,
+        academic_year: academicYear.trim(),
+        semester,
+        period,
+        eval_type: evalType,
+        score,
+        max_score: 20,
+      }
+      if (existingId) {
+        return api.patch(`/academics/evaluations/${existingId}/`, payload)
+      }
+      return api.post('/academics/evaluations/', payload)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['evaluation-grades'] })
+      setEvalOverrides({})
+      showSuccessToast('Évaluation enregistrée')
+    },
+    onError: (err: any) => {
+      if (err?.response?.data) console.error('POST/PATCH evaluations:', err.response.data)
+      showErrorToast(err, "Erreur lors de l'enregistrement de l'évaluation")
+    },
+  })
+
+  const handleEvalBlur = (studentId: number) => {
+    if (!subject || !selectedClass) return
+    const raw = evalOverrides[studentId]
+    if (raw === undefined) return
+    const num = parseFloat(raw)
+    if (isNaN(num)) return
+    const value = Math.max(0, Math.min(20, num))
+    const existing = (evalsByStudent[studentId] ?? [])[0]
+    saveEvalMutation.mutate({
+      studentId,
+      existingId: existing?.id,
+      score: value,
+    })
+  }
+
+  const handleEvalChange = (studentId: number, value: string) => {
+    setEvalOverrides((prev) => ({ ...prev, [studentId]: value }))
+  }
+
+  const handleAggregate = async () => {
+    if (!selectedClass || !subject || !academicYear.trim()) return
+    setAggregating(true)
+    try {
+      const period = semester === 'S1'
+        ? (periodField === 's1_p1' ? 1 : periodField === 's1_p2' ? 2 : 1)
+        : (periodField === 's2_p3' ? 3 : periodField === 's2_p4' ? 4 : 3)
+      const eval_types =
+        evalType === 'EXAM' ? ['EXAM'] : ['HOMEWORK', 'QUIZ']
+      await api.post('/academics/evaluations/aggregate-to-bulletin/', {
+        academic_year: academicYear.trim(),
+        school_class: selectedClass,
+        subject,
+        semester,
+        period,
+        target_field: periodField,
+        eval_types,
+      })
+      showSuccessToast('Bulletin mis à jour à partir des évaluations.')
+      queryClient.invalidateQueries({ queryKey: ['grade-bulletins'] })
+    } catch (err) {
+      showErrorToast(err, "Erreur lors de l'agrégation vers le bulletin")
+    } finally {
+      setAggregating(false)
+    }
+  }
+
   return (
     <div>
-      <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">
-        Gestion des Notes (Bulletin RDC)
+      <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+        Gestion des Notes
       </h1>
+
+      <div className="flex space-x-2 mb-4 border-b border-gray-200 dark:border-gray-700">
+        <button
+          onClick={() => setActiveTab('bulletin')}
+          className={`px-4 py-2 text-sm font-medium ${
+            activeTab === 'bulletin'
+              ? 'text-blue-600 border-b-2 border-blue-600'
+              : 'text-gray-600 dark:text-gray-400'
+          }`}
+        >
+          Bulletin RDC
+        </button>
+        <button
+          onClick={() => setActiveTab('evaluations')}
+          className={`px-4 py-2 text-sm font-medium ${
+            activeTab === 'evaluations'
+              ? 'text-blue-600 border-b-2 border-blue-600'
+              : 'text-gray-600 dark:text-gray-400'
+          }`}
+        >
+          Évaluations (Devoirs / Interrogations / Examens)
+        </button>
+      </div>
 
       <Card className="mb-6">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Filtres</h2>
@@ -445,6 +591,92 @@ export default function TeacherGrades() {
           </div>
         )}
       </Card>
+
+      {activeTab === 'evaluations' && (
+        <Card className="mt-6">
+          <div className="p-4 space-y-4">
+            <div className="flex flex-wrap items-center gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Type d&apos;évaluation
+                </label>
+                <select
+                  className="input"
+                  value={evalType}
+                  onChange={(e) => setEvalType(e.target.value as any)}
+                >
+                  <option value="HOMEWORK">Devoirs</option>
+                  <option value="QUIZ">Interrogations</option>
+                  <option value="EXAM">Examens</option>
+                </select>
+              </div>
+              <button
+                className="btn btn-secondary mt-6"
+                onClick={handleAggregate}
+                disabled={aggregating || !subject || !selectedClass}
+              >
+                {aggregating ? 'Calcul en cours...' : 'Calculer et envoyer au bulletin'}
+              </button>
+            </div>
+
+            {loadingStudents ? (
+              <div className="py-8 flex justify-center text-gray-500 dark:text-gray-400">
+                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                Chargement des élèves...
+              </div>
+            ) : students.length === 0 ? (
+              <div className="py-8 text-center text-gray-500 dark:text-gray-400">
+                Sélectionnez une classe et une matière pour saisir les évaluations.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 dark:bg-gray-800">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                        Élève
+                      </th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                        Note /20
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {students.map((s: any) => {
+                      const existing = (evalsByStudent[s.id] ?? [])[0]
+                      const display =
+                        evalOverrides[s.id] !== undefined
+                          ? evalOverrides[s.id]
+                          : existing
+                          ? String(existing.score)
+                          : ''
+                      return (
+                        <tr key={s.id}>
+                          <td className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">
+                            {studentName(s)}
+                          </td>
+                          <td className="px-4 py-2">
+                            <input
+                              type="number"
+                              min={0}
+                              max={20}
+                              step={0.1}
+                              className="input w-24"
+                              value={display}
+                              onChange={(e) => handleEvalChange(s.id, e.target.value)}
+                              onBlur={() => handleEvalBlur(s.id)}
+                            />
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
     </div>
   )
 }

@@ -3,6 +3,10 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from .models import User, Teacher, Parent, Student
 from apps.schools.admin_base import SchoolScopedAdminMixin
 
+admin.site.site_header = "E-SCHOOL ADMIN"
+admin.site.site_title = "E-SCHOOL ADMIN"
+admin.site.index_title = "Tableau de bord E-SCHOOL"
+
 
 @admin.register(User)
 class UserAdmin(SchoolScopedAdminMixin, BaseUserAdmin):

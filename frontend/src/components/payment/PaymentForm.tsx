@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { X, Smartphone, CheckCircle } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import api from '@/services/api'
+import { useAcademicYears } from '@/hooks/useAcademicYears'
 import toast from 'react-hot-toast'
 
 type PaymentFormMode = 'parent' | 'accountant'
@@ -71,6 +72,7 @@ export default function PaymentForm({
   const [submitting, setSubmitting] = useState(false)
   const [selectedMethod, setSelectedMethod] = useState('')
   const [existingPaymentLoaded, setExistingPaymentLoaded] = useState(false)
+  const { years: academicYears, current: currentAcademicYear } = useAcademicYears()
 
   const studentOptions =
     mode === 'parent'
@@ -392,13 +394,32 @@ export default function PaymentForm({
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Année scolaire
               </label>
-              <input
-                type="text"
-                name="academic_year"
-                className="input w-full"
-                placeholder="ex. 2025-2026"
-                defaultValue={`${new Date().getFullYear()}-${new Date().getFullYear() + 1}`}
-              />
+              {academicYears.length > 0 ? (
+                <select
+                  name="academic_year"
+                  className="input w-full"
+                  defaultValue={currentAcademicYear || ''}
+                >
+                  <option value="">
+                    {currentAcademicYear
+                      ? `Sélectionner (par défaut ${currentAcademicYear})`
+                      : 'Sélectionner une année'}
+                  </option>
+                  {academicYears.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  name="academic_year"
+                  className="input w-full"
+                  placeholder="ex. 2025-2026"
+                  defaultValue={`${new Date().getFullYear()}-${new Date().getFullYear() + 1}`}
+                />
+              )}
             </div>
           </>
         )}

@@ -4,8 +4,10 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from django.db.models import Q
+from django.db.models import Q, Sum
 from .models import School, Section, SchoolClass, Subject, ClassSubject, StudentClassEnrollment
+from apps.accounts.models import Student, User
+from apps.payments.models import Payment, SchoolExpense
 from .serializers import (
     SchoolSerializer, SectionSerializer, SchoolClassSerializer, SubjectSerializer, ClassSubjectSerializer,
     StudentClassEnrollmentSerializer,
@@ -26,6 +28,151 @@ class SchoolViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(request.user.school)
             return Response(serializer.data)
         return Response({'detail': 'No school associated'}, status=404)
+
+    @action(detail=False, methods=['get'], url_path='all-for-transfer')
+    def all_for_transfer(self, request):
+        """
+        Liste de toutes les écoles actives de la plateforme, pour transfert / collaboration inter-écoles.
+        Accès réservé aux admins d'école, promoteurs et superusers.
+        """
+        user = request.user
+        if not (getattr(user, 'is_admin', False) or getattr(user, 'is_promoter', False) or user.is_superuser):
+            raise PermissionDenied("Accès réservé aux administrateurs et promoteurs.")
+        qs = School.objects.filter(is_active=True).order_by('name')
+        data = [
+            {
+                'id': s.id,
+                'name': s.name,
+                'code': s.code,
+                'city': s.city,
+                'school_type': s.school_type,
+            }
+            for s in qs
+        ]
+        return Response({'results': data})
+
+    @action(detail=False, methods=['get'], url_path='my-schools')
+    def my_schools(self, request):
+        """
+        Liste des écoles du promoteur connecté, avec quelques statistiques de base
+        (effectif élèves, totaux paiements/dépenses).
+        """
+        user = request.user
+        if not getattr(user, 'is_promoter', False):
+            return Response({'results': []})
+
+        schools = School.objects.filter(promoters=user, is_active=True).order_by('name')
+        school_ids = list(schools.values_list('id', flat=True))
+
+        # Élèves par école
+        students_counts = dict(
+            Student.objects.filter(user__school_id__in=school_ids)
+            .values_list('user__school_id')
+            .annotate(count=models.Count('id'))
+        )
+
+        # Paiements complétés par école
+        payments_totals = {}
+        if school_ids:
+            for row in (
+                Payment.objects.filter(school_id__in=school_ids, status='COMPLETED')
+                .values('school_id', 'currency')
+                .annotate(total=Sum('amount'))
+            ):
+                key = (row['school_id'], row['currency'] or 'CDF')
+                payments_totals[key] = float(row['total'] or 0)
+
+        # Dépenses payées par école
+        expenses_totals = {}
+        if school_ids:
+            for row in (
+                SchoolExpense.objects.filter(school_id__in=school_ids, status='PAID')
+                .values('school_id', 'currency')
+                .annotate(total=Sum('amount'))
+            ):
+                key = (row['school_id'], row['currency'] or 'CDF')
+                expenses_totals[key] = float(row['total'] or 0)
+
+        data = []
+        for school in schools:
+            serialized = SchoolSerializer(school, context=self.get_serializer_context()).data
+            sid = school.id
+            serialized['students_count'] = students_counts.get(sid, 0)
+            serialized['payments_totals'] = {
+                currency: amount
+                for (sch_id, currency), amount in payments_totals.items()
+                if sch_id == sid
+            }
+            serialized['expenses_totals'] = {
+                currency: amount
+                for (sch_id, currency), amount in expenses_totals.items()
+                if sch_id == sid
+            }
+            data.append(serialized)
+
+        return Response({'results': data})
+
+    @action(detail=False, methods=['get'], url_path='promoter-dashboard')
+    def promoter_dashboard(self, request):
+        """
+        Tableau de bord global du promoteur :
+        - Nombre d'écoles par type
+        - Nombre total d'élèves
+        - Totaux paiements et dépenses (toutes ses écoles)
+        """
+        user = request.user
+        if not getattr(user, 'is_promoter', False):
+            return Response(
+                {'detail': "Accès réservé au promoteur."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        schools = School.objects.filter(promoters=user, is_active=True)
+        school_ids = list(schools.values_list('id', flat=True))
+
+        # Écoles par type
+        type_counts = dict(
+            schools.values_list('school_type').annotate(count=models.Count('id'))
+        )
+
+        # Élèves
+        total_students = (
+            Student.objects.filter(user__school_id__in=school_ids).count()
+            if school_ids else 0
+        )
+
+        # Paiements complétés
+        payments_by_currency = {}
+        if school_ids:
+            for row in (
+                Payment.objects.filter(school_id__in=school_ids, status='COMPLETED')
+                .values('currency')
+                .annotate(total=Sum('amount'))
+            ):
+                currency = row['currency'] or 'CDF'
+                payments_by_currency[currency] = float(row['total'] or 0)
+
+        # Dépenses payées
+        expenses_by_currency = {}
+        if school_ids:
+            for row in (
+                SchoolExpense.objects.filter(school_id__in=school_ids, status='PAID')
+                .values('currency')
+                .annotate(total=Sum('amount'))
+            ):
+                currency = row['currency'] or 'CDF'
+                expenses_by_currency[currency] = float(row['total'] or 0)
+
+        return Response({
+            'schools_total': len(school_ids),
+            'schools_by_type': {
+                key: type_counts.get(key, 0)
+                for key in ['MATERNELLE', 'PRIMAIRE', 'HUMANITAIRE']
+            },
+            'students_total': total_students,
+            'payments_by_currency': payments_by_currency,
+            'expenses_by_currency': expenses_by_currency,
+        })
 
 
 class SectionViewSet(viewsets.ModelViewSet):

@@ -58,13 +58,13 @@ export default function AdminCommunication() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { user } = useAuthStore()
-  const [activeTab, setActiveTab] = useState<'messages' | 'announcements' | 'notifications'>('announcements')
+  const [activeTab, setActiveTab] = useState<'messages' | 'announcements' | 'notifications' | 'inter_school'>('announcements')
   const [showMessageForm, setShowMessageForm] = useState(false)
 
   // Ouvrir l'onglet indiqué par l'URL (?tab=messages | announcements | notifications)
   useEffect(() => {
     const tab = searchParams.get('tab')
-    if (tab === 'messages' || tab === 'announcements' || tab === 'notifications') {
+    if (tab === 'messages' || tab === 'announcements' || tab === 'notifications' || tab === 'inter_school') {
       setActiveTab(tab)
     }
   }, [searchParams])
@@ -74,6 +74,9 @@ export default function AdminCommunication() {
   const [messageFilter, setMessageFilter] = useState<'all' | 'sent' | 'received'>('received')
   const [replyToMessage, setReplyToMessage] = useState<Message | null>(null)
   const [announcementFilter, setAnnouncementFilter] = useState<'all' | 'published' | 'draft'>('all')
+  const [selectedInterSchoolId, setSelectedInterSchoolId] = useState<string>('')
+  const [interSchoolSubject, setInterSchoolSubject] = useState('')
+  const [interSchoolBody, setInterSchoolBody] = useState('')
 
   // Récupérer les messages
   const { data: messagesData, isLoading: messagesLoading } = useQuery({
@@ -140,6 +143,18 @@ export default function AdminCommunication() {
     STUDENT: 'Élève',
   }
 
+  // Écoles pour la collaboration inter-école
+  const { data: schoolsData, isLoading: schoolsLoading } = useQuery({
+    queryKey: ['all-schools-for-transfer'],
+    queryFn: async () => {
+      const response = await api.get('/schools/schools/all-for-transfer/')
+      return response.data
+    },
+    enabled: activeTab === 'inter_school' && !!user,
+  })
+
+  const schools = Array.isArray(schoolsData) ? schoolsData : (schoolsData?.results || [])
+
   // Envoyer un message
   const sendMessageMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -172,6 +187,42 @@ export default function AdminCommunication() {
       
       toast.error(errorMessage)
       console.error('Erreur envoi message:', errorData || error)
+    },
+  })
+
+  // Envoyer un message inter-école
+  const sendInterSchoolMutation = useMutation({
+    mutationFn: async () => {
+      const payload = {
+        target_school: selectedInterSchoolId,
+        subject: interSchoolSubject,
+        message: interSchoolBody,
+      }
+      const response = await api.post('/communication/messages/inter-school/', payload)
+      return response.data
+    },
+    onSuccess: () => {
+      setInterSchoolBody('')
+      setInterSchoolSubject('')
+      setSelectedInterSchoolId('')
+      toast.success('Message inter-école envoyé avec succès')
+      queryClient.invalidateQueries({ queryKey: ['communication-messages'] })
+    },
+    onError: (error: any) => {
+      const errorData = error?.response?.data
+      let errorMessage = "Erreur lors de l'envoi du message inter-école"
+      if (errorData?.detail) {
+        errorMessage = errorData.detail
+      } else if (typeof errorData === 'object') {
+        const firstKey = Object.keys(errorData)[0]
+        if (firstKey) {
+          const val = errorData[firstKey]
+          errorMessage =
+            Array.isArray(val) ? val.join(', ') : typeof val === 'string' ? val : errorMessage
+        }
+      }
+      toast.error(errorMessage)
+      console.error('Erreur envoi message inter-école:', errorData || error)
     },
   })
 
@@ -373,6 +424,23 @@ export default function AdminCommunication() {
           <div className="flex items-center gap-2">
             <Megaphone className="w-4 h-4" />
             Annonces
+          </div>
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab('inter_school')
+            setSearchParams({ tab: 'inter_school' })
+          }}
+          className={cn(
+            'px-4 py-2 font-medium text-sm transition-colors whitespace-nowrap',
+            activeTab === 'inter_school'
+              ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+          )}
+        >
+          <div className="flex items-center gap-2">
+            <MessageSquare className="w-4 h-4" />
+            Collaboration inter-école
           </div>
         </button>
         <button
@@ -666,6 +734,98 @@ export default function AdminCommunication() {
                 ))}
               </div>
             )}
+          </Card>
+        </div>
+      )}
+
+      {activeTab === 'inter_school' && (
+        <div className="space-y-6">
+          <Card className="p-4 sm:p-6">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+              Envoyer un message à une autre école
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Sélectionnez une école de la plateforme et envoyez un message aux administrateurs de
+              cette école. Les réponses arriveront dans l&apos;onglet <strong>Messages</strong>.
+            </p>
+            <form
+              className="space-y-4"
+              onSubmit={(e) => {
+                e.preventDefault()
+                if (!selectedInterSchoolId) {
+                  toast.error("Veuillez sélectionner l'école cible.")
+                  return
+                }
+                if (!interSchoolSubject.trim() || !interSchoolBody.trim()) {
+                  toast.error('Sujet et message sont obligatoires.')
+                  return
+                }
+                sendInterSchoolMutation.mutate()
+              }}
+            >
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  École cible <span className="text-red-500">*</span>
+                </label>
+                {schoolsLoading ? (
+                  <div className="input">Chargement des écoles...</div>
+                ) : schools.length === 0 ? (
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    Aucune autre école disponible ou accès restreint.
+                  </div>
+                ) : (
+                  <select
+                    className="input"
+                    value={selectedInterSchoolId}
+                    onChange={(e) => setSelectedInterSchoolId(e.target.value)}
+                    required
+                  >
+                    <option value="">Sélectionner une école</option>
+                    {schools.map((s: any) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} {s.city ? `(${s.city})` : ''} {s.code ? `- ${s.code}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Sujet <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  className="input"
+                  value={interSchoolSubject}
+                  onChange={(e) => setInterSchoolSubject(e.target.value)}
+                  placeholder="Objet de la collaboration"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Message <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  className="input"
+                  rows={6}
+                  value={interSchoolBody}
+                  onChange={(e) => setInterSchoolBody(e.target.value)}
+                  placeholder="Contenu du message..."
+                  required
+                />
+              </div>
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={sendInterSchoolMutation.isPending}
+                  className="btn btn-primary flex items-center gap-2"
+                >
+                  <Send className="w-4 h-4" />
+                  {sendInterSchoolMutation.isPending ? 'Envoi...' : 'Envoyer'}
+                </button>
+              </div>
+            </form>
           </Card>
         </div>
       )}

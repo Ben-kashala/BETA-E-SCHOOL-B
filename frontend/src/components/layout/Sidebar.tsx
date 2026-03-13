@@ -15,7 +15,8 @@ import {
   UserCheck,
   AlertCircle,
   Wallet,
-  X
+  X,
+  Building2,
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 
@@ -65,6 +66,7 @@ const teacherMenu = [
 
 const parentMenu = [
   { path: '/parent', label: 'Tableau de bord', icon: LayoutDashboard },
+  { path: '/parent/enrollments', label: 'Inscriptions', icon: Users },
   { path: '/parent/grades', label: 'Notes', icon: FileText },
   { path: '/parent/meetings', label: 'Réunions', icon: Calendar },
   { path: '/parent/payments', label: 'Paiements', icon: CreditCard },
@@ -100,6 +102,13 @@ const disciplineOfficerMenu = [
   { path: '/discipline-officer/communication', label: 'Communication', icon: MessageSquare },
 ]
 
+const promoterMenu = [
+  { path: '/promoter', label: 'Tableau de bord', icon: LayoutDashboard },
+  { path: '/promoter/schools', label: 'Mes écoles', icon: Building2 },
+  { path: '/admin/communication', label: 'Communication', icon: MessageSquare },
+  { path: '/admin/meetings', label: 'Réunions', icon: Calendar },
+]
+
 export default function Sidebar({ user, currentPath, isOpen = false, onClose }: SidebarProps) {
   const getMenu = () => {
     switch (user.role) {
@@ -115,6 +124,8 @@ export default function Sidebar({ user, currentPath, isOpen = false, onClose }: 
         return accountantMenu
       case 'DISCIPLINE_OFFICER':
         return disciplineOfficerMenu
+      case 'PROMOTER':
+        return promoterMenu
       default:
         return []
     }

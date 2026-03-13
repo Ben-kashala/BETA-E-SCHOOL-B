@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { showErrorToast, showSuccessToast } from '@/utils/toast'
+import { useAcademicYears } from '@/hooks/useAcademicYears'
 const classSchema = z.object({
   name: z.string().min(1, 'Le nom est requis'),
   next_class_name: z.string().max(100).optional().nullable(),
@@ -31,12 +32,13 @@ export default function AdminClasses() {
   const [classSearchQuery, setClassSearchQuery] = useState<string>('')
   const [academicYearFilter, setAcademicYearFilter] = useState<string>('')
   const queryClient = useQueryClient()
+  const { years: academicYearsFromApi, current: currentAcademicYear } = useAcademicYears()
   const { register, handleSubmit, formState: { errors }, reset, setValue } = useForm<ClassForm>({
     resolver: zodResolver(classSchema),
     defaultValues: {
       capacity: 40,
       titulaire: null,
-      academic_year: `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
+      academic_year: currentAcademicYear || `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
     },
   })
 
@@ -113,9 +115,19 @@ export default function AdminClasses() {
   })
 
   // Extraire les années scolaires uniques pour le filtre
-  const academicYears: string[] = classes?.results 
-    ? (Array.from(new Set(classes.results.map((cls: any) => cls.academic_year).filter((year: unknown): year is string => Boolean(year)))) as string[]).sort().reverse()
-    : []
+  const academicYears: string[] =
+    (academicYearsFromApi && academicYearsFromApi.length > 0
+      ? academicYearsFromApi
+      : classes?.results
+        ? (Array.from(
+            new Set(
+              classes.results
+                .map((cls: any) => cls.academic_year)
+                .filter((year: unknown): year is string => Boolean(year)),
+            ),
+          ) as string[]
+          ).sort()
+        : [])
 
   // Filtrer les classes selon la recherche et l'année scolaire
   const filteredClasses = classes?.results?.filter((cls: any) => {
@@ -380,11 +392,26 @@ export default function AdminClasses() {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Année scolaire <span className="text-red-500">*</span>
                 </label>
-                <input
-                  {...register('academic_year')}
-                  className="input"
-                  placeholder="2024-2025"
-                />
+                {academicYearsFromApi && academicYearsFromApi.length > 0 ? (
+                  <select {...register('academic_year')} className="input">
+                    <option value="">
+                      {currentAcademicYear
+                        ? `Sélectionner (par défaut ${currentAcademicYear})`
+                        : 'Sélectionner une année'}
+                    </option>
+                    {academicYearsFromApi.map((year) => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    {...register('academic_year')}
+                    className="input"
+                    placeholder="2024-2025"
+                  />
+                )}
                 {errors.academic_year && (
                   <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.academic_year.message}</p>
                 )}

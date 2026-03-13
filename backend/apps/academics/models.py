@@ -147,6 +147,49 @@ class GradeBulletin(models.Model):
         super().save(*args, **kwargs)
 
 
+class EvaluationGrade(models.Model):
+    """
+    Détail des évaluations (devoirs, interrogations, examens) par élève/matière/période.
+    Sert de base pour calculer des moyennes et alimenter GradeBulletin.
+    """
+    EVAL_TYPES = [
+        ('HOMEWORK', 'Devoir'),
+        ('QUIZ', 'Interrogation'),
+        ('EXAM', 'Examen'),
+    ]
+    SEMESTER_CHOICES = [
+        ('S1', 'Premier semestre'),
+        ('S2', 'Second semestre'),
+    ]
+
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='evaluation_grades', verbose_name="Élève")
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='evaluation_grades', verbose_name="Matière")
+    school_class = models.ForeignKey(SchoolClass, on_delete=models.CASCADE, related_name='evaluation_grades', verbose_name="Classe")
+    academic_year = models.CharField(max_length=20, verbose_name="Année scolaire")
+    semester = models.CharField(max_length=2, choices=SEMESTER_CHOICES, verbose_name="Semestre")
+    # Période 1 à 4 (Travaux journaliers / interrogations) ou période examen
+    period = models.PositiveSmallIntegerField(verbose_name="Période (1 à 4)")
+    eval_type = models.CharField(max_length=10, choices=EVAL_TYPES, verbose_name="Type d'évaluation")
+
+    score = models.DecimalField(max_digits=6, decimal_places=2, validators=[MinValueValidator(0)], verbose_name="Note obtenue")
+    max_score = models.DecimalField(max_digits=6, decimal_places=2, validators=[MinValueValidator(0)], verbose_name="Note sur")
+
+    # Lien facultatif avec une activité en ligne (devoir/quiz de la plateforme)
+    source = models.CharField(max_length=20, default='MANUAL', verbose_name="Source")
+    source_id = models.CharField(max_length=64, null=True, blank=True, verbose_name="ID source")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Évaluation détaillée"
+        verbose_name_plural = "Évaluations détaillées"
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.student} - {self.subject} - {self.semester} P{self.period} {self.eval_type}"
+
+
 class Attendance(models.Model):
     """Model for student attendance"""
     STATUS_CHOICES = [

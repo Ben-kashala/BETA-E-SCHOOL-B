@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { showErrorToast, showSuccessToast } from '@/utils/toast'
+import { useAcademicYears } from '@/hooks/useAcademicYears'
 
 const toNum = (v: unknown) => (typeof v === 'string' ? parseFloat(v.replace(',', '.')) : Number(v))
 
@@ -54,6 +55,7 @@ export default function TeacherQuizzes() {
   const [editingQuestionId, setEditingQuestionId] = useState<number | null>(null)
   const [showAddQuestion, setShowAddQuestion] = useState(false)
   const queryClient = useQueryClient()
+  const { years: academicYears, current: currentAcademicYear } = useAcademicYears()
 
   const { register, handleSubmit, formState: { errors }, reset } = useForm<QuizForm>({
     resolver: zodResolver(quizSchema),
@@ -306,7 +308,22 @@ export default function TeacherQuizzes() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Année scolaire *</label>
-                <input {...register('academic_year')} className="input w-full" placeholder="2024-2025" />
+                {academicYears.length > 0 ? (
+                  <select {...register('academic_year')} className="input w-full">
+                    <option value="">
+                      {currentAcademicYear
+                        ? `Sélectionner (par défaut ${currentAcademicYear})`
+                        : 'Sélectionner une année'}
+                    </option>
+                    {academicYears.map((year) => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input {...register('academic_year')} className="input w-full" placeholder="2024-2025" />
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Date de début *</label>
@@ -504,7 +521,22 @@ export default function TeacherQuizzes() {
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Année scolaire</label>
-                          <input {...register('academic_year')} className="input w-full" placeholder="2024-2025" />
+                          {academicYears.length > 0 ? (
+                            <select {...register('academic_year')} className="input w-full">
+                              <option value="">
+                                {currentAcademicYear
+                                  ? `Sélectionner (par défaut ${currentAcademicYear})`
+                                  : 'Sélectionner une année'}
+                              </option>
+                              {academicYears.map((year) => (
+                                <option key={year} value={year}>
+                                  {year}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input {...register('academic_year')} className="input w-full" placeholder="2024-2025" />
+                          )}
                         </div>
                         <div className="md:col-span-2">
                           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Début / Fin</label>

@@ -48,6 +48,7 @@ import ParentLibrary from './pages/parent/Library'
 import ParentTutoring from './pages/parent/Tutoring'
 import ParentDiscipline from './pages/parent/Discipline'
 import ParentCommunication from './pages/parent/Communication'
+import ParentEnrollments from './pages/parent/Enrollments'
 
 // Student pages
 import StudentDashboard from './pages/student/Dashboard'
@@ -64,6 +65,10 @@ import AccountantDashboard from './pages/accountant/Dashboard'
 import AccountantPayments from './pages/accountant/Payments'
 import AccountantExpenses from './pages/accountant/Expenses'
 import AccountantCaisse from './pages/accountant/Caisse'
+
+// Promoter pages
+import PromoterDashboard from './pages/promoter/Dashboard'
+import PromoterSchools from './pages/promoter/Schools'
 
 // Discipline officer pages
 import DisciplineOfficerDashboard from './pages/discipline-officer/Dashboard'
@@ -148,6 +153,7 @@ function App() {
         {/* Parent Routes */}
         <Route path="/parent" element={<RoleRoute allowedRoles={['PARENT']} />}>
           <Route index element={<ParentDashboard />} />
+          <Route path="enrollments" element={<ParentEnrollments />} />
           <Route path="grades" element={<ParentGrades />} />
           <Route path="meetings" element={<ParentMeetings />} />
           <Route path="payments" element={<ParentPayments />} />
@@ -186,6 +192,12 @@ function App() {
           <Route path="communication" element={<DisciplineOfficerCommunication />} />
         </Route>
 
+        {/* Promoter Routes */}
+        <Route path="/promoter" element={<RoleRoute allowedRoles={['PROMOTER']} />}>
+          <Route index element={<PromoterDashboard />} />
+          <Route path="schools" element={<PromoterSchools />} />
+        </Route>
+
         {/* Redirect based on role */}
         <Route path="/" element={
           isAuthenticated ? (
@@ -199,6 +211,7 @@ function App() {
                   STUDENT: '/student',
                   ACCOUNTANT: '/accountant',
                   DISCIPLINE_OFFICER: '/discipline-officer',
+                  PROMOTER: '/promoter',
                 }
                 return roleRoutes[user?.role || ''] || '/admin'
               })()
