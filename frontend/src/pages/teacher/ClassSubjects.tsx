@@ -15,6 +15,7 @@ export default function TeacherClassSubjects() {
   const [addSubject, setAddSubject] = useState<number | ''>('')
   const [addPeriodMax, setAddPeriodMax] = useState<number>(20)
   const [addTeacher, setAddTeacher] = useState<number | ''>('')
+  const [addDomain, setAddDomain] = useState<string>('')
   const [showCreateSubjectModal, setShowCreateSubjectModal] = useState(false)
   const [createName, setCreateName] = useState('')
   const [createCode, setCreateCode] = useState('')
@@ -58,7 +59,7 @@ export default function TeacherClassSubjects() {
   })
 
   const createMutation = useMutation({
-    mutationFn: (payload: { school_class: number; subject: number; period_max: number; teacher?: number | null }) =>
+    mutationFn: (payload: { school_class: number; subject: number; period_max: number; teacher?: number | null; domain?: string | null }) =>
       api.post('/schools/class-subjects/', payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['class-subjects'] })
@@ -66,15 +67,17 @@ export default function TeacherClassSubjects() {
       setAddSubject('')
       setAddPeriodMax(20)
       setAddTeacher('')
+      setAddDomain('')
     },
     onError: (e: any) => showErrorToast(e, 'Erreur lors de l\'ajout'),
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, period_max, teacher }: { id: number; period_max?: number; teacher?: number | null }) => {
+    mutationFn: ({ id, period_max, teacher, domain }: { id: number; period_max?: number; teacher?: number | null; domain?: string | null }) => {
       const body: Record<string, unknown> = {}
       if (period_max !== undefined) body.period_max = period_max
       if (teacher !== undefined) body.teacher = teacher
+      if (domain !== undefined) body.domain = domain
       return api.patch(`/schools/class-subjects/${id}/`, body)
     },
     onSuccess: () => {
@@ -130,11 +133,13 @@ export default function TeacherClassSubjects() {
 
   const handleAdd = () => {
     if (!selectedClass || !addSubject) return
+    const domain = addDomain.trim() || null
     createMutation.mutate({
       school_class: selectedClass,
       subject: Number(addSubject),
       period_max: addPeriodMax,
       teacher: addTeacher === '' ? null : Number(addTeacher),
+      domain,
     })
   }
 
@@ -144,6 +149,11 @@ export default function TeacherClassSubjects() {
 
   const handleTeacherChange = (cs: any, value: string) => {
     updateMutation.mutate({ id: cs.id, teacher: value === '' ? null : Number(value) })
+  }
+
+  const handleDomainChange = (cs: any, value: string) => {
+    const clean = value.trim() || null
+    updateMutation.mutate({ id: cs.id, domain: clean })
   }
 
   const teacherName = (t: any) =>
@@ -161,7 +171,7 @@ export default function TeacherClassSubjects() {
         Matières par classe
       </h1>
       <p className="text-gray-600 dark:text-gray-400 mb-6">
-        En tant que titulaire, définissez les matières de votre classe, les notes de base (max par <strong>période</strong> et <strong>examen</strong> = 2 × période, bulletin RDC) et <strong>attribuez chaque matière à un enseignant</strong>. L&apos;enseignant assigné pourra saisir les notes de cette matière dans cette classe ; le planning horaire pourra s&apos;appuyer sur cette répartition.
+        En tant que titulaire, définissez les matières de votre classe, les notes de base (max par <strong>période</strong> et <strong>examen</strong> = 2 × période, bulletin RDC), <strong>classez-les par domaine (Sciences, Langues, Arts…)</strong> et <strong>attribuez chaque matière à un enseignant</strong>. Les domaines et notes de base sont utilisés pour construire le bulletin officiel RDC.
       </p>
 
       {!hasTitularClasses ? (
@@ -234,6 +244,20 @@ export default function TeacherClassSubjects() {
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Examen (max) = 2 × période = {addPeriodMax * 2}</p>
             </div>
             <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Domaine (bulletin RDC)
+              </label>
+              <input
+                value={addDomain}
+                onChange={(e) => setAddDomain(e.target.value)}
+                className="input min-w-[200px]"
+                placeholder="Ex. DOMAINE DES SCIENCES"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                Utilisé pour regrouper les matières dans le bulletin officiel.
+              </p>
+            </div>
+            <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Enseignant assigné</label>
               <select
                 value={addTeacher}
@@ -263,6 +287,7 @@ export default function TeacherClassSubjects() {
               <thead className="bg-gray-50 dark:bg-gray-800">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Matière</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Domaine (bulletin RDC)</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Note de base (max/période)</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Enseignant assigné</th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Actions</th>
@@ -271,7 +296,7 @@ export default function TeacherClassSubjects() {
               <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                 {classSubjects.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                    <td colSpan={5} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                       Aucune matière assignée. Ajoutez-en une ci-dessus.
                     </td>
                   </tr>
@@ -280,6 +305,15 @@ export default function TeacherClassSubjects() {
                     <tr key={cs.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                       <td className="px-6 py-3 text-sm font-medium text-gray-900 dark:text-white">
                         {cs.subject_name} {cs.subject_code && `(${cs.subject_code})`}
+                      </td>
+                      <td className="px-6 py-3">
+                        <input
+                          defaultValue={cs.domain ?? ''}
+                          onBlur={(e) => handleDomainChange(cs, e.target.value)}
+                          disabled={updateMutation.isPending}
+                          className="input w-full py-1.5 text-sm"
+                          placeholder="Ex. DOMAINE DES SCIENCES"
+                        />
                       </td>
                       <td className="px-6 py-3">
                         <div className="flex flex-col gap-0.5">

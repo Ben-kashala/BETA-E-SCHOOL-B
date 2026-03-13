@@ -20,7 +20,16 @@ const enrollmentSchema = z.object({
   place_of_birth: z.string().min(1, 'Le lieu de naissance est requis'),
   phone: z.string().optional(),
   email: z.string().email('Email invalide').optional().or(z.literal('')),
-  address: z.string().min(1, "L'adresse est requise"),
+  // Adresse structurée de l'élève
+  address_number: z.string().optional(),
+  address_avenue: z.string().optional(),
+  address_quarter: z.string().optional(),
+  address_commune: z.string().optional(),
+  address_city: z.string().min(1, 'La ville est requise'),
+  address_province: z.string().min(1, 'La province est requise'),
+  address_country: z.string().min(1, 'Le pays est requis'),
+  // Champ libre (optionnel) – reconstruit côté frontend
+  address: z.string().optional(),
   academic_year: z.string().min(1, "L'année scolaire est requise"),
   requested_class: z.number().optional(),
   previous_school: z.string().optional(),
@@ -29,6 +38,14 @@ const enrollmentSchema = z.object({
   parent_phone: z.string().min(1, 'Le téléphone du parent est requis'),
   parent_email: z.string().email('Email invalide').optional().or(z.literal('')),
   parent_profession: z.string().optional(),
+  // Adresse structurée du parent
+  parent_address_number: z.string().optional(),
+  parent_address_avenue: z.string().optional(),
+  parent_address_quarter: z.string().optional(),
+  parent_address_commune: z.string().optional(),
+  parent_address_city: z.string().optional(),
+  parent_address_province: z.string().optional(),
+  parent_address_country: z.string().optional(),
   parent_address: z.string().optional(),
 })
 
@@ -50,7 +67,8 @@ export default function ParentEnrollments() {
       parent_name: `${user?.first_name ?? ''} ${user?.last_name ?? ''}`.trim() || '',
       parent_phone: user?.phone ?? '',
       parent_email: user?.email ?? '',
-      parent_address: user?.school?.address ?? '',
+      parent_address_city: user?.school?.city ?? '',
+      parent_address_country: user?.school?.country ?? 'RDC',
     },
   })
 
@@ -104,9 +122,36 @@ export default function ParentEnrollments() {
   })
 
   const onSubmit = (form: EnrollmentForm) => {
-    createMutation.mutate({
+    // Reconstruire les champs adresse libres à partir des morceaux structurés
+    const addressParts = [
+      form.address_number ? `N° ${form.address_number}` : '',
+      form.address_avenue ? `Av. ${form.address_avenue}` : '',
+      form.address_quarter ? `Q. ${form.address_quarter}` : '',
+      form.address_commune ? `C. ${form.address_commune}` : '',
+      form.address_city,
+      form.address_province,
+      form.address_country,
+    ].filter(Boolean)
+
+    const parentAddressParts = [
+      form.parent_address_number ? `N° ${form.parent_address_number}` : '',
+      form.parent_address_avenue ? `Av. ${form.parent_address_avenue}` : '',
+      form.parent_address_quarter ? `Q. ${form.parent_address_quarter}` : '',
+      form.parent_address_commune ? `C. ${form.parent_address_commune}` : '',
+      form.parent_address_city,
+      form.parent_address_province,
+      form.parent_address_country,
+    ].filter(Boolean)
+
+    const payload: EnrollmentForm = {
       ...form,
-      requested_class: form.requested_class ? Number(form.requested_class) : undefined,
+      address: addressParts.join(', '),
+      parent_address: parentAddressParts.join(', '),
+    }
+
+    createMutation.mutate({
+      ...payload,
+      requested_class: payload.requested_class ? Number(payload.requested_class) : undefined,
     })
   }
 
@@ -175,9 +220,46 @@ export default function ParentEnrollments() {
             {errors.email && <p className="text-sm text-red-500">{errors.email.message}</p>}
           </div>
           <div className="md:col-span-2">
-            <label className="label">Adresse de l&apos;élève *</label>
-            <input className="input" {...register('address')} />
-            {errors.address && <p className="text-sm text-red-500">{errors.address.message}</p>}
+            <label className="label">Adresse de l&apos;élève</label>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="label text-xs">Numéro</label>
+                <input className="input" {...register('address_number')} />
+              </div>
+              <div>
+                <label className="label text-xs">Avenue</label>
+                <input className="input" {...register('address_avenue')} />
+              </div>
+              <div>
+                <label className="label text-xs">Quartier</label>
+                <input className="input" {...register('address_quarter')} />
+              </div>
+              <div>
+                <label className="label text-xs">Commune</label>
+                <input className="input" {...register('address_commune')} />
+              </div>
+              <div>
+                <label className="label text-xs">Ville *</label>
+                <input className="input" {...register('address_city')} />
+                {errors.address_city && (
+                  <p className="text-sm text-red-500">{errors.address_city.message}</p>
+                )}
+              </div>
+              <div>
+                <label className="label text-xs">Province *</label>
+                <input className="input" {...register('address_province')} />
+                {errors.address_province && (
+                  <p className="text-sm text-red-500">{errors.address_province.message}</p>
+                )}
+              </div>
+              <div>
+                <label className="label text-xs">Pays *</label>
+                <input className="input" {...register('address_country')} />
+                {errors.address_country && (
+                  <p className="text-sm text-red-500">{errors.address_country.message}</p>
+                )}
+              </div>
+            </div>
           </div>
           <div>
             <label className="label">Année scolaire *</label>
@@ -246,9 +328,38 @@ export default function ParentEnrollments() {
             <label className="label">Profession du parent</label>
             <input className="input" {...register('parent_profession')} />
           </div>
-          <div>
+          <div className="md:col-span-2">
             <label className="label">Adresse du parent</label>
-            <input className="input" {...register('parent_address')} />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="label text-xs">Numéro</label>
+                <input className="input" {...register('parent_address_number')} />
+              </div>
+              <div>
+                <label className="label text-xs">Avenue</label>
+                <input className="input" {...register('parent_address_avenue')} />
+              </div>
+              <div>
+                <label className="label text-xs">Quartier</label>
+                <input className="input" {...register('parent_address_quarter')} />
+              </div>
+              <div>
+                <label className="label text-xs">Commune</label>
+                <input className="input" {...register('parent_address_commune')} />
+              </div>
+              <div>
+                <label className="label text-xs">Ville</label>
+                <input className="input" {...register('parent_address_city')} />
+              </div>
+              <div>
+                <label className="label text-xs">Province</label>
+                <input className="input" {...register('parent_address_province')} />
+              </div>
+              <div>
+                <label className="label text-xs">Pays</label>
+                <input className="input" {...register('parent_address_country')} />
+              </div>
+            </div>
           </div>
 
           <div className="md:col-span-2 flex justify-end mt-2">

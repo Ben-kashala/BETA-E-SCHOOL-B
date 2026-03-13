@@ -9,6 +9,32 @@ class SchoolAdmin(SchoolScopedAdminMixin, admin.ModelAdmin):
     list_filter = ['is_active', 'country', 'city']
     search_fields = ['name', 'code', 'email']
     readonly_fields = ['created_at', 'updated_at']
+    fieldsets = (
+        (None, {
+            'fields': ('name', 'code', 'school_type', 'is_active'),
+        }),
+        ('Adresse', {
+            'fields': (
+                'address_number',
+                'address_avenue',
+                'address_quarter',
+                'commune',
+                'city',
+                'province',
+                'country',
+                'address',
+            ),
+        }),
+        ('Contact', {
+            'fields': ('phone', 'email', 'website'),
+        }),
+        ('Configuration', {
+            'fields': ('academic_year', 'currency', 'language', 'promoters'),
+        }),
+        ('Suivi', {
+            'fields': ('created_at', 'updated_at'),
+        }),
+    )
     
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -98,8 +124,8 @@ class StudentClassEnrollmentAdmin(SchoolScopedAdminMixin, admin.ModelAdmin):
 
 @admin.register(ClassSubject)
 class ClassSubjectAdmin(SchoolScopedAdminMixin, admin.ModelAdmin):
-    list_display = ['school_class', 'subject', 'period_max', 'created_at']
-    list_filter = ['school_class']
+    list_display = ['school_class', 'subject', 'domain', 'period_max', 'created_at']
+    list_filter = ['school_class', 'domain']
     search_fields = ['subject__name', 'school_class__name']
     
     def get_queryset(self, request):
