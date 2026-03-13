@@ -170,7 +170,13 @@ class EvaluationGrade(models.Model):
     # Période 1 à 4 (Travaux journaliers / interrogations) ou période examen
     period = models.PositiveSmallIntegerField(verbose_name="Période (1 à 4)")
     eval_type = models.CharField(max_length=10, choices=EVAL_TYPES, verbose_name="Type d'évaluation")
-    title = models.CharField(max_length=255, verbose_name="Titre de l'évaluation")
+    title = models.CharField(
+        max_length=255,
+        verbose_name="Titre de l'évaluation",
+        blank=True,
+        default='',
+        help_text="Texte libre saisi par l'enseignant (ex. Devoir d'algèbre).",
+    )
 
     score = models.DecimalField(max_digits=6, decimal_places=2, validators=[MinValueValidator(0)], verbose_name="Note obtenue")
     max_score = models.DecimalField(max_digits=6, decimal_places=2, validators=[MinValueValidator(0)], verbose_name="Note sur")

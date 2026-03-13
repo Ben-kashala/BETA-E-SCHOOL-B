@@ -46,6 +46,7 @@ export default function TeacherGrades() {
   const [evalOverrides, setEvalOverrides] = useState<Record<number, string>>({})
   const [aggregating, setAggregating] = useState(false)
   const [evalBase, setEvalBase] = useState<number>(20)
+  const [evalTitle, setEvalTitle] = useState<string>('')
 
   useEffect(() => {
     const t = setTimeout(() => setSearchDebounced(searchStudent), 300)
@@ -327,8 +328,9 @@ export default function TeacherGrades() {
         semester,
         period,
         eval_type: evalType,
+        title: evalTitle || '',
         score,
-      max_score: evalBase,
+        max_score: evalBase,
       }
       if (existingId) {
         return api.patch(`/academics/evaluations/${existingId}/`, payload)
@@ -348,6 +350,10 @@ export default function TeacherGrades() {
 
   const handleEvalBlur = (studentId: number) => {
     if (!subject || !selectedClass) return
+    if (!evalTitle.trim()) {
+      showErrorToast(null, "Veuillez saisir le titre de l'évaluation avant d'enregistrer les notes.")
+      return
+    }
     const raw = evalOverrides[studentId]
     if (raw === undefined) return
     const num = parseFloat(raw)
@@ -622,14 +628,11 @@ export default function TeacherGrades() {
                     evalType === 'HOMEWORK'
                       ? 'Devoir de mathématiques...'
                       : evalType === 'QUIZ'
-                      ? 'Interro d\'histoire...'
+                      ? "Interro d'histoire..."
                       : 'Examen du semestre...'
                   }
-                  value={''}
-                  onChange={() => {
-                    /* le titre est géré au niveau de chaque enregistrement en ligne (back prêt, à connecter plus tard) */
-                  }}
-                  disabled
+                  value={evalTitle}
+                  onChange={(e) => setEvalTitle(e.target.value)}
                 />
               </div>
               <button
