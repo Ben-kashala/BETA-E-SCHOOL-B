@@ -27,8 +27,16 @@ class User(AbstractUser):
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, verbose_name="Rôle")
     profile_picture = models.ImageField(upload_to='profiles/', null=True, blank=True, verbose_name="Photo de profil")
     
-    # Additional info
-    address = models.TextField(null=True, blank=True, verbose_name="Adresse")
+    # Adresse structurée (Numéro, Avenue, Quartier, Commune, Ville, Province, Pays)
+    address_number = models.CharField(max_length=20, null=True, blank=True, verbose_name="Numéro")
+    address_avenue = models.CharField(max_length=100, null=True, blank=True, verbose_name="Avenue")
+    address_quarter = models.CharField(max_length=100, null=True, blank=True, verbose_name="Quartier")
+    address_commune = models.CharField(max_length=100, null=True, blank=True, verbose_name="Commune")
+    address_city = models.CharField(max_length=100, null=True, blank=True, verbose_name="Ville")
+    address_province = models.CharField(max_length=100, null=True, blank=True, verbose_name="Province")
+    address_country = models.CharField(max_length=100, null=True, blank=True, verbose_name="Pays")
+    # Ancien champ adresse libre (conservé pour compatibilité)
+    address = models.TextField(null=True, blank=True, verbose_name="Adresse (libre)")
     date_of_birth = models.DateField(null=True, blank=True, verbose_name="Date de naissance")
     
     # Status

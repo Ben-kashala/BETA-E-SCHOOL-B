@@ -29,6 +29,15 @@ class EnrollmentApplication(models.Model):
     # Contact
     phone = models.CharField(max_length=20, null=True, blank=True, verbose_name="Téléphone")
     email = models.EmailField(null=True, blank=True, verbose_name="Email")
+    # Adresse structurée de l'élève
+    address_number = models.CharField(max_length=20, null=True, blank=True, verbose_name="Numéro")
+    address_avenue = models.CharField(max_length=100, null=True, blank=True, verbose_name="Avenue")
+    address_quarter = models.CharField(max_length=100, null=True, blank=True, verbose_name="Quartier")
+    address_commune = models.CharField(max_length=100, null=True, blank=True, verbose_name="Commune")
+    address_city = models.CharField(max_length=100, null=True, blank=True, verbose_name="Ville")
+    address_province = models.CharField(max_length=100, null=True, blank=True, verbose_name="Province")
+    address_country = models.CharField(max_length=100, null=True, blank=True, verbose_name="Pays")
+    # Ancien champ adresse libre
     address = models.TextField(verbose_name="Adresse")
     
     # Academic
@@ -42,6 +51,15 @@ class EnrollmentApplication(models.Model):
     parent_phone = models.CharField(max_length=20, verbose_name="Téléphone du parent")
     parent_email = models.EmailField(null=True, blank=True, verbose_name="Email du parent")
     parent_profession = models.CharField(max_length=100, null=True, blank=True, verbose_name="Profession du parent")
+    # Adresse structurée du parent
+    parent_address_number = models.CharField(max_length=20, null=True, blank=True, verbose_name="Numéro (parent)")
+    parent_address_avenue = models.CharField(max_length=100, null=True, blank=True, verbose_name="Avenue (parent)")
+    parent_address_quarter = models.CharField(max_length=100, null=True, blank=True, verbose_name="Quartier (parent)")
+    parent_address_commune = models.CharField(max_length=100, null=True, blank=True, verbose_name="Commune (parent)")
+    parent_address_city = models.CharField(max_length=100, null=True, blank=True, verbose_name="Ville (parent)")
+    parent_address_province = models.CharField(max_length=100, null=True, blank=True, verbose_name="Province (parent)")
+    parent_address_country = models.CharField(max_length=100, null=True, blank=True, verbose_name="Pays (parent)")
+    # Ancien champ adresse libre du parent
     parent_address = models.TextField(null=True, blank=True, verbose_name="Adresse du parent")
     
     # Documents

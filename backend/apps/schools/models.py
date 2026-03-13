@@ -20,6 +20,11 @@ class School(models.Model):
         validators=[RegexValidator(regex=r'^[A-Z0-9]+$', message='Code doit contenir uniquement des majuscules et chiffres')],
         verbose_name="Code de l'école"
     )
+    # Adresse structurée
+    address_number = models.CharField(max_length=20, null=True, blank=True, verbose_name="Numéro")
+    address_avenue = models.CharField(max_length=100, null=True, blank=True, verbose_name="Avenue")
+    address_quarter = models.CharField(max_length=100, null=True, blank=True, verbose_name="Quartier")
+    # Ancien champ adresse libre (conservé pour compatibilité / affichage)
     address = models.TextField(verbose_name="Adresse")
     # Localisation détaillée pour les bulletins officiels (RDC)
     province = models.CharField(max_length=100, null=True, blank=True, verbose_name="Province")
