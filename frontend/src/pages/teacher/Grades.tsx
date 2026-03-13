@@ -45,6 +45,7 @@ export default function TeacherGrades() {
   const [evalType, setEvalType] = useState<'HOMEWORK' | 'QUIZ' | 'EXAM'>('HOMEWORK')
   const [evalOverrides, setEvalOverrides] = useState<Record<number, string>>({})
   const [aggregating, setAggregating] = useState(false)
+  const [evalBase, setEvalBase] = useState<number>(20)
 
   useEffect(() => {
     const t = setTimeout(() => setSearchDebounced(searchStudent), 300)
@@ -327,7 +328,7 @@ export default function TeacherGrades() {
         period,
         eval_type: evalType,
         score,
-        max_score: 20,
+      max_score: evalBase,
       }
       if (existingId) {
         return api.patch(`/academics/evaluations/${existingId}/`, payload)
@@ -351,7 +352,7 @@ export default function TeacherGrades() {
     if (raw === undefined) return
     const num = parseFloat(raw)
     if (isNaN(num)) return
-    const value = Math.max(0, Math.min(20, num))
+    const value = Math.max(0, Math.min(evalBase || 20, num))
     const existing = (evalsByStudent[studentId] ?? [])[0]
     saveEvalMutation.mutate({
       studentId,
@@ -610,6 +611,27 @@ export default function TeacherGrades() {
                   <option value="EXAM">Examens</option>
                 </select>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Titre de l&apos;évaluation
+                </label>
+                <input
+                  type="text"
+                  className="input"
+                  placeholder={
+                    evalType === 'HOMEWORK'
+                      ? 'Devoir de mathématiques...'
+                      : evalType === 'QUIZ'
+                      ? 'Interro d\'histoire...'
+                      : 'Examen du semestre...'
+                  }
+                  value={''}
+                  onChange={() => {
+                    /* le titre est géré au niveau de chaque enregistrement en ligne (back prêt, à connecter plus tard) */
+                  }}
+                  disabled
+                />
+              </div>
               <button
                 className="btn btn-secondary mt-6"
                 onClick={handleAggregate}
@@ -617,6 +639,25 @@ export default function TeacherGrades() {
               >
                 {aggregating ? 'Calcul en cours...' : 'Calculer et envoyer au bulletin'}
               </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Note de base (max)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  className="input w-24"
+                  value={evalBase}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value)
+                    setEvalBase(isNaN(v) || v <= 0 ? 20 : v)
+                  }}
+                />
+              </div>
             </div>
 
             {loadingStudents ? (
@@ -659,7 +700,7 @@ export default function TeacherGrades() {
                             <input
                               type="number"
                               min={0}
-                              max={20}
+                              max={evalBase || 20}
                               step={0.1}
                               className="input w-24"
                               value={display}
