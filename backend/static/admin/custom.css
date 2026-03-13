@@ -27,24 +27,32 @@
 
 /* Fond global */
 body {
-  background: var(--eschool-white);
+  background: var(--eschool-white) !important;
+  color: #111111 !important;
 }
 
-#content {
-  background: #ffffff;
+#container {
+  background: var(--eschool-white) !important;
+}
+
+#content,
+.dashboard #content,
+.change-form #content {
+  background: #ffffff !important;
+  color: #111111 !important;
 }
 
 /* Tableaux & modules */
 .module caption,
 .module h2,
 .inline-group h2 {
-  background: var(--eschool-blue);
-  color: var(--eschool-white);
+  background: var(--eschool-blue) !important;
+  color: var(--eschool-white) !important;
 }
 
 .module,
 .inline-group {
-  border-color: var(--eschool-blue);
+  border-color: var(--eschool-blue) !important;
 }
 
 /* Fil d’Ariane */
@@ -93,4 +101,52 @@ a:hover {
 #footer {
   display: none !important;
 }
+
+/* Sidebar navigation */
+#nav-sidebar {
+  background: var(--eschool-blue) !important;
+  color: var(--eschool-white) !important;
+}
+
+#nav-sidebar .module,
+#nav-sidebar .app-auth,
+#nav-sidebar .app-list {
+  background: transparent !important;
+  border: none !important;
+}
+
+#nav-sidebar h2 {
+  color: var(--eschool-yellow) !important;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+#nav-sidebar li a {
+  color: var(--eschool-white) !important;
+}
+
+#nav-sidebar li.current > a,
+#nav-sidebar li.selected > a {
+  background: var(--eschool-yellow) !important;
+  color: #000000 !important;
+}
+
+/* Ligne sélectionnée / survol dans les tableaux */
+tr.row1:hover,
+tr.row2:hover,
+tr.selected {
+  background-color: rgba(202, 157, 30, 0.12) !important;
+}
+
+/* Champ de recherche / filtres */
+#changelist-search input[type=text] {
+  border-color: var(--eschool-blue) !important;
+}
+
+.paginator,
+.actions {
+  background: #fafafa !important;
+  border-color: #dddddd !important;
+}
+
 

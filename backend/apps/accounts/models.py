@@ -132,6 +132,20 @@ class Student(models.Model):
     # Medical info
     blood_group = models.CharField(max_length=5, null=True, blank=True, verbose_name="Groupe sanguin")
     allergies = models.TextField(null=True, blank=True, verbose_name="Allergies")
+    # Identité pour le bulletin officiel (complète les données de User / EnrollmentApplication)
+    gender = models.CharField(
+        max_length=10,
+        choices=[('M', 'Masculin'), ('F', 'Féminin')],
+        null=True,
+        blank=True,
+        verbose_name="Genre"
+    )
+    place_of_birth = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True,
+        verbose_name="Lieu de naissance"
+    )
     
     class Meta:
         verbose_name = "Élève"

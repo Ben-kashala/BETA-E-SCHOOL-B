@@ -21,6 +21,9 @@ class School(models.Model):
         verbose_name="Code de l'école"
     )
     address = models.TextField(verbose_name="Adresse")
+    # Localisation détaillée pour les bulletins officiels (RDC)
+    province = models.CharField(max_length=100, null=True, blank=True, verbose_name="Province")
+    commune = models.CharField(max_length=100, null=True, blank=True, verbose_name="Commune / Territoire")
     city = models.CharField(max_length=100, verbose_name="Ville")
     country = models.CharField(max_length=100, default="RDC", verbose_name="Pays")
     phone = models.CharField(max_length=20, verbose_name="Téléphone")
@@ -223,6 +226,14 @@ class ClassSubject(models.Model):
     period_max = models.PositiveSmallIntegerField(
         choices=PERIOD_MAX_CHOICES,
         verbose_name="Note de base (max/période)"
+    )
+    # Domaine pour le bulletin officiel RDC (Sciences, Langues, Arts, etc.)
+    domain = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        verbose_name="Domaine (bulletin RDC)",
+        help_text="Ex. DOMAINE DES SCIENCES, DOMAINE DES LANGUES, DOMAINE DES ARTS…"
     )
     created_at = models.DateTimeField(auto_now_add=True)
 

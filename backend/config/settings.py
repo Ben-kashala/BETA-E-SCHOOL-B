@@ -1,5 +1,5 @@
 """
-Django settings for e-school-management project.
+Django settings for e-school.
 """
 import os
 from pathlib import Path
@@ -65,6 +65,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'apps.accounts.middleware.AutoLogoutMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     # Custom middleware for multi-tenant
@@ -315,6 +316,7 @@ SESSION_COOKIE_SECURE = not DEBUG  # True en production (HTTPS uniquement)
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
 SESSION_SAVE_EVERY_REQUEST = True
+AUTO_LOGOUT_DELAY = 30 * 60  # 30 minutes d'inactivité pour l'admin
 
 # CSRF Cookie Settings
 CSRF_COOKIE_SECURE = not DEBUG  # True en production (HTTPS uniquement)

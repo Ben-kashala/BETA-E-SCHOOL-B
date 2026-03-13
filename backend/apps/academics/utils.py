@@ -1,8 +1,10 @@
 """
 Utility functions for academics (PDF generation, class ranking, etc.)
 """
+import os
 from decimal import Decimal
 from io import BytesIO
+from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db.models import Q
@@ -10,7 +12,7 @@ from reportlab.lib.pagesizes import letter, A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import inch
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet
 from .models import ReportCard, Grade, GradeBulletin
 from apps.accounts.models import Student
@@ -62,39 +64,92 @@ def get_class_ranking_map(school_class, academic_year):
     return {r['student_id']: {'rank': r['rank'], 'percentage': r['percentage']} for r in rows}
 
 
+def _build_bulletin_header_with_logos(story, styles):
+    """
+    Ajoute l'en-tête RDC avec le drapeau à gauche et les armoiries à droite,
+    comme sur le bulletin officiel.
+    Les fichiers doivent être placés dans STATIC_ROOT/ bulletins / :
+      - rdc_flag.png
+      - rdc_arms.png
+    """
+    title_text = (
+        "<b>REPUBLIQUE DEMOCRATIQUE DU CONGO<br/>"
+        "MINISTERE DE L'ENSEIGNEMENT PRIMAIRE, SECONDAIRE ET PROFESSIONNEL</b>"
+    )
+    title = Paragraph(title_text, styles["Title"])
+
+    static_root = getattr(settings, "STATIC_ROOT", None) or os.path.join(
+        settings.BASE_DIR, "static"
+    )
+    left_path = os.path.join(static_root, "bulletins", "rdc_flag.png")
+    right_path = os.path.join(static_root, "bulletins", "rdc_arms.png")
+
+    def _img_or_spacer(path):
+        if os.path.exists(path):
+            return Image(path, width=1.4 * inch, height=0.9 * inch)
+        return Spacer(1.4 * inch, 0.9 * inch)
+
+    left_img = _img_or_spacer(left_path)
+    right_img = _img_or_spacer(right_path)
+
+    header_table = Table(
+        [[left_img, title, right_img]],
+        colWidths=[1.4 * inch, None, 1.4 * inch],
+    )
+    header_table.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN", (0, 0), (0, 0), "LEFT"),
+                ("ALIGN", (1, 0), (1, 0), "CENTER"),
+                ("ALIGN", (2, 0), (2, 0), "RIGHT"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+    story.append(header_table)
+    story.append(Spacer(1, 0.15 * inch))
+
+
 def generate_bulletin_grade_pdf(student, school_class, academic_year):
     """
     Génère le bulletin PDF (notes RDC) pour un élève, une classe et une année.
     Retourne un BytesIO (à envoyer en téléchargement, non enregistré).
     """
-    ac_year = (academic_year or '').strip()
+    ac_year = (academic_year or "").strip()
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4)
     styles = getSampleStyleSheet()
     story = []
 
-    # En-tête
-    title = Paragraph(
-        "<b>REPUBLIQUE DEMOCRATIQUE DU CONGO<br/>MINISTERE DE L'EDUCATION NATIONALE</b>",
-        styles['Title']
-    )
-    story.append(title)
-    story.append(Spacer(1, 0.15*inch))
-    class_name = school_class.name if school_class else 'N/A'
+    # En-tête officiel avec logos
+    school = getattr(student.user, "school", None)
+    school_name = getattr(school, "name", None) or "-"
+    _build_bulletin_header_with_logos(story, styles)
+
+    resolved_class = school_class or getattr(student, "school_class", None)
+    class_name = resolved_class.name if resolved_class else "N/A"
+    header = f"<b>BULLETIN DE LA {class_name}</b> &nbsp;&nbsp; <b>ANNÉE SCOLAIRE :</b> {ac_year}"
+    story.append(Paragraph(header, styles["Heading3"]))
+    story.append(Spacer(1, 0.1 * inch))
+
     info = f"""
+    <b>École:</b> {school_name}<br/>
     <b>Élève:</b> {student.user.get_full_name() if student.user else 'N/A'} &nbsp;&nbsp;
     <b>Matricule:</b> {getattr(student, 'student_id', '') or '-'} &nbsp;&nbsp;
-    <b>Classe:</b> {class_name}<br/>
-    <b>Année scolaire:</b> {ac_year}
+    <b>Classe:</b> {class_name}
     """
-    story.append(Paragraph(info, styles['Normal']))
-    story.append(Spacer(1, 0.25*inch))
+    story.append(Paragraph(info, styles["Normal"]))
+    story.append(Spacer(1, 0.25 * inch))
 
     # Tableau des notes (GradeBulletin pour cette classe et année)
-    grades = GradeBulletin.objects.filter(
+    grades_qs = GradeBulletin.objects.filter(
         student=student,
-        academic_year=ac_year
-    ).filter(Q(school_class=school_class) | Q(school_class__isnull=True)).select_related('subject').order_by('subject__name')
+        academic_year=ac_year,
+    ).filter(Q(school_class=resolved_class) | Q(school_class__isnull=True)).select_related("subject")
 
     headers = [
         'BRANCHES',
@@ -102,38 +157,117 @@ def generate_bulletin_grade_pdf(student, school_class, academic_year):
         '3ème P.', '4ème P.', 'EXAM.', 'TOT. S2',
         'T.G.', 'Repêch. %'
     ]
+    headers = headers
     data = [headers]
-    for g in grades:
-        def _v(f, d='-'):
-            v = getattr(g, f, None)
-            if v is not None and v != '':
-                try:
-                    return str(Decimal(str(v)).quantize(Decimal('0.01')))
-                except Exception:
-                    return d
-            return d
-        data.append([
-            g.subject.name if g.subject else '-',
-            _v('s1_p1'), _v('s1_p2'), _v('s1_exam'), _v('total_s1'),
-            _v('s2_p3'), _v('s2_p4'), _v('s2_exam'), _v('total_s2'),
-            _v('total_general'),
-            _v('reclamation_score'),
-        ])
+
+    # Regroupement par domaine à partir de ClassSubject pour cette classe
+    class_subjects = []
+    if resolved_class:
+        class_subjects = list(
+            ClassSubject.objects.filter(school_class=resolved_class).select_related("subject")
+        )
+    cs_by_subject_id = {cs.subject_id: cs for cs in class_subjects}
+
+    domains = {}
+    for g in grades_qs:
+        subj = g.subject
+        if not subj:
+            continue
+        cs = cs_by_subject_id.get(subj.id)
+        domain_label = (getattr(cs, "domain", None) or "AUTRES").upper()
+        domains.setdefault(domain_label, []).append((g, cs))
+
+    def _grade_value(grade_obj, field, default="-"):
+        v = getattr(grade_obj, field, None)
+        if v is not None and v != "":
+            try:
+                return str(Decimal(str(v)).quantize(Decimal("0.01")))
+            except Exception:
+                return default
+        return default
+
+    # Tri des matières dans chaque domaine par note de base (period_max) décroissante
+    for dom, items in domains.items():
+        items.sort(
+            key=lambda tpl: getattr(tpl[1], "period_max", getattr(tpl[0].subject, "period_max", 20)),
+            reverse=True,
+        )
+
+    def _domain_weight(items):
+        total = 0
+        for _, cs in items:
+            base = getattr(cs, "period_max", None)
+            if base is None and cs and hasattr(cs, "subject"):
+                base = getattr(cs.subject, "period_max", 20)
+            if base is None:
+                base = 20
+            total += int(base)
+        return total
+
+    sorted_domains = sorted(domains.items(), key=lambda kv: _domain_weight(kv[1]), reverse=True)
+
+    if sorted_domains:
+        for dom, items in sorted_domains:
+            # Ligne de domaine
+            data.append([dom] + [""] * (len(headers) - 1))
+            for g, cs in items:
+                data.append(
+                    [
+                        g.subject.name if g.subject else "-",
+                        _grade_value(g, "s1_p1"),
+                        _grade_value(g, "s1_p2"),
+                        _grade_value(g, "s1_exam"),
+                        _grade_value(g, "total_s1"),
+                        _grade_value(g, "s2_p3"),
+                        _grade_value(g, "s2_p4"),
+                        _grade_value(g, "s2_exam"),
+                        _grade_value(g, "total_s2"),
+                        _grade_value(g, "total_general"),
+                        _grade_value(g, "reclamation_score"),
+                    ]
+                )
+    else:
+        # Repli : comportement d'origine, simple liste de matières
+        for g in grades_qs.order_by("subject__name"):
+            data.append(
+                [
+                    g.subject.name if g.subject else "-",
+                    _grade_value(g, "s1_p1"),
+                    _grade_value(g, "s1_p2"),
+                    _grade_value(g, "s1_exam"),
+                    _grade_value(g, "total_s1"),
+                    _grade_value(g, "s2_p3"),
+                    _grade_value(g, "s2_p4"),
+                    _grade_value(g, "s2_exam"),
+                    _grade_value(g, "total_s2"),
+                    _grade_value(g, "total_general"),
+                    _grade_value(g, "reclamation_score"),
+                ]
+            )
 
     if len(data) > 1:
-        col_widths = [1.4*inch] + [0.5*inch]*10
+        col_widths = [1.4 * inch] + [0.5 * inch] * 10
         table = Table(data, colWidths=col_widths)
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 8),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-        ]))
+        table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 8),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+                ]
+            )
+        )
         story.append(table)
     else:
-        story.append(Paragraph("<i>Aucune note (bulletin RDC) enregistrée pour cette classe et année.</i>", styles['Normal']))
+        story.append(
+            Paragraph(
+                "<i>Aucune note (bulletin RDC) enregistrée pour cette classe et année.</i>",
+                styles["Normal"],
+            )
+        )
 
     story.append(Spacer(1, 0.2*inch))
     # Place et Pourcentage (depuis le classement)
@@ -164,27 +298,74 @@ def generate_bulletin_rdc_pdf(report_card):
     story = []
 
     student = report_card.student
-    # En-tête
-    title = Paragraph(
-        "<b>REPUBLIQUE DEMOCRATIQUE DU CONGO<br/>MINISTERE DE L'EDUCATION NATIONALE</b>",
-        styles['Title']
-    )
-    story.append(title)
-    story.append(Spacer(1, 0.15*inch))
-    info = f"""
-    <b>Élève:</b> {student.user.get_full_name()} &nbsp;&nbsp;
-    <b>Matricule:</b> {student.student_id} &nbsp;&nbsp;
-    <b>Classe:</b> {student.school_class.name if student.school_class else 'N/A'}<br/>
-    <b>Année scolaire:</b> {report_card.academic_year}
-    """
-    story.append(Paragraph(info, styles['Normal']))
-    story.append(Spacer(1, 0.25*inch))
+    school = getattr(student.user, "school", None)
+    school_name = getattr(school, "name", None) or "-"
+    province = getattr(school, "province", None) or "-"
+    city = getattr(school, "city", None) or "-"
+    commune = getattr(school, "commune", None) or "-"
+    code_ecole = getattr(school, "code", None) or "-"
 
-    # Tableau des notes (GradeBulletin)
-    grades = GradeBulletin.objects.filter(
+    # En-tête officiel RDC avec logos
+    _build_bulletin_header_with_logos(story, styles)
+
+    # Ligne "BULLETIN DE LA ... ANNÉE SCOLAIRE ..."
+    classe_name = student.school_class.name if student.school_class else "CLASSE"
+    header_text = f"BULLETIN DE LA {classe_name} &nbsp;&nbsp; ANNÉE SCOLAIRE : {report_card.academic_year}"
+    story.append(Paragraph(f"<b>{header_text}</b>", styles["Heading3"]))
+    story.append(Spacer(1, 0.1 * inch))
+
+    # Informations école
+    school_block = f"""
+    <b>PROVINCE :</b> {province} &nbsp;&nbsp;
+    <b>VILLE :</b> {city} &nbsp;&nbsp;
+    <b>COMMUNE / TER. :</b> {commune}<br/>
+    <b>ECOLE :</b> {school_name} &nbsp;&nbsp;
+    <b>CODE :</b> {code_ecole}
+    """
+    story.append(Paragraph(school_block, styles["Normal"]))
+    story.append(Spacer(1, 0.1 * inch))
+
+    # Identité élève : Élève, Sexe, Né(e) à, le, Classe, N° perm.
+    user = student.user
+    full_name = user.get_full_name()
+    sex = getattr(student, "gender", None)
+    if not sex and hasattr(user, "gender"):
+        sex = getattr(user, "gender")
+    if sex == "M":
+        sex_label = "M"
+    elif sex == "F":
+        sex_label = "F"
+    else:
+        sex_label = "-"
+    place_of_birth = getattr(student, "place_of_birth", None) or "-"
+    dob = getattr(user, "date_of_birth", None)
+    dob_str = dob.strftime("%d/%m/%Y") if dob else "-"
+
+    student_block = f"""
+    <b>ELEVE :</b> {full_name} &nbsp;&nbsp;
+    <b>SEXE :</b> {sex_label} &nbsp;&nbsp;
+    <b>NE(E) A :</b> {place_of_birth} &nbsp;&nbsp;
+    <b>LE :</b> {dob_str}<br/>
+    <b>CLASSE :</b> {classe_name} &nbsp;&nbsp;
+    <b>N° PERM. :</b> {student.student_id}
+    """
+    story.append(Paragraph(student_block, styles["Normal"]))
+    story.append(Spacer(1, 0.25 * inch))
+
+    # Tableau des notes (GradeBulletin) regroupé par domaine et trié par note de base
+    grades_qs = GradeBulletin.objects.filter(
         student=student,
-        academic_year=report_card.academic_year
-    ).select_related('subject').order_by('subject__name')
+        academic_year=report_card.academic_year,
+    ).select_related("subject", "school_class")
+
+    # Classe utilisée pour retrouver les domaines/note de base
+    resolved_class = student.school_class
+    class_subjects = []
+    if resolved_class:
+        class_subjects = list(
+            ClassSubject.objects.filter(school_class=resolved_class).select_related("subject")
+        )
+    cs_by_subject_id = {cs.subject_id: cs for cs in class_subjects}
 
     headers = [
         'BRANCHES',
@@ -193,37 +374,104 @@ def generate_bulletin_rdc_pdf(report_card):
         'T.G.', 'Repêch. %'
     ]
     data = [headers]
-    for g in grades:
-        def _v(f, d='-'):
-            v = getattr(g, f, None)
-            if v is not None and v != '':
-                try:
-                    return str(Decimal(str(v)).quantize(Decimal('0.01')))
-                except Exception:
-                    return d
-            return d
-        data.append([
-            g.subject.name if g.subject else '-',
-            _v('s1_p1'), _v('s1_p2'), _v('s1_exam'), _v('total_s1'),
-            _v('s2_p3'), _v('s2_p4'), _v('s2_exam'), _v('total_s2'),
-            _v('total_general'),
-            _v('reclamation_score'),
-        ])
+
+    def _grade_value(g, field, default="-"):
+        v = getattr(g, field, None)
+        if v is not None and v != "":
+            try:
+                return str(Decimal(str(v)).quantize(Decimal("0.01")))
+            except Exception:
+                return default
+        return default
+
+    # Regroupement par domaine
+    domains = {}
+    for g in grades_qs:
+        subj = g.subject
+        if not subj:
+            continue
+        cs = cs_by_subject_id.get(subj.id)
+        domain_label = (getattr(cs, "domain", None) or "AUTRES").upper()
+        domains.setdefault(domain_label, []).append((g, cs))
+
+    # Tri des matières dans chaque domaine par note de base décroissante
+    for dom, items in domains.items():
+        items.sort(
+            key=lambda tpl: getattr(tpl[1], "period_max", getattr(tpl[0].subject, "period_max", 20)),
+            reverse=True,
+        )
+
+    def _domain_weight(items):
+        total = 0
+        for _, cs in items:
+            base = getattr(cs, "period_max", None)
+            if base is None and cs and hasattr(cs, "subject"):
+                base = getattr(cs.subject, "period_max", 20)
+            if base is None:
+                base = 20
+            total += int(base)
+        return total
+
+    sorted_domains = sorted(domains.items(), key=lambda kv: _domain_weight(kv[1]), reverse=True)
+
+    if sorted_domains:
+        for dom, items in sorted_domains:
+            data.append([dom] + [""] * (len(headers) - 1))
+            for g, cs in items:
+                data.append(
+                    [
+                        g.subject.name if g.subject else "-",
+                        _grade_value(g, "s1_p1"),
+                        _grade_value(g, "s1_p2"),
+                        _grade_value(g, "s1_exam"),
+                        _grade_value(g, "total_s1"),
+                        _grade_value(g, "s2_p3"),
+                        _grade_value(g, "s2_p4"),
+                        _grade_value(g, "s2_exam"),
+                        _grade_value(g, "total_s2"),
+                        _grade_value(g, "total_general"),
+                        _grade_value(g, "reclamation_score"),
+                    ]
+                )
+    else:
+        # Repli : tableau simple ordonné par matière
+        for g in grades_qs.order_by("subject__name"):
+            data.append(
+                [
+                    g.subject.name if g.subject else "-",
+                    _grade_value(g, "s1_p1"),
+                    _grade_value(g, "s1_p2"),
+                    _grade_value(g, "s1_exam"),
+                    _grade_value(g, "total_s1"),
+                    _grade_value(g, "s2_p3"),
+                    _grade_value(g, "s2_p4"),
+                    _grade_value(g, "s2_exam"),
+                    _grade_value(g, "total_s2"),
+                    _grade_value(g, "total_general"),
+                    _grade_value(g, "reclamation_score"),
+                ]
+            )
 
     if len(data) > 1:
-        col_widths = [1.4*inch] + [0.5*inch]*10
+        col_widths = [1.4 * inch] + [0.5 * inch] * 10
         table = Table(data, colWidths=col_widths)
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 8),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-        ]))
+        table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 8),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+                ]
+            )
+        )
         story.append(table)
     else:
-        story.append(Paragraph("<i>Aucune note (bulletin RDC) enregistrée.</i>", styles['Normal']))
+        story.append(
+            Paragraph("<i>Aucune note (bulletin RDC) enregistrée.</i>", styles["Normal"])
+        )
 
     story.append(Spacer(1, 0.2*inch))
     # APPLICATION, CONDUITE, Place
