@@ -295,338 +295,297 @@ def generate_bulletin_grade_pdf(student, school_class, academic_year):
     return buffer
 
 
+def _bulletin_logo_path(filename):
+    """Retourne le chemin absolu du logo si trouvé (static/bulletins ou STATIC_ROOT/bulletins)."""
+    base = getattr(settings, "BASE_DIR", None)
+    if base:
+        p = os.path.join(str(base), "static", "bulletins", filename)
+        if os.path.isfile(p):
+            return p
+    static_root = getattr(settings, "STATIC_ROOT", None)
+    if static_root:
+        p = os.path.join(str(static_root), "bulletins", filename)
+        if os.path.isfile(p):
+            return p
+    # Repli : depuis backend (parent de config), static/bulletins
+    this_dir = os.path.dirname(os.path.abspath(__file__))
+    for _ in range(3):
+        parent = os.path.dirname(this_dir)
+        p = os.path.join(parent, "static", "bulletins", filename)
+        if os.path.isfile(p):
+            return p
+        this_dir = parent
+    return None
+
+
 def generate_bulletin_rdc_pdf(report_card):
     """
-    Génère le bulletin au format officiel RDC (une page), conforme au modèle fourni :
-    2 semestres, 4 périodes (Trav. journaliers), 2 examens, TOT. S1/S2, T.G., repêchage ;
-    MAXIMA GÉNÉRAUX, TOTAUX, POURCENTAGE, PLACE, APPLICATION, CONDUITE, décisions.
+    Génère le bulletin au format officiel RDC (une page).
     """
-    from decimal import Decimal
+    from reportlab.lib.enums import TA_CENTER
     from reportlab.lib.styles import ParagraphStyle
+
     buffer = BytesIO()
-    # Une seule page, marges réduites pour tenir comme le modèle officiel
+    margin_pt = 0.4 * inch
+
+    def draw_border(canvas, doc):
+        """Bordure autour du contenu du bulletin."""
+        canvas.saveState()
+        canvas.setStrokeColor(colors.black)
+        canvas.setLineWidth(0.5)
+        w, h = doc.pagesize
+        m = margin_pt
+        canvas.rect(m, m, w - 2 * m, h - 2 * m)
+        canvas.restoreState()
+
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        leftMargin=0.35 * inch,
-        rightMargin=0.35 * inch,
-        topMargin=0.35 * inch,
-        bottomMargin=0.35 * inch,
+        leftMargin=margin_pt,
+        rightMargin=margin_pt,
+        topMargin=margin_pt,
+        bottomMargin=margin_pt,
+        onFirstPage=draw_border,
+        onLaterPage=draw_border,
     )
     styles = getSampleStyleSheet()
-    style_compact = ParagraphStyle(name="Compact", parent=styles["Normal"], fontSize=7, leading=8, spaceAfter=0)
-    style_heading_compact = ParagraphStyle(name="HeadingCompact", parent=styles["Heading3"], fontSize=8, leading=10, spaceAfter=0)
+    style_center = ParagraphStyle(
+        "center",
+        parent=styles["Normal"],
+        alignment=TA_CENTER,
+        fontSize=9,
+    )
+    style_small = ParagraphStyle(
+        "small",
+        parent=styles["Normal"],
+        fontSize=7,
+    )
     story = []
 
     student = report_card.student
-    school = getattr(student.user, "school", None)
-    school_name = getattr(school, "name", None) or "-"
-    province = getattr(school, "province", None) or "-"
-    city = getattr(school, "city", None) or "-"
-    commune = getattr(school, "commune", None) or "-"
-    code_ecole = getattr(school, "code", None) or "-"
-
-    # En-tête officiel RDC avec logos (format compact)
-    _build_bulletin_header_with_logos(story, styles)
-
-    # Identité école / élève — grille comme modèle officiel
     user = student.user
+    school = getattr(user, "school", None)
+
+    school_name = getattr(school, "name", "-") if school else "-"
+    province = getattr(school, "province", "-") if school else "-"
+    city = getattr(school, "city", "-") if school else "-"
+    commune = getattr(school, "commune", "-") if school else "-"
+    code_ecole = getattr(school, "code", "-") if school else "-"
+
+    # HEADER : titre au-dessus, puis logos en dessous
+    story.append(Paragraph("<b>REPUBLIQUE DEMOCRATIQUE DU CONGO</b>", style_center))
+    story.append(Paragraph("MINISTERE DE L'ENSEIGNEMENT PRIMAIRE, SECONDAIRE ET PROFESSIONNEL", style_center))
+    story.append(Spacer(1, 4))
+
+    logo_w, logo_h = 1.1 * inch, 0.7 * inch
+    left_logo_path = _bulletin_logo_path("Drapeau.png") or _bulletin_logo_path("rdc_flag.png")
+    right_logo_path = _bulletin_logo_path("Armoirie.png") or _bulletin_logo_path("rdc_arms.png")
+
+    def _logo_or_spacer(path):
+        if path:
+            try:
+                return Image(path, width=logo_w, height=logo_h)
+            except Exception:
+                pass
+        return Spacer(logo_w, logo_h)
+
+    logo_left = _logo_or_spacer(left_logo_path)
+    logo_right = _logo_or_spacer(right_logo_path)
+    logo_table = Table(
+        [[logo_left, Spacer(1, 1), logo_right]],
+        colWidths=[logo_w, None, logo_w],
+    )
+    logo_table.setStyle(TableStyle([
+        ("ALIGN", (0, 0), (0, 0), "LEFT"),
+        ("ALIGN", (2, 0), (2, 0), "RIGHT"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    story.append(logo_table)
+    story.append(Spacer(1, 6))
+
+    # INFOS ELEVE
     full_name = user.get_full_name()
-    sex = getattr(student, "gender", None)
-    if not sex and hasattr(user, "gender"):
-        sex = getattr(user, "gender")
-    if sex == "M":
-        sex_label = "M"
-    elif sex == "F":
-        sex_label = "F"
-    else:
-        sex_label = "-"
-    place_of_birth = getattr(student, "place_of_birth", None) or "-"
+    classe = student.school_class.name if student.school_class else "-"
     dob = getattr(user, "date_of_birth", None)
     dob_str = dob.strftime("%d/%m/%Y") if dob else "-"
-
-    classe_name = student.school_class.name if student.school_class else "CLASSE"
+    sex_label = "M" if getattr(student, "gender", None) == "M" else "F" if getattr(student, "gender", None) == "F" else "-"
+    place_of_birth = getattr(student, "place_of_birth", None) or "-"
 
     info_data = [
         ["N° ID.", "", "", "", "", ""],
         ["PROVINCE EDUCATIONNELLE :", province, "", "", "", ""],
         ["VILLE :", city, "ELEVE :", full_name, "SEXE :", sex_label],
-        ["COMMUNE /TER (1) :", commune, "NE (E) A :", place_of_birth, "LE :", dob_str],
-        ["ECOLE :", school_name, "CLASSE :", classe_name, "", ""],
+        ["COMMUNE /TER :", commune, "NE(E) A :", place_of_birth, "LE :", dob_str],
+        ["ECOLE :", school_name, "CLASSE :", classe, "", ""],
         ["CODE :", code_ecole, "N° PERM. :", student.student_id or "-", "", ""],
     ]
-    col_widths_info = [1.5 * inch, 2.4 * inch, 1.0 * inch, 1.8 * inch, 0.75 * inch, 1.0 * inch]
-    info_table = Table(info_data, colWidths=col_widths_info)
-    info_table.setStyle(
-        TableStyle(
-            [
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
-                ("FONTSIZE", (0, 0), (-1, -1), 7),
-                ("TOPPADDING", (0, 0), (-1, -1), 2),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-                ("BACKGROUND", (0, 0), (-1, 0), colors.whitesmoke),
-            ]
+    info_table = Table(
+        info_data,
+        colWidths=[1.2 * inch, 2.8 * inch, 0.9 * inch, 2.0 * inch, 0.6 * inch, 1.1 * inch],
+    )
+    info_table.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.black),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+    ]))
+    story.append(info_table)
+    story.append(Spacer(1, 6))
+    story.append(
+        Paragraph(
+            f"<b>BULLETIN DE LA {classe} &nbsp;&nbsp;&nbsp; ANNÉE SCOLAIRE : {report_card.academic_year}</b>",
+            styles["Normal"],
         )
     )
-    story.append(info_table)
-    story.append(Spacer(1, 0.06 * inch))
+    story.append(Spacer(1, 6))
 
-    # Ligne "BULLETIN DE LA ... ANNÉE SCOLAIRE ..."
-    header_text = f"BULLETIN DE LA {classe_name} &nbsp;&nbsp; ANNÉE SCOLAIRE : {report_card.academic_year}"
-    story.append(Paragraph(f"<b>{header_text}</b>", style_heading_compact))
-    story.append(Spacer(1, 0.06 * inch))
-
-    # Tableau des notes (GradeBulletin) regroupé par domaine et trié par note de base
-    grades_qs = GradeBulletin.objects.filter(
-        student=student,
-        academic_year=report_card.academic_year,
-    ).select_related("subject", "school_class")
-
-    # Classe utilisée pour retrouver les domaines/note de base
-    resolved_class = student.school_class
-    class_subjects = []
-    if resolved_class:
-        class_subjects = list(
-            ClassSubject.objects.filter(school_class=resolved_class).select_related("subject")
-        )
-    cs_by_subject_id = {cs.subject_id: cs for cs in class_subjects}
-
-    # En-têtes multi-lignes comme sur le modèle officiel
-    col_labels = [
-        "BRANCHES",
-        "1ère P.", "2ème P.", "EXAM.", "TOT. S1",
-        "3ème P.", "4ème P.", "EXAM.", "TOT. S2",
-        "T.G.", "Repêch. %",
-    ]
-    data = []
-    # Ligne 1 : titres de blocs
-    data.append(
+    # TABLEAU NOTES
+    header = [
         [
             "BRANCHES",
             "PREMIER SEMESTRE", "", "", "",
             "SECOND SEMESTRE", "", "", "",
             "TOTAL GENERAL",
             "EXAMEN DE REPECHAGE",
-        ]
-    )
-    # Ligne 2 : MAX / TRAVAUX JOURNAL / MAX EXAM / TOTAL
-    data.append(
+        ],
         [
             "",
             "MAX.", "TRAVAUX JOURNAL.", "MAX. EXAM.", "TOTAL",
             "MAX.", "TRAVAUX JOURNAL.", "MAX. EXAM.", "TOTAL",
             "",
             "%",
-        ]
-    )
-    # Ligne 3 : 1ère P., 2ème P., EXAM, TOT S1, 3ème, 4ème, EXAM, TOT S2, T.G., Sign. Prof.
-    data.append(
+        ],
         [
             "",
             "1ère P.", "2ème P.", "EXAM.", "TOT. S1",
             "3ème P.", "4ème P.", "EXAM.", "TOT. S2",
             "T.G.",
             "Sign. Prof.",
-        ]
-    )
+        ],
+    ]
+    data = list(header)
 
-    def _grade_value(g, field, default="-"):
-        v = getattr(g, field, None)
-        if v is not None and v != "":
-            try:
-                return str(Decimal(str(v)).quantize(Decimal("0.01")))
-            except Exception:
-                return default
-        return default
+    grades = GradeBulletin.objects.filter(
+        student=student,
+        academic_year=report_card.academic_year,
+    ).select_related("subject")
 
-    # Regroupement par domaine
+    # Domaine depuis ClassSubject (pas sur Subject)
+    resolved_class = student.school_class
+    cs_by_subject_id = {}
+    if resolved_class:
+        for cs in ClassSubject.objects.filter(school_class=resolved_class).select_related("subject"):
+            cs_by_subject_id[cs.subject_id] = cs
+
     domains = {}
-    for g in grades_qs:
-        subj = g.subject
-        if not subj:
+    for g in grades:
+        if not g.subject:
             continue
-        cs = cs_by_subject_id.get(subj.id)
-        domain_label = (getattr(cs, "domain", None) or "AUTRES").upper()
-        domains.setdefault(domain_label, []).append((g, cs))
+        cs = cs_by_subject_id.get(g.subject_id)
+        domain = (getattr(cs, "domain", None) or "AUTRES").strip().upper() or "AUTRES"
+        domains.setdefault(domain, []).append(g)
 
-    # Tri des matières dans chaque domaine par note de base décroissante
-    for dom, items in domains.items():
-        items.sort(
-            key=lambda tpl: getattr(tpl[1], "period_max", getattr(tpl[0].subject, "period_max", 20)),
-            reverse=True,
-        )
+    def val(v):
+        if v is None:
+            return "-"
+        return str(Decimal(str(v)).quantize(Decimal("0.01")))
 
-    def _domain_weight(items):
-        total = 0
-        for _, cs in items:
-            base = getattr(cs, "period_max", None)
-            if base is None and cs and hasattr(cs, "subject"):
-                base = getattr(cs.subject, "period_max", 20)
-            if base is None:
-                base = 20
-            total += int(base)
-        return total
+    for domain, items in domains.items():
+        data.append([domain] + [""] * 10)
+        for g in items:
+            data.append([
+                g.subject.name,
+                val(g.s1_p1),
+                val(g.s1_p2),
+                val(g.s1_exam),
+                val(g.total_s1),
+                val(g.s2_p3),
+                val(g.s2_p4),
+                val(g.s2_exam),
+                val(g.total_s2),
+                val(g.total_general),
+                val(g.reclamation_score),
+            ])
 
-    sorted_domains = sorted(domains.items(), key=lambda kv: _domain_weight(kv[1]), reverse=True)
-
-    if sorted_domains:
-        for dom, items in sorted_domains:
-            data.append([dom] + [""] * (len(col_labels) - 1))
-            for g, cs in items:
-                data.append(
-                    [
-                        g.subject.name if g.subject else "-",
-                        _grade_value(g, "s1_p1"),
-                        _grade_value(g, "s1_p2"),
-                        _grade_value(g, "s1_exam"),
-                        _grade_value(g, "total_s1"),
-                        _grade_value(g, "s2_p3"),
-                        _grade_value(g, "s2_p4"),
-                        _grade_value(g, "s2_exam"),
-                        _grade_value(g, "total_s2"),
-                        _grade_value(g, "total_general"),
-                        _grade_value(g, "reclamation_score"),
-                    ]
-                )
-    else:
-        # Repli : tableau simple ordonné par matière
-        for g in grades_qs.order_by("subject__name"):
-            data.append(
-                [
-                    g.subject.name if g.subject else "-",
-                    _grade_value(g, "s1_p1"),
-                    _grade_value(g, "s1_p2"),
-                    _grade_value(g, "s1_exam"),
-                    _grade_value(g, "total_s1"),
-                    _grade_value(g, "s2_p3"),
-                    _grade_value(g, "s2_p4"),
-                    _grade_value(g, "s2_exam"),
-                    _grade_value(g, "total_s2"),
-                    _grade_value(g, "total_general"),
-                    _grade_value(g, "reclamation_score"),
-                ]
-            )
-
-    if len(data) <= 3:
-        for _ in range(8):
-            data.append([""] * len(col_labels))
-    else:
-        # Limiter à 12 lignes de matières + 3 en-têtes pour tenir sur une page
-        max_data_rows = 12
-        if len(data) > 3 + max_data_rows:
-            data = data[: 3 + max_data_rows]
-
-    col_widths = [1.5 * inch] + [0.48 * inch] * 10
-    table = Table(data, colWidths=col_widths)
-    table.setStyle(
-        TableStyle(
-            [
-                ("SPAN", (0, 0), (0, 2)),
-                ("SPAN", (1, 0), (4, 0)),
-                ("SPAN", (5, 0), (8, 0)),
-                ("SPAN", (9, 0), (9, 1)),
-                ("BACKGROUND", (0, 0), (-1, 2), colors.grey),
-                ("TEXTCOLOR", (0, 0), (-1, 2), colors.whitesmoke),
-                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("FONTNAME", (0, 0), (-1, 2), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 7),
-                ("TOPPADDING", (0, 0), (-1, -1), 2),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
-            ]
-        )
+    table = Table(
+        data,
+        colWidths=[
+            2.0 * inch,
+            0.55 * inch, 0.55 * inch, 0.55 * inch, 0.55 * inch,
+            0.55 * inch, 0.55 * inch, 0.55 * inch, 0.55 * inch,
+            0.65 * inch,
+            0.65 * inch,
+        ],
     )
+    table.setStyle(TableStyle([
+        ("SPAN", (0, 0), (0, 2)),
+        ("SPAN", (1, 0), (4, 0)),
+        ("SPAN", (5, 0), (8, 0)),
+        ("SPAN", (9, 0), (9, 1)),
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.black),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("FONTNAME", (0, 0), (-1, 2), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 7),
+        ("BACKGROUND", (0, 0), (-1, 2), colors.lightgrey),
+    ]))
     story.append(table)
+    story.append(Spacer(1, 6))
 
-    # Bloc MAXIMA GÉNÉRAUX / TOTAUX / POURCENTAGE / PLACE / APPLICATION / CONDUITE / SIGNATURE (modèle officiel)
-    story.append(Spacer(1, 0.06 * inch))
-    app = report_card.application if report_card.application is not None else ""
-    cond = report_card.conduite if report_card.conduite is not None else ""
-    place_txt = f"{report_card.rank or ''} / {report_card.total_students or ''}".strip(" /")
-    # Pourcentage approximé : moyenne /20 → %
-    pct_txt = ""
+    # FOOTER TABLE
+    pct = ""
     if report_card.average_score is not None:
-        try:
-            pct_val = float(report_card.average_score) * 5.0
-            pct_txt = f"{pct_val:.2f} %"
-        except Exception:
-            pct_txt = ""
+        pct = f"{float(report_card.average_score) * 5:.2f} %"
+    place = f"{report_card.rank or ''}/{report_card.total_students or ''}"
 
-    # Tableau pied de page : MAXIMA GÉNÉRAUX, TOTAUX, POURCENTAGE, PLACE, APPLICATION, CONDUITE, SIGNATURE (modèle officiel)
-    footer_data = [
+    footer = [
         ["MAXIMA GENERAUX"] + [""] * 11,
         ["TOTAUX"] + [""] * 11,
-        ["POURCENTAGE"] + [str(pct_txt)] + [""] * 10,
-        ["PLACE / NBRE D'ELEVES"] + [str(place_txt)] + [""] * 10,
-        ["APPLICATION"] + [str(app)] + [""] * 10,
-        ["CONDUITE"] + [str(cond)] + [""] * 10,
+        ["POURCENTAGE", pct] + [""] * 10,
+        ["PLACE / NBRE D'ELEVES", place] + [""] * 10,
+        ["APPLICATION", report_card.application or ""] + [""] * 10,
+        ["CONDUITE", report_card.conduite or ""] + [""] * 10,
         ["SIGNATURE"] + [""] * 11,
     ]
     footer_table = Table(
-        footer_data,
-        colWidths=[1.65 * inch] + [0.32 * inch] * 11,
+        footer,
+        colWidths=[1.6 * inch] + [0.35 * inch] * 11,
     )
-    footer_table.setStyle(
-        TableStyle(
-            [
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
-                ("FONTSIZE", (0, 0), (-1, -1), 7),
-                ("TOPPADDING", (0, 0), (-1, -1), 2),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-                ("BACKGROUND", (0, 0), (-1, 0), colors.whitesmoke),
-            ]
-        )
-    )
+    footer_table.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.black),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("FONTSIZE", (0, 0), (-1, -1), 7),
+    ]))
     story.append(footer_table)
+    story.append(Spacer(1, 6))
 
-    story.append(Spacer(1, 0.05 * inch))
+    # DECISIONS
+    story.append(Paragraph(
+        "- L'élève ne pourra passer dans la classe supérieure s'il n'a subi avec succès un examen de repêchage (1)",
+        style_small,
+    ))
+    story.append(Paragraph("- L'élève passe dans la classe supérieure (1)", style_small))
+    story.append(Paragraph("- L'élève double la classe (1)", style_small))
+    story.append(Spacer(1, 10))
 
-    rep_matiere = report_card.reclamation_subject.name if report_card.reclamation_subject else "........................................................"
-    rep_line = (
-        "L'élève ne pourra passer dans la classe supérieure s'il n'a subi avec succès "
-        f"un examen de repêchage en {rep_matiere}(1)"
-    )
-    story.append(Paragraph(f"- {rep_line}", style_compact))
-    story.append(Paragraph("- L'élève passe dans la classe supérieure (1)", style_compact))
-    story.append(Paragraph("- L'élève double la classe (1)", style_compact))
-    story.append(Spacer(1, 0.04 * inch))
-
-    sig_city = city or "........................................"
-    sig_table = Table(
-        [
-            ["", "", "", ""],
-            [
-                "Signature de l'élève",
-                "Sceau de l'Ecole",
-                f"Fait à {sig_city}, le ....../....../20......",
-                "Chef d'Etablissement",
-            ],
-        ],
-        colWidths=[2.0 * inch, 1.8 * inch, 2.6 * inch, 1.8 * inch],
-    )
-    sig_table.setStyle(
-        TableStyle(
-            [
-                ("LINEABOVE", (0, 0), (-1, 0), 0.5, colors.black),
-                ("ALIGN", (0, 1), (-1, 1), "CENTER"),
-                ("FONTNAME", (0, 1), (-1, 1), "Helvetica"),
-                ("FONTSIZE", (0, 1), (-1, 1), 7),
-            ]
-        )
-    )
+    sig_table = Table([
+        ["Signature de l'élève", "Sceau de l'Ecole", f"Fait à {city}, le ....../....../20....", "Chef d'Etablissement"],
+    ], colWidths=[2 * inch, 2 * inch, 3 * inch, 2 * inch])
+    sig_table.setStyle(TableStyle([
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("FONTSIZE", (0, 0), (-1, -1), 7),
+    ]))
     story.append(sig_table)
-
-    story.append(Spacer(1, 0.04 * inch))
-    story.append(Paragraph("(1) Biffer la mention inutile.", style_compact))
-    story.append(Paragraph("Note importante : Le bulletin est sans valeur s'il est raturé ou surchargé.", style_compact))
-    story.append(Paragraph("Interdiction formelle de reproduire ce bulletin sous peine des sanctions prévues par la loi. IGE/P.S./012", style_compact))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph("(1) Biffer la mention inutile.", style_small))
+    story.append(Paragraph("Note importante : Le bulletin est sans valeur s'il est raturé ou surchargé.", style_small))
+    story.append(Paragraph(
+        "Interdiction formelle de reproduire ce bulletin sous peine des sanctions prévues par la loi.",
+        style_small,
+    ))
 
     doc.build(story)
     buffer.seek(0)
