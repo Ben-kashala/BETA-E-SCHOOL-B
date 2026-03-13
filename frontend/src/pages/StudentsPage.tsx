@@ -331,6 +331,7 @@ export default function StudentsPage() {
                   classEnrollments={detailData.class_enrollments || []}
                   gradeBulletins={detailData.grade_bulletins || []}
                   reportCards={detailData.report_cards || []}
+                  onRefresh={() => queryClient.invalidateQueries({ queryKey: ['student-full-detail', selectedId] })}
                 />
               ) : (
                 <PaymentsTab payments={detailData.payments || []} />
@@ -423,12 +424,38 @@ function ParcoursTab({
   classEnrollments,
   gradeBulletins,
   reportCards,
+  onRefresh,
 }: {
   studentId: number | null
   classEnrollments: any[]
   gradeBulletins: any[]
   reportCards: any[]
+  onRefresh?: () => void
 }) {
+  const [generateYear, setGenerateYear] = useState<string>('')
+  const [generating, setGenerating] = useState(false)
+  const enrollmentYears = useMemo(() => {
+    const years = new Set<string>()
+    classEnrollments.forEach((e: any) => { if (e.academic_year) years.add(e.academic_year) })
+    return Array.from(years).sort().reverse()
+  }, [classEnrollments])
+  const defaultYear = enrollmentYears[0] ?? ''
+
+  const generateAnnualBulletin = async () => {
+    const year = generateYear || defaultYear
+    if (!studentId || !year) return
+    setGenerating(true)
+    try {
+      await api.post(`accounts/students/${studentId}/generate_annual_bulletin/`, { academic_year: year })
+      toast.success('Bulletin annuel créé.')
+      onRefresh?.()
+    } catch {
+      // toast géré par l'intercepteur
+    } finally {
+      setGenerating(false)
+    }
+  }
+
   const downloadPdf = async (url: string, filename: string) => {
     try {
       const res = await api.get(url, { responseType: 'blob' })
@@ -540,9 +567,32 @@ function ParcoursTab({
       </section>
 
       <section>
-        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Bulletins (décision)</h3>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Bulletins (décision)</h3>
+          {studentId && enrollmentYears.length > 0 && (
+            <div className="flex items-center gap-2">
+              <select
+                value={generateYear || defaultYear}
+                onChange={(e) => setGenerateYear(e.target.value)}
+                className="rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm px-2 py-1.5 text-gray-900 dark:text-gray-100"
+              >
+                {enrollmentYears.map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={generateAnnualBulletin}
+                disabled={generating}
+                className="inline-flex items-center gap-1.5 rounded bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+              >
+                {generating ? 'Génération…' : 'Générer Bulletin annuel'}
+              </button>
+            </div>
+          )}
+        </div>
         {reportCards.length === 0 ? (
-          <p className="text-gray-500 dark:text-gray-400">Aucun bulletin.</p>
+          <p className="text-gray-500 dark:text-gray-400">Aucun bulletin. Utilisez « Générer Bulletin annuel » pour en créer un.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

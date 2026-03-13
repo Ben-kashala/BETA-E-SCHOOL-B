@@ -1,3 +1,4 @@
+from decimal import Decimal
 from datetime import date, timedelta
 from django.db.models import Count, Q
 from django.utils import timezone
@@ -464,6 +465,72 @@ class StudentViewSet(viewsets.ModelViewSet):
             'report_cards': report_cards_data,
             'payments': payments_data,
         })
+
+    @action(detail=True, methods=['post'], url_path='generate_annual_bulletin')
+    def generate_annual_bulletin(self, request, pk=None):
+        """
+        Crée ou récupère le bulletin de décision annuel (term='AN') pour l'élève et l'année donnée.
+        Corps : { "academic_year": "2025-2026" }. Calcule moyenne/rang si possible à partir des notes RDC.
+        """
+        student = self.get_object()
+        academic_year = (request.data.get('academic_year') or request.query_params.get('academic_year') or '').strip()
+        if not academic_year:
+            return Response(
+                {'error': "Le paramètre academic_year est obligatoire (ex. '2025-2026')."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        enrollment = StudentClassEnrollment.objects.filter(
+            student=student
+        ).select_related('school_class').filter(
+            school_class__academic_year=academic_year
+        ).first()
+        school_class = enrollment.school_class if enrollment else None
+        ranking_map = get_class_ranking_map(school_class, academic_year) if school_class else {}
+        total_students = len(ranking_map)
+        info = ranking_map.get(student.id, {})
+        rank = info.get('rank')
+        percentage = info.get('percentage')
+        average_score = Decimal(str(round(percentage * 20 / 100, 2))) if percentage is not None else None
+        total_subjects = GradeBulletin.objects.filter(
+            student=student, academic_year=academic_year
+        ).count()
+        report_card, created = ReportCard.objects.get_or_create(
+            student=student,
+            academic_year=academic_year,
+            term='AN',
+            defaults={
+                'total_subjects': total_subjects,
+                'average_score': average_score,
+                'rank': rank,
+                'total_students': total_students if total_students else None,
+            }
+        )
+        if not created:
+            report_card.total_students = total_students or report_card.total_students
+            report_card.rank = rank if rank is not None else report_card.rank
+            if average_score is not None:
+                report_card.average_score = average_score
+            report_card.total_subjects = total_subjects
+            report_card.save(update_fields=['total_students', 'rank', 'average_score', 'total_subjects'])
+        report_cards_data = [{
+            'id': report_card.id,
+            'academic_year': report_card.academic_year,
+            'term': report_card.term,
+            'average_score': float(report_card.average_score) if report_card.average_score is not None else None,
+            'rank': report_card.rank,
+            'total_students': report_card.total_students,
+            'application': float(report_card.application) if report_card.application is not None else None,
+            'conduite': float(report_card.conduite) if report_card.conduite is not None else None,
+            'decision': report_card.decision,
+            'is_published': report_card.is_published,
+            'teacher_comment': report_card.teacher_comment,
+            'principal_comment': report_card.principal_comment,
+        }]
+        return Response({
+            'report_card': report_cards_data[0],
+            'created': created,
+            'message': 'Bulletin annuel créé.' if created else 'Bulletin annuel déjà existant.',
+        }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
     @action(detail=True, methods=['get'], url_path='bulletin_pdf')
     def bulletin_pdf(self, request, pk=None):
