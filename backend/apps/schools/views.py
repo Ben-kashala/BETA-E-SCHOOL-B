@@ -254,12 +254,17 @@ class SchoolClassViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = SchoolClass.objects.filter(is_active=True)
-        # Filter by user's school
-        if self.request.user.school:
-            queryset = queryset.filter(school=self.request.user.school)
-        # Filter by school if provided in query params
         school_id = self.request.query_params.get('school', None)
-        if school_id:
+        user = self.request.user
+        can_see_other_schools = getattr(user, 'is_admin', False) or getattr(user, 'is_promoter', False) or user.is_superuser
+        # Transfert : admin/promoter/superuser peut demander les classes d'une autre école via ?school=
+        if school_id and can_see_other_schools:
+            return queryset.filter(school_id=school_id)
+        if user.school:
+            queryset = queryset.filter(school=user.school)
+            if school_id and str(user.school_id) != str(school_id):
+                return queryset.none()
+        elif school_id:
             queryset = queryset.filter(school_id=school_id)
         return queryset
     
