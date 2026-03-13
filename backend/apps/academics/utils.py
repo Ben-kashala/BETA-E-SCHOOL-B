@@ -64,25 +64,28 @@ def get_class_ranking_map(school_class, academic_year):
     return {r['student_id']: {'rank': r['rank'], 'percentage': r['percentage']} for r in rows}
 
 
-def _build_bulletin_header_with_logos(story, styles):
+def _build_bulletin_header_with_logos(story, styles, logo_width=1.15 * inch, logo_height=0.75 * inch, spacer_after=0.06 * inch):
     """
     Ajoute l'en-tête RDC avec le drapeau à gauche et les armoiries à droite,
-    comme sur le bulletin officiel.
-    Les fichiers doivent être placés dans STATIC_ROOT/ bulletins / :
-      - rdc_flag.png
-      - rdc_arms.png
+    comme sur le bulletin officiel (format compact une page).
     """
+    from reportlab.lib.styles import ParagraphStyle
+    small_title = ParagraphStyle(
+        name="BulletinTitle",
+        parent=styles["Title"],
+        fontSize=9,
+        leading=11,
+        spaceAfter=0,
+    )
     title_text = (
         "<b>REPUBLIQUE DEMOCRATIQUE DU CONGO<br/>"
         "MINISTERE DE L'ENSEIGNEMENT PRIMAIRE, SECONDAIRE ET PROFESSIONNEL</b>"
     )
-    title = Paragraph(title_text, styles["Title"])
+    title = Paragraph(title_text, small_title)
 
     static_root = getattr(settings, "STATIC_ROOT", None) or os.path.join(settings.BASE_DIR, "static")
     bulletins_dir = os.path.join(static_root, "bulletins")
 
-    # On supporte plusieurs noms possibles pour limiter les manipulations manuelles.
-    # Priorité : rdc_flag.png / rdc_arms.png, repli : Drapeau.png / Armoirie.png
     def _first_existing(*candidates):
         for name in candidates:
             path = os.path.join(bulletins_dir, name)
@@ -93,17 +96,17 @@ def _build_bulletin_header_with_logos(story, styles):
     left_path = _first_existing("rdc_flag.png", "Drapeau.png")
     right_path = _first_existing("rdc_arms.png", "Armoirie.png")
 
-    def _img_or_spacer(path):
+    def _img_or_spacer(path, w, h):
         if path and os.path.exists(path):
-            return Image(path, width=1.4 * inch, height=0.9 * inch)
-        return Spacer(1.4 * inch, 0.9 * inch)
+            return Image(path, width=w, height=h)
+        return Spacer(w, h)
 
-    left_img = _img_or_spacer(left_path)
-    right_img = _img_or_spacer(right_path)
+    left_img = _img_or_spacer(left_path, logo_width, logo_height)
+    right_img = _img_or_spacer(right_path, logo_width, logo_height)
 
     header_table = Table(
         [[left_img, title, right_img]],
-        colWidths=[1.4 * inch, None, 1.4 * inch],
+        colWidths=[logo_width, None, logo_width],
     )
     header_table.setStyle(
         TableStyle(
@@ -120,7 +123,7 @@ def _build_bulletin_header_with_logos(story, styles):
         )
     )
     story.append(header_table)
-    story.append(Spacer(1, 0.15 * inch))
+    story.append(Spacer(1, spacer_after))
 
 
 def generate_bulletin_grade_pdf(student, school_class, academic_year):
@@ -294,13 +297,25 @@ def generate_bulletin_grade_pdf(student, school_class, academic_year):
 
 def generate_bulletin_rdc_pdf(report_card):
     """
-    Génère le bulletin au format officiel RDC: 2 semestres, 4 périodes (Trav. journaliers),
-    2 examens, TOT. S1/S2, T.G., repêchage; APPLICATION, CONDUITE, Place, Décision.
+    Génère le bulletin au format officiel RDC (une page), conforme au modèle fourni :
+    2 semestres, 4 périodes (Trav. journaliers), 2 examens, TOT. S1/S2, T.G., repêchage ;
+    MAXIMA GÉNÉRAUX, TOTAUX, POURCENTAGE, PLACE, APPLICATION, CONDUITE, décisions.
     """
     from decimal import Decimal
+    from reportlab.lib.styles import ParagraphStyle
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    # Une seule page, marges réduites pour tenir comme le modèle officiel
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=0.35 * inch,
+        rightMargin=0.35 * inch,
+        topMargin=0.35 * inch,
+        bottomMargin=0.35 * inch,
+    )
     styles = getSampleStyleSheet()
+    style_compact = ParagraphStyle(name="Compact", parent=styles["Normal"], fontSize=7, leading=8, spaceAfter=0)
+    style_heading_compact = ParagraphStyle(name="HeadingCompact", parent=styles["Heading3"], fontSize=8, leading=10, spaceAfter=0)
     story = []
 
     student = report_card.student
@@ -311,10 +326,10 @@ def generate_bulletin_rdc_pdf(report_card):
     commune = getattr(school, "commune", None) or "-"
     code_ecole = getattr(school, "code", None) or "-"
 
-    # En-tête officiel RDC avec logos
+    # En-tête officiel RDC avec logos (format compact)
     _build_bulletin_header_with_logos(story, styles)
 
-    # Identité école / élève dans une grille proche du modèle officiel
+    # Identité école / élève — grille comme modèle officiel
     user = student.user
     full_name = user.get_full_name()
     sex = getattr(student, "gender", None)
@@ -333,14 +348,14 @@ def generate_bulletin_rdc_pdf(report_card):
     classe_name = student.school_class.name if student.school_class else "CLASSE"
 
     info_data = [
-        ["N° ID.", ""],
-        ["PROVINCE EDUCATIONNELLE :", province],
+        ["N° ID.", "", "", "", "", ""],
+        ["PROVINCE EDUCATIONNELLE :", province, "", "", "", ""],
         ["VILLE :", city, "ELEVE :", full_name, "SEXE :", sex_label],
         ["COMMUNE /TER (1) :", commune, "NE (E) A :", place_of_birth, "LE :", dob_str],
-        ["ECOLE :", school_name, "CLASSE :", classe_name],
-        ["CODE :", code_ecole, "N° PERM. :", student.student_id],
+        ["ECOLE :", school_name, "CLASSE :", classe_name, "", ""],
+        ["CODE :", code_ecole, "N° PERM. :", student.student_id or "-", "", ""],
     ]
-    col_widths_info = [1.7 * inch, 2.6 * inch, 1.1 * inch, 2.0 * inch, 0.9 * inch, 1.1 * inch]
+    col_widths_info = [1.5 * inch, 2.4 * inch, 1.0 * inch, 1.8 * inch, 0.75 * inch, 1.0 * inch]
     info_table = Table(info_data, colWidths=col_widths_info)
     info_table.setStyle(
         TableStyle(
@@ -349,20 +364,20 @@ def generate_bulletin_rdc_pdf(report_card):
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("ALIGN", (0, 0), (-1, -1), "LEFT"),
                 ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
-                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("FONTSIZE", (0, 0), (-1, -1), 7),
+                ("TOPPADDING", (0, 0), (-1, -1), 2),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
                 ("BACKGROUND", (0, 0), (-1, 0), colors.whitesmoke),
             ]
         )
     )
     story.append(info_table)
-    story.append(Spacer(1, 0.15 * inch))
+    story.append(Spacer(1, 0.06 * inch))
 
     # Ligne "BULLETIN DE LA ... ANNÉE SCOLAIRE ..."
-    header_text = (
-        f"BULLETIN DE LA {classe_name} &nbsp;&nbsp; ANNÉE SCOLAIRE : {report_card.academic_year}"
-    )
-    story.append(Paragraph(f"<b>{header_text}</b>", styles["Heading3"]))
-    story.append(Spacer(1, 0.15 * inch))
+    header_text = f"BULLETIN DE LA {classe_name} &nbsp;&nbsp; ANNÉE SCOLAIRE : {report_card.academic_year}"
+    story.append(Paragraph(f"<b>{header_text}</b>", style_heading_compact))
+    story.append(Spacer(1, 0.06 * inch))
 
     # Tableau des notes (GradeBulletin) regroupé par domaine et trié par note de base
     grades_qs = GradeBulletin.objects.filter(
@@ -496,37 +511,39 @@ def generate_bulletin_rdc_pdf(report_card):
             )
 
     if len(data) <= 3:
-        # Aucun domaine / matière : garder la maquette complète avec lignes vides
         for _ in range(8):
             data.append([""] * len(col_labels))
+    else:
+        # Limiter à 12 lignes de matières + 3 en-têtes pour tenir sur une page
+        max_data_rows = 12
+        if len(data) > 3 + max_data_rows:
+            data = data[: 3 + max_data_rows]
 
-    col_widths = [1.7 * inch] + [0.55 * inch] * 10
+    col_widths = [1.5 * inch] + [0.48 * inch] * 10
     table = Table(data, colWidths=col_widths)
     table.setStyle(
         TableStyle(
             [
-                # Blocs d'en-tête fusionnés
                 ("SPAN", (0, 0), (0, 2)),
                 ("SPAN", (1, 0), (4, 0)),
                 ("SPAN", (5, 0), (8, 0)),
                 ("SPAN", (9, 0), (9, 1)),
-                ("SPAN", (10, 0), (10, 0)),
-                ("SPAN", (10, 1), (10, 1)),
-                # Style général
                 ("BACKGROUND", (0, 0), (-1, 2), colors.grey),
                 ("TEXTCOLOR", (0, 0), (-1, 2), colors.whitesmoke),
                 ("ALIGN", (0, 0), (-1, -1), "CENTER"),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("FONTNAME", (0, 0), (-1, 2), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("FONTSIZE", (0, 0), (-1, -1), 7),
+                ("TOPPADDING", (0, 0), (-1, -1), 2),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
                 ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
             ]
         )
     )
     story.append(table)
 
-    # Bloc MAXIMA / TOTAUX / POURCENTAGE / PLACE / APPLICATION / CONDUITE / SIGNATURE
-    story.append(Spacer(1, 0.15 * inch))
+    # Bloc MAXIMA GÉNÉRAUX / TOTAUX / POURCENTAGE / PLACE / APPLICATION / CONDUITE / SIGNATURE (modèle officiel)
+    story.append(Spacer(1, 0.06 * inch))
     app = report_card.application if report_card.application is not None else ""
     cond = report_card.conduite if report_card.conduite is not None else ""
     place_txt = f"{report_card.rank or ''} / {report_card.total_students or ''}".strip(" /")
@@ -539,19 +556,19 @@ def generate_bulletin_rdc_pdf(report_card):
         except Exception:
             pct_txt = ""
 
-    # Tableau avec colonnes multiples (cases vides) comme sur le modèle
+    # Tableau pied de page : MAXIMA GÉNÉRAUX, TOTAUX, POURCENTAGE, PLACE, APPLICATION, CONDUITE, SIGNATURE (modèle officiel)
     footer_data = [
         ["MAXIMA GENERAUX"] + [""] * 11,
         ["TOTAUX"] + [""] * 11,
-        ["POURCENTAGE"] + [pct_txt] + [""] * 10,
-        ["PLACE / NBRE D'ELEVES"] + [place_txt] + [""] * 10,
-        ["APPLICATION"] + [app] + [""] * 10,
-        ["CONDUITE"] + [cond] + [""] * 10,
+        ["POURCENTAGE"] + [str(pct_txt)] + [""] * 10,
+        ["PLACE / NBRE D'ELEVES"] + [str(place_txt)] + [""] * 10,
+        ["APPLICATION"] + [str(app)] + [""] * 10,
+        ["CONDUITE"] + [str(cond)] + [""] * 10,
         ["SIGNATURE"] + [""] * 11,
     ]
     footer_table = Table(
         footer_data,
-        colWidths=[1.9 * inch] + [0.35 * inch] * 11,
+        colWidths=[1.65 * inch] + [0.32 * inch] * 11,
     )
     footer_table.setStyle(
         TableStyle(
@@ -560,38 +577,27 @@ def generate_bulletin_rdc_pdf(report_card):
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("ALIGN", (0, 0), (-1, -1), "CENTER"),
                 ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
-                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("FONTSIZE", (0, 0), (-1, -1), 7),
+                ("TOPPADDING", (0, 0), (-1, -1), 2),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
                 ("BACKGROUND", (0, 0), (-1, 0), colors.whitesmoke),
             ]
         )
     )
     story.append(footer_table)
 
-    # Partie texte du bas de page conforme au modèle officiel
-    story.append(Spacer(1, 0.15 * inch))
+    story.append(Spacer(1, 0.05 * inch))
 
-    # Ligne sur l'examen de repêchage
-    rep_matiere = ""
-    if report_card.reclamation_subject:
-        rep_matiere = report_card.reclamation_subject.name
+    rep_matiere = report_card.reclamation_subject.name if report_card.reclamation_subject else "........................................................"
     rep_line = (
         "L'élève ne pourra passer dans la classe supérieure s'il n'a subi avec succès "
-        f"un examen de repêchage en {rep_matiere or '........................................................'}(1)"
+        f"un examen de repêchage en {rep_matiere}(1)"
     )
-    story.append(Paragraph(f"- {rep_line}", styles["Normal"]))
-    story.append(
-        Paragraph(
-            "- L'élève passe dans la classe supérieure (1)", styles["Normal"]
-        )
-    )
-    story.append(
-        Paragraph(
-            "- L'élève double la classe (1)", styles["Normal"]
-        )
-    )
-    story.append(Spacer(1, 0.1 * inch))
+    story.append(Paragraph(f"- {rep_line}", style_compact))
+    story.append(Paragraph("- L'élève passe dans la classe supérieure (1)", style_compact))
+    story.append(Paragraph("- L'élève double la classe (1)", style_compact))
+    story.append(Spacer(1, 0.04 * inch))
 
-    # Ligne des signatures : élève, sceau, fait à..., chef d'établissement
     sig_city = city or "........................................"
     sig_table = Table(
         [
@@ -603,7 +609,7 @@ def generate_bulletin_rdc_pdf(report_card):
                 "Chef d'Etablissement",
             ],
         ],
-        colWidths=[2.2 * inch, 2.0 * inch, 3.0 * inch, 2.0 * inch],
+        colWidths=[2.0 * inch, 1.8 * inch, 2.6 * inch, 1.8 * inch],
     )
     sig_table.setStyle(
         TableStyle(
@@ -611,31 +617,16 @@ def generate_bulletin_rdc_pdf(report_card):
                 ("LINEABOVE", (0, 0), (-1, 0), 0.5, colors.black),
                 ("ALIGN", (0, 1), (-1, 1), "CENTER"),
                 ("FONTNAME", (0, 1), (-1, 1), "Helvetica"),
-                ("FONTSIZE", (0, 1), (-1, 1), 8),
+                ("FONTSIZE", (0, 1), (-1, 1), 7),
             ]
         )
     )
     story.append(sig_table)
 
-    story.append(Spacer(1, 0.1 * inch))
-    story.append(
-        Paragraph(
-            "(1) Biffer la mention inutile.", styles["Normal"]
-        )
-    )
-    story.append(
-        Paragraph(
-            "Note importante : Le bulletin est sans valeur s'il est raturé ou surchargé.",
-            styles["Normal"],
-        )
-    )
-    story.append(
-        Paragraph(
-            "Interdiction formelle de reproduire ce bulletin sous peine des sanctions prévues par la loi. "
-            "IGE/P.S./012",
-            styles["Normal"],
-        )
-    )
+    story.append(Spacer(1, 0.04 * inch))
+    story.append(Paragraph("(1) Biffer la mention inutile.", style_compact))
+    story.append(Paragraph("Note importante : Le bulletin est sans valeur s'il est raturé ou surchargé.", style_compact))
+    story.append(Paragraph("Interdiction formelle de reproduire ce bulletin sous peine des sanctions prévues par la loi. IGE/P.S./012", style_compact))
 
     doc.build(story)
     buffer.seek(0)
