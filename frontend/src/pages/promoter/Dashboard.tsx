@@ -138,4 +138,4 @@ export default function PromoterDashboard() {
       </Card>
     </div>
   )
-
+}

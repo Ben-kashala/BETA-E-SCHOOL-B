@@ -265,6 +265,34 @@ class DisciplineRequestSerializer(serializers.ModelSerializer):
         except Exception:
             return ''
 
+    def get_discipline_record_detail(self, obj):
+        try:
+            record = obj.discipline_record
+            return {
+                'id': record.id,
+                'student_name': record.student.user.get_full_name() if record.student and record.student.user else '',
+                'student_id': record.student.student_id if record.student else '',
+                'class_name': record.school_class.name if record.school_class else '',
+                'date': record.date,
+                'type': record.type,
+                'type_display': record.get_type_display(),
+                'severity': record.severity,
+                'severity_display': record.get_severity_display(),
+                'description': record.description,
+                'action_taken': record.action_taken,
+                'status': record.status,
+                'status_display': record.get_status_display(),
+                'recorded_by_name': record.recorded_by.get_full_name() if record.recorded_by else '',
+            }
+        except Exception:
+            return {}
+
+    def get_responded_by_name(self, obj):
+        try:
+            return obj.responded_by.get_full_name() if obj.responded_by else ''
+        except Exception:
+            return ''
+
 
 class EvaluationGradeSerializer(serializers.ModelSerializer):
   student_name = serializers.SerializerMethodField()
@@ -293,34 +321,6 @@ class EvaluationGradeSerializer(serializers.ModelSerializer):
           return obj.school_class.name if obj.school_class else ''
       except Exception:
           return ''
-    
-    def get_discipline_record_detail(self, obj):
-        try:
-            record = obj.discipline_record
-            return {
-                'id': record.id,
-                'student_name': record.student.user.get_full_name() if record.student and record.student.user else '',
-                'student_id': record.student.student_id if record.student else '',
-                'class_name': record.school_class.name if record.school_class else '',
-                'date': record.date,
-                'type': record.type,
-                'type_display': record.get_type_display(),
-                'severity': record.severity,
-                'severity_display': record.get_severity_display(),
-                'description': record.description,
-                'action_taken': record.action_taken,
-                'status': record.status,
-                'status_display': record.get_status_display(),
-                'recorded_by_name': record.recorded_by.get_full_name() if record.recorded_by else '',
-            }
-        except Exception:
-            return {}
-    
-    def get_responded_by_name(self, obj):
-        try:
-            return obj.responded_by.get_full_name() if obj.responded_by else ''
-        except Exception:
-            return ''
 
 
 class ReportCardSerializer(serializers.ModelSerializer):

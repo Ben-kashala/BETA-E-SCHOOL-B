@@ -143,4 +143,4 @@ export default function PromoterSchools() {
       )}
     </div>
   )
-
+}
