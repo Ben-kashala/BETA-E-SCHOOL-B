@@ -329,10 +329,10 @@ def generate_bulletin_rdc_pdf(report_card):
     margin_pt = 0.4 * inch
 
     def draw_border(canvas, doc):
-        """Bordure autour du contenu du bulletin."""
+        """Encadrement : bordure noire épaisse autour du bulletin."""
         canvas.saveState()
         canvas.setStrokeColor(colors.black)
-        canvas.setLineWidth(0.5)
+        canvas.setLineWidth(1.5)
         w, h = doc.pagesize
         m = margin_pt
         canvas.rect(m, m, w - 2 * m, h - 2 * m)
@@ -349,11 +349,27 @@ def generate_bulletin_rdc_pdf(report_card):
         onLaterPage=draw_border,
     )
     styles = getSampleStyleSheet()
-    style_center = ParagraphStyle(
-        "center",
+    style_title_main = ParagraphStyle(
+        "title_main",
         parent=styles["Normal"],
         alignment=TA_CENTER,
-        fontSize=9,
+        fontSize=10,
+        leading=11,
+        fontName="Helvetica-Bold",
+        textColor=colors.black,
+        spaceBefore=0,
+        spaceAfter=1,
+    )
+    style_title_sub = ParagraphStyle(
+        "title_sub",
+        parent=styles["Normal"],
+        alignment=TA_CENTER,
+        fontSize=8,
+        leading=9,
+        fontName="Helvetica-Bold",
+        textColor=colors.black,
+        spaceBefore=0,
+        spaceAfter=0,
     )
     style_small = ParagraphStyle(
         "small",
@@ -372,12 +388,8 @@ def generate_bulletin_rdc_pdf(report_card):
     commune = getattr(school, "commune", "-") if school else "-"
     code_ecole = getattr(school, "code", "-") if school else "-"
 
-    # HEADER : titre au-dessus, puis logos en dessous
-    story.append(Paragraph("<b>REPUBLIQUE DEMOCRATIQUE DU CONGO</b>", style_center))
-    story.append(Paragraph("MINISTERE DE L'ENSEIGNEMENT PRIMAIRE, SECONDAIRE ET PROFESSIONNEL", style_center))
-    story.append(Spacer(1, 4))
-
-    logo_w, logo_h = 1.1 * inch, 0.7 * inch
+    # HEADER : drapeau coin gauche, titre centré, armoiries coin droit (comme 2ème capture)
+    logo_w, logo_h = 1.15 * inch, 0.85 * inch
     left_logo_path = _bulletin_logo_path("Drapeau.png") or _bulletin_logo_path("rdc_flag.png")
     right_logo_path = _bulletin_logo_path("Armoirie.png") or _bulletin_logo_path("rdc_arms.png")
 
@@ -391,21 +403,39 @@ def generate_bulletin_rdc_pdf(report_card):
 
     logo_left = _logo_or_spacer(left_logo_path)
     logo_right = _logo_or_spacer(right_logo_path)
-    logo_table = Table(
-        [[logo_left, Spacer(1, 1), logo_right]],
+
+    title_block = [
+        Paragraph("<b>REPUBLIQUE DEMOCRATIQUE DU CONGO</b>", style_title_main),
+        Paragraph("<b>MINISTERE DE L'ENSEIGNEMENT PRIMAIRE, SECONDAIRE ET PROFESSIONNEL</b>", style_title_sub),
+    ]
+
+    header_table = Table(
+        [[logo_left, title_block, logo_right]],
         colWidths=[logo_w, None, logo_w],
     )
-    logo_table.setStyle(TableStyle([
+    light_blue = colors.HexColor("#dce8f5")
+    header_table.setStyle(TableStyle([
         ("ALIGN", (0, 0), (0, 0), "LEFT"),
+        ("ALIGN", (1, 0), (1, 0), "CENTER"),
         ("ALIGN", (2, 0), (2, 0), "RIGHT"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ("TOPPADDING", (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("BACKGROUND", (0, 0), (-1, -1), light_blue),
     ]))
-    story.append(logo_table)
-    story.append(Spacer(1, 6))
+    story.append(header_table)
+
+    # Ligne de séparation épaisse sous l'en-tête
+    sep = Table([[""]], colWidths=[7 * inch])
+    sep.setStyle(TableStyle([
+        ("LINEABOVE", (0, 0), (-1, -1), 2, colors.black),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    story.append(sep)
+    story.append(Spacer(1, 4))
 
     # INFOS ELEVE
     full_name = user.get_full_name()

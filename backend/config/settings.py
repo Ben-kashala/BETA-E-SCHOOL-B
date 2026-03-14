@@ -280,11 +280,12 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-# CORS Settings
+# CORS Settings — frontend (React) peut appeler l'API depuis ces origines
+# En production : définir CORS_ALLOWED_ORIGINS ou laisser la valeur par défaut (e-school.africaits.com + localhost)
 CORS_ALLOWED_ORIGINS = config(
     'CORS_ALLOWED_ORIGINS',
-    default='http://localhost:3000,http://localhost:8081',
-    cast=lambda v: [s.strip() for s in v.split(',')]
+    default='http://localhost:3000,http://localhost:8081,https://e-school.africaits.com,http://e-school.africaits.com',
+    cast=lambda v: [s.strip() for s in v.split(',') if s.strip()]
 )
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = [
@@ -301,11 +302,11 @@ CORS_ALLOW_HEADERS = [
 ]
 
 # CSRF Settings - Required for Django Admin in production (Django 4+ : inclure le schéma https://)
-# Sur Railway, définir dans Variables : CSRF_TRUSTED_ORIGINS=https://votre-app.up.railway.app
+# Sur Railway, définir dans Variables : CSRF_TRUSTED_ORIGINS=https://votre-app.up.railway.app,https://e-school.africaits.com
 CSRF_TRUSTED_ORIGINS = config(
     'CSRF_TRUSTED_ORIGINS',
-    default='http://localhost:3000,http://localhost:8081',
-    cast=lambda v: [s.strip() for s in v.split(',')]
+    default='http://localhost:3000,http://localhost:8081,https://e-school.africaits.com,http://e-school.africaits.com',
+    cast=lambda v: [s.strip() for s in v.split(',') if s.strip()]
 )
 
 # Derrière un proxy (Railway, etc.) : Django doit faire confiance au header X-Forwarded-Proto pour HTTPS
