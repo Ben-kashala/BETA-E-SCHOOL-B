@@ -552,12 +552,12 @@ def generate_bulletin_rdc_pdf(report_card):
         ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
 
-    eleve_line = f"{(full_name, 30)} SEXE : {(sex_label, 6)}"
-    naissance_line = f"{(place_of_birth, 20)} LE {dob_str}"
+    eleve_line = _dots(full_name, 30) + " SEXE : " + _dots(sex_label, 6)
+    naissance_line = _dots(place_of_birth, 20) + " LE " + (dob_str or "")
     info_data = [
-        ["VILLE :", (city, 46), "ELEVE :", eleve_line],
-        ["COMMUNE /TER (1) :",(commune, 40), "NE (E) A :", naissance_line],
-        ["ECOLE :", (school_name, 42), "CLASSE :", (classe, 30)],
+        ["VILLE :", _dots(city, 46), "ELEVE :", eleve_line],
+        ["COMMUNE /TER (1) :", _dots(commune, 40), "NE (E) A :", naissance_line],
+        ["ECOLE :", _dots(school_name, 42), "CLASSE :", _dots(classe, 30)],
         ["CODE :", code_boxes, "N° PERM.", perm_boxes],
     ]
     info_table = Table(
