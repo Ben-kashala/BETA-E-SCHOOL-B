@@ -327,7 +327,7 @@ def generate_bulletin_rdc_pdf(report_card):
     from reportlab.lib.styles import ParagraphStyle
 
     buffer = BytesIO()
-    margin_pt = 0.5 * inch
+    margin_pt = 0.32 * inch
     watermark_path = _bulletin_logo_path("Armoirie.png") or _bulletin_logo_path("rdc_arms.png")
 
     def _make_border_canvas(margin):
@@ -376,8 +376,8 @@ def generate_bulletin_rdc_pdf(report_card):
         "title_main",
         parent=styles["Normal"],
         alignment=TA_CENTER,
-        fontSize=11,
-        leading=12,
+        fontSize=10,
+        leading=11,
         fontName="Helvetica-Bold",
         textColor=colors.black,
         spaceBefore=0,
@@ -387,8 +387,8 @@ def generate_bulletin_rdc_pdf(report_card):
         "title_sub",
         parent=styles["Normal"],
         alignment=TA_CENTER,
-        fontSize=9,
-        leading=10,
+        fontSize=8,
+        leading=9,
         fontName="Helvetica-Bold",
         textColor=colors.black,
         spaceBefore=0,
@@ -397,7 +397,7 @@ def generate_bulletin_rdc_pdf(report_card):
     style_small = ParagraphStyle(
         "small",
         parent=styles["Normal"],
-        fontSize=7,
+        fontSize=6.4,
     )
     story = []
 
@@ -412,7 +412,7 @@ def generate_bulletin_rdc_pdf(report_card):
     code_ecole = getattr(school, "code", "") if school else ""
 
     # ----- EN-TÊTE : Drapeau gauche, 3 lignes centrées, Armoiries droite -----
-    logo_w, logo_h = 1.15 * inch, 0.85 * inch
+    logo_w, logo_h = 1.05 * inch, 0.78 * inch
     left_logo_path = (
         _bulletin_logo_path("Drapeau.png")
         or _bulletin_logo_path("drapeau_RDC.png")
@@ -450,8 +450,8 @@ def generate_bulletin_rdc_pdf(report_card):
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("LEFTPADDING", (0, 0), (-1, -1), 4),
         ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
         ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#dce8f5")),
         ("BOX", (0, 0), (-1, -1), 0.5, colors.black),
     ]))
@@ -461,10 +461,10 @@ def generate_bulletin_rdc_pdf(report_card):
     line_table.setStyle(TableStyle([
         ("LINEABOVE", (0, 0), (-1, -1), 1, colors.black),
         ("TOPPADDING", (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
     ]))
     story.append(line_table)
-    story.append(Spacer(1, 4))
+    story.append(Spacer(1, 1))
 
     # ----- BLOC INFOS : structure du modèle officiel -----
     full_name = user.get_full_name() or ""
@@ -476,10 +476,12 @@ def generate_bulletin_rdc_pdf(report_card):
     n_perm = student.student_id or ""
 
     id_cells = ["N° ID."] + [""] * 22
-    id_table = Table([id_cells], colWidths=[0.55 * inch] + [0.28 * inch] * 22)
+    id_table = Table([id_cells], colWidths=[0.52 * inch] + [0.272 * inch] * 22)
     id_table.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.25, colors.black),
-        ("FONTSIZE", (0, 0), (-1, -1), 7),
+        ("FONTSIZE", (0, 0), (-1, -1), 6.2),
+        ("TOPPADDING", (0, 0), (-1, -1), 1),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
         ("FONTNAME", (0, 0), (0, 0), "Helvetica-Bold"),
     ]))
     story.append(id_table)
@@ -490,9 +492,11 @@ def generate_bulletin_rdc_pdf(report_card):
     )
     province_table.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.25, colors.black),
-        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("FONTSIZE", (0, 0), (-1, -1), 6.8),
         ("FONTNAME", (0, 0), (0, 0), "Helvetica-Bold"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 3),
+        ("LEFTPADDING", (0, 0), (-1, -1), 2),
+        ("TOPPADDING", (0, 0), (-1, -1), 1),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
     ]))
     story.append(province_table)
 
@@ -504,20 +508,22 @@ def generate_bulletin_rdc_pdf(report_card):
     ]
     info_table = Table(
         info_data,
-        colWidths=[1.25 * inch, 2.05 * inch, 1.0 * inch, 1.9 * inch, 0.6 * inch, 0.9 * inch],
+        colWidths=[1.22 * inch, 2.0 * inch, 0.95 * inch, 1.84 * inch, 0.58 * inch, 0.9 * inch],
     )
     info_table.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.25, colors.black),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("FONTSIZE", (0, 0), (-1, -1), 7),
+        ("FONTSIZE", (0, 0), (-1, -1), 6.2),
         ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
         ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
         ("FONTNAME", (4, 0), (4, -1), "Helvetica-Bold"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 3),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+        ("LEFTPADDING", (0, 0), (-1, -1), 2),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+        ("TOPPADDING", (0, 0), (-1, -1), 1),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
     ]))
     story.append(info_table)
-    story.append(Spacer(1, 3))
+    story.append(Spacer(1, 1))
 
     # ----- TITRE : BULLETIN DE LA ... ANNEE SCOLAIRE ... (encadré bordure noire fine) -----
     titre_bulletin = f"BULLETIN DE LA 1ère ANNEE DES HUMANITES SCIENTIFIQUES    ANNEE SCOLAIRE {report_card.academic_year or '2024 - 2025'}"
@@ -525,11 +531,11 @@ def generate_bulletin_rdc_pdf(report_card):
         "bulletin_titre",
         parent=styles["Normal"],
         alignment=TA_CENTER,
-        fontSize=9,
-        leading=10,
+        fontSize=8,
+        leading=8.6,
         fontName="Helvetica-Bold",
-        spaceBefore=6,
-        spaceAfter=6,
+        spaceBefore=2,
+        spaceAfter=2,
     )
     titre_para = Paragraph(f"<b>{titre_bulletin}</b>", style_titre)
     titre_wrapper = Table([[titre_para]], colWidths=[7 * inch])
@@ -540,7 +546,7 @@ def generate_bulletin_rdc_pdf(report_card):
         ("BACKGROUND", (0, 0), (-1, -1), colors.white),
     ]))
     story.append(titre_wrapper)
-    story.append(Spacer(1, 5))
+    story.append(Spacer(1, 2))
 
     # ----- TABLEAU DES NOTES (structure officielle : 14 colonnes, 3 niveaux d'en-têtes) -----
     # Colonnes : BRANCHES | PREMIER SEMESTRE (MAX., TRAVAUX JOURNAL. 1ère P./2è P., MAX. EXAM., TOTAL) | SECOND (3è P./4è P., idem) | TOTAL GENERAL | EXAMEN DE REPECHAGE (%, Sign. Prof.)
@@ -648,10 +654,11 @@ def generate_bulletin_rdc_pdf(report_card):
         if g_ctx:
             g, cs = g_ctx
             max_p = max_p or (getattr(cs, "period_max", None) or 20)
+            max_exam = max_p * 2
             return [
                 label,
-                str(int(max_p)), val(g.s1_p1), val(g.s1_p2), val(g.s1_exam), val(g.total_s1),
-                str(int(max_p)), val(g.s2_p3), val(g.s2_p4), val(g.s2_exam), val(g.total_s2),
+                str(int(max_p)), val(g.s1_p1), val(g.s1_p2), str(int(max_exam)), val(g.total_s1),
+                str(int(max_p)), val(g.s2_p3), val(g.s2_p4), str(int(max_exam)), val(g.total_s2),
                 val(g.total_general),
                 val(g.reclamation_score) or "", "",
             ]
@@ -702,11 +709,11 @@ def generate_bulletin_rdc_pdf(report_card):
             data_rows.append(row[:num_cols])
 
     col_widths = [
-        1.55 * inch,
-        0.35 * inch, 0.4 * inch, 0.35 * inch, 0.4 * inch, 0.38 * inch,
-        0.35 * inch, 0.4 * inch, 0.35 * inch, 0.4 * inch, 0.38 * inch,
-        0.45 * inch,
-        0.35 * inch, 0.4 * inch,
+        1.48 * inch,
+        0.33 * inch, 0.37 * inch, 0.33 * inch, 0.37 * inch, 0.35 * inch,
+        0.33 * inch, 0.37 * inch, 0.33 * inch, 0.37 * inch, 0.35 * inch,
+        0.42 * inch,
+        0.32 * inch, 0.38 * inch,
     ]
     table = Table(data_rows, colWidths=col_widths[:num_cols])
     tbl_style = [
@@ -722,7 +729,11 @@ def generate_bulletin_rdc_pdf(report_card):
         ("ALIGN", (1, 0), (-1, -1), "CENTER"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("FONTNAME", (0, 0), (-1, 2), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 6),
+        ("FONTSIZE", (0, 0), (-1, -1), 5.6),
+        ("LEFTPADDING", (0, 0), (-1, -1), 1),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 1),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
         ("BACKGROUND", (0, 0), (-1, 0), HEADER_DARK),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
         ("BACKGROUND", (0, 1), (-1, 2), HEADER_LIGHT),
@@ -742,7 +753,7 @@ def generate_bulletin_rdc_pdf(report_card):
             tbl_style.append(("FONTNAME", (0, r), (-1, r), "Helvetica-Bold"))
     table.setStyle(TableStyle(tbl_style))
     story.append(table)
-    story.append(Spacer(1, 5))
+    story.append(Spacer(1, 2))
 
     # ----- SECTION RÉSUMÉ : gauche = MAXIMA, TOTAUX, POURCENTAGE, PLACE, APPLICATION, CONDUITE, SIGNATURE | droite = encadré - PASSE (1), - DOUBLE (1), LE..../....../20...., Chef d'Etablissement, Sceau de l'Ecole -----
     pct = ""
@@ -761,12 +772,16 @@ def generate_bulletin_rdc_pdf(report_card):
         ["CONDUITE", conduite],
         ["SIGNATURE", ""],
     ]
-    footer_left_table = Table(footer_left_data, colWidths=[1.8 * inch, 2.8 * inch])
+    footer_left_table = Table(footer_left_data, colWidths=[1.75 * inch, 2.75 * inch])
     footer_left_table.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.25, colors.black),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("FONTSIZE", (0, 0), (-1, -1), 7),
+        ("FONTSIZE", (0, 0), (-1, -1), 6.2),
         ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 2),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+        ("TOPPADDING", (0, 0), (-1, -1), 1),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
     ]))
     footer_right_cells = [
         "- PASSE (1)",
@@ -779,7 +794,7 @@ def generate_bulletin_rdc_pdf(report_card):
     footer_right_para = Paragraph(footer_right_text, style_small)
     footer_table = Table(
         [[footer_left_table, footer_right_para]],
-        colWidths=[4.6 * inch, 2.2 * inch],
+        colWidths=[4.5 * inch, 2.1 * inch],
     )
     footer_table.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -789,7 +804,7 @@ def generate_bulletin_rdc_pdf(report_card):
         ("BACKGROUND", (1, 0), (1, 0), colors.white),
     ]))
     story.append(footer_table)
-    story.append(Spacer(1, 6))
+    story.append(Spacer(1, 2))
 
     # ----- DÉCISIONS ET MENTIONS LÉGALES (ordre comme capture 2) -----
     story.append(Paragraph(
@@ -798,7 +813,7 @@ def generate_bulletin_rdc_pdf(report_card):
     ))
     story.append(Paragraph("- L'élève passe dans la classe supérieure (1)", style_small))
     story.append(Paragraph("- L'élève double la classe (1)", style_small))
-    story.append(Spacer(1, 5))
+    story.append(Spacer(1, 2))
     # Ligne signatures : gauche Signature de l'élève, centre Sceau de l'Ecole, droite Fait à ... le....../....../20......
     sig_line = Table([
         [
@@ -806,21 +821,21 @@ def generate_bulletin_rdc_pdf(report_card):
             Paragraph("<b>Sceau de l'Ecole</b>", style_small),
             Paragraph(f"Fait à {city or '..............................................'} le....../....../20......", style_small),
         ]
-    ], colWidths=[2.2 * inch, 2.2 * inch, 2.6 * inch])
+    ], colWidths=[2.15 * inch, 2.1 * inch, 2.35 * inch])
     sig_line.setStyle(TableStyle([
         ("ALIGN", (0, 0), (0, 0), "LEFT"),
         ("ALIGN", (1, 0), (1, 0), "CENTER"),
         ("ALIGN", (2, 0), (2, 0), "RIGHT"),
     ]))
     story.append(sig_line)
-    story.append(Spacer(1, 4))
+    story.append(Spacer(1, 2))
     story.append(Paragraph("(1) Biffer la mention inutile.", style_small))
     story.append(Paragraph("Note importante : Le bulletin est sans valeur s'il est raturé ou surchargé.", style_small))
     story.append(Paragraph(
         "<b>Interdiction formelle de reproduire ce bulletin sous peine des sanctions prévues par la loi.</b>",
         style_small,
     ))
-    story.append(Spacer(1, 4))
+    story.append(Spacer(1, 1))
     # En bas à droite : Chef d'Etablissement, puis IGE/P.S./012 en dessous
     story.append(Paragraph("<b>Chef d'Etablissement,</b>", ParagraphStyle("right", parent=style_small, alignment=2)))
     story.append(Paragraph("IGE/P.S./012", ParagraphStyle("right2", parent=style_small, alignment=2)))
