@@ -421,17 +421,13 @@ def generate_bulletin_rdc_pdf(report_card):
     code_ecole = getattr(school, "code", "") if school else ""
 
     # ----- EN-TÊTE : Drapeau gauche, 3 lignes centrées, Armoiries droite -----
-    logo_w, logo_h = 1.1 * inch, 0.76 * inch
+    logo_w, logo_h = 0.95 * inch, 0.64 * inch
     left_logo_path = (
         _bulletin_logo_path("Drapeau.png")
         or _bulletin_logo_path("drapeau_RDC.png")
         or _bulletin_logo_path("rdc_flag.png")
     )
-    right_logo_path = (
-        _bulletin_logo_path("Armoirie.png")
-        or _bulletin_logo_path("armoiries_RDC.png")
-        or _bulletin_logo_path("rdc_arms.png")
-    )
+    right_logo_path = _bulletin_logo_path("Armoirie.png") or _bulletin_logo_path("rdc_arms.png")
 
     def _logo_or_spacer(path):
         if path:
@@ -459,8 +455,8 @@ def generate_bulletin_rdc_pdf(report_card):
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("LEFTPADDING", (0, 0), (-1, -1), 4),
         ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
         ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#dce8f5")),
         ("BOX", (0, 0), (-1, -1), 0.5, colors.black),
     ]))
@@ -475,7 +471,7 @@ def generate_bulletin_rdc_pdf(report_card):
     story.append(line_table)
     story.append(Spacer(1, 0))
 
-    # ----- BLOC INFOS : structure du modèle officiel -----
+    # ----- BLOC INFOS : structure visuelle identique au bulletin officiel -----
     full_name = user.get_full_name() or ""
     classe = student.school_class.name if student.school_class else "1ère ANNEE DES HUMANITES SCIENTIFIQUES"
     dob = getattr(user, "date_of_birth", None)
@@ -483,6 +479,13 @@ def generate_bulletin_rdc_pdf(report_card):
     sex_label = "M" if getattr(student, "gender", None) == "M" else "F" if getattr(student, "gender", None) == "F" else "........"
     place_of_birth = getattr(student, "place_of_birth", None) or ""
     n_perm = student.student_id or ""
+
+    def _dots(value, total=42):
+        txt = (value or "").strip()
+        if txt:
+            n = max(8, total - len(txt))
+            return f"{txt}{'.' * n}"
+        return "." * total
 
     id_cells = ["N° ID."] + [""] * 22
     id_label_w = 0.55 * inch
@@ -498,7 +501,7 @@ def generate_bulletin_rdc_pdf(report_card):
     story.append(id_table)
 
     province_table = Table(
-        [["PROVINCE EDUCATIONNELLE :", province]],
+        [["PROVINCE EDUCATIONNELLE :", _dots(province, 72)]],
         colWidths=[2.35 * inch, full_w - 2.35 * inch],
     )
     province_table.setStyle(TableStyle([
@@ -511,25 +514,46 @@ def generate_bulletin_rdc_pdf(report_card):
     ]))
     story.append(province_table)
 
+    left_label_w = 1.15 * inch
+    left_value_w = 2.6 * inch
+    right_label_w = 1.35 * inch
+    right_value_w = full_w - (left_label_w + left_value_w + right_label_w)
+
+    code_boxes_count = 9
+    perm_boxes_count = 13
+    code_boxes = Table([[""] * code_boxes_count], colWidths=[left_value_w / code_boxes_count] * code_boxes_count)
+    code_boxes.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.black),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    perm_boxes = Table([[""] * perm_boxes_count], colWidths=[right_value_w / perm_boxes_count] * perm_boxes_count)
+    perm_boxes.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.black),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+
+    eleve_line = f"{_dots(full_name, 30)} SEXE : {_dots(sex_label, 6)}"
+    naissance_line = f"{_dots(place_of_birth, 20)} LE {dob_str}"
     info_data = [
-        ["VILLE :", city, "ELEVE :", full_name, "SEXE :", sex_label],
-        ["COMMUNE /TER (1) :", commune, "NE (E) A :", place_of_birth, "LE", dob_str],
-        ["ECOLE :", school_name, "CLASSE :", classe, "", ""],
-        ["CODE :", code_ecole, "N° PERM.", n_perm, "", ""],
+        ["VILLE :", _dots(city, 46), "ELEVE :", eleve_line],
+        ["COMMUNE /TER (1) :", _dots(commune, 40), "NE (E) A :", naissance_line],
+        ["ECOLE :", _dots(school_name, 42), "CLASSE :", _dots(classe, 30)],
+        ["CODE :", code_boxes, "N° PERM.", perm_boxes],
     ]
     info_table = Table(
         info_data,
-        colWidths=_fit_widths([1.22 * inch, 2.0 * inch, 0.95 * inch, 1.84 * inch, 0.58 * inch, 0.9 * inch]),
+        colWidths=[left_label_w, left_value_w, right_label_w, right_value_w],
     )
     info_table.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.25, colors.black),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("FONTSIZE", (0, 0), (-1, -1), 6.2),
+        ("FONTSIZE", (0, 0), (-1, -1), 6.1),
         ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
         ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
-        ("FONTNAME", (4, 0), (4, -1), "Helvetica-Bold"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 2),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+        ("LEFTPADDING", (0, 0), (-1, -1), 1.5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 1.5),
         ("TOPPADDING", (0, 0), (-1, -1), 1),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
     ]))
@@ -575,8 +599,8 @@ def generate_bulletin_rdc_pdf(report_card):
     ]
     header_row2 = [
         "",
-        "MAX.", "TRAVAUX JOURNAL.", "", "MAX. EXAM.", "TOTAL",
-        "MAX.", "TRAVAUX JOURNAL.", "", "MAX. EXAM.", "TOTAL",
+        "MAX.", "TRAVAUX\nJOURNAL.", "", "MAX. EXAM.", "TOTAL",
+        "MAX.", "TRAVAUX\nJOURNAL.", "", "MAX. EXAM.", "TOTAL",
         "",
         "%", "Sign. Prof.",
     ]
@@ -726,7 +750,7 @@ def generate_bulletin_rdc_pdf(report_card):
         0.42 * inch,
         0.32 * inch, 0.38 * inch,
     ])
-    row_heights = [0.18 * inch, 0.18 * inch, 0.14 * inch] + [None] * (len(data_rows) - 3)
+    row_heights = [0.2 * inch, 0.2 * inch, 0.16 * inch] + [None] * (len(data_rows) - 3)
     table = Table(data_rows, colWidths=col_widths[:num_cols], rowHeights=row_heights)
     tbl_style = [
         ("SPAN", (0, 0), (0, 2)),
@@ -736,24 +760,27 @@ def generate_bulletin_rdc_pdf(report_card):
         ("SPAN", (12, 0), (13, 0)),
         ("SPAN", (2, 1), (3, 1)),
         ("SPAN", (7, 1), (8, 1)),
-        ("GRID", (0, 0), (-1, -1), 0.25, colors.black),
+        ("GRID", (0, 0), (-1, -1), 0.35, colors.black),
+        ("LINEBEFORE", (12, 0), (12, -1), 1.0, colors.black),
         ("ALIGN", (0, 0), (0, -1), "LEFT"),
         ("ALIGN", (1, 0), (-1, -1), "CENTER"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("FONTNAME", (0, 0), (-1, 2), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 5.2),
+        ("FONTSIZE", (0, 0), (-1, -1), 6.0),
         ("LEFTPADDING", (0, 0), (-1, -1), 1),
         ("RIGHTPADDING", (0, 0), (-1, -1), 1),
         ("TOPPADDING", (0, 0), (-1, -1), 0),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-        ("BACKGROUND", (0, 0), (-1, 0), HEADER_DARK),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
-        ("BACKGROUND", (0, 1), (-1, 2), HEADER_LIGHT),
+        ("BACKGROUND", (0, 0), (-1, 2), colors.white),
+        ("TEXTCOLOR", (0, 0), (-1, 2), colors.black),
     ]
     # Lignes "Sous - Total" en gras
     for r in range(3, len(data_rows)):
         if len(data_rows[r]) and data_rows[r][0] == "Sous - Total":
             tbl_style.append(("FONTNAME", (0, r), (-1, r), "Helvetica-Bold"))
+            # Sur le modèle officiel, les colonnes d'examen de repêchage sont barrées en noir
+            tbl_style.append(("BACKGROUND", (12, r), (13, r), colors.black))
+            tbl_style.append(("TEXTCOLOR", (12, r), (13, r), colors.white))
     # Lignes domaine / sous-domaine en bandeau bleu clair
     for r in range(3, len(data_rows)):
         cell0 = (data_rows[r][0] if data_rows[r] else "").strip()
@@ -763,6 +790,7 @@ def generate_bulletin_rdc_pdf(report_card):
             tbl_style.append(("BACKGROUND", (0, r), (-1, r), HEADER_DARK))
             tbl_style.append(("TEXTCOLOR", (0, r), (-1, r), colors.black))
             tbl_style.append(("FONTNAME", (0, r), (-1, r), "Helvetica-Bold"))
+            tbl_style.append(("LINEABOVE", (0, r), (-1, r), 0.8, colors.black))
     table.setStyle(TableStyle(tbl_style))
     story.append(table)
     story.append(Spacer(1, 0))
@@ -824,21 +852,56 @@ def generate_bulletin_rdc_pdf(report_card):
     ))
     story.append(Paragraph("- L'élève passe dans la classe supérieure (1)", style_small))
     story.append(Paragraph("- L'élève double la classe (1)", style_small))
-    story.append(Spacer(1, 2))
+    story.append(Spacer(1, 1))
     story.append(Paragraph("……………………………………………………………………………………………………............................................................................................................................(1)", style_small))
-    story.append(Spacer(1, 0))
+    story.append(Spacer(1, 1))
+    sig_line = Table(
+        [[
+            Paragraph("Signature de l'élève", style_small),
+            Paragraph("Sceau de l'Ecole", ParagraphStyle("seal_center", parent=style_small, alignment=1)),
+            Paragraph(f"Fait à {city or '………………………………………'}, le……..…/…………/20……..", ParagraphStyle("fait_center", parent=style_small, alignment=1)),
+        ]],
+        colWidths=_fit_widths([2.1 * inch, 1.9 * inch, 3.0 * inch]),
+    )
+    sig_line.setStyle(TableStyle([
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
+    ]))
+    story.append(sig_line)
+    story.append(Spacer(1, 1))
     story.append(Paragraph("(1) Biffer la mention inutile.", style_small))
     story.append(Paragraph("Note importante : Le bulletin est sans valeur s'il est raturé ou surchargé.", style_small))
-    story.append(Paragraph("IGE/P.S./012", style_small))
-    story.append(Paragraph(
-        "<b>Interdiction formelle de reproduire ce bulletin sous peine des sanctions prévues par la loi.</b>",
-        style_small,
-    ))
-    story.append(Spacer(1, 1))
-    story.append(Paragraph("Sceau de l'Ecole", style_small))
-    story.append(Paragraph(f"Fait à {city or '………………………………………'}, le……..…/…………/20……..", style_small))
-    story.append(Paragraph("Chef d'Etablissement,", ParagraphStyle("right3", parent=style_small, alignment=2)))
-    story.append(Paragraph("Signature de l'élève", style_small))
+    chef_line = Table(
+        [[
+            Paragraph("", style_small),
+            Paragraph("Chef d'Etablissement,", ParagraphStyle("chef_right", parent=style_small, alignment=2)),
+        ]],
+        colWidths=_fit_widths([4.9 * inch, 2.1 * inch]),
+    )
+    chef_line.setStyle(TableStyle([
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    story.append(chef_line)
+    interdiction_line = Table(
+        [[
+            Paragraph("<b><i>Interdiction formelle de reproduire ce bulletin sous peine des sanctions prévues par la loi.</i></b>", style_small),
+            Paragraph("<b><i>IGE/P.S./012</i></b>", ParagraphStyle("ige_right", parent=style_small, alignment=2)),
+        ]],
+        colWidths=_fit_widths([5.85 * inch, 1.15 * inch]),
+    )
+    interdiction_line.setStyle(TableStyle([
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    story.append(interdiction_line)
 
     doc.build(story)
     buffer.seek(0)
