@@ -474,10 +474,27 @@ def generate_bulletin_rdc_pdf(report_card):
     # ----- BLOC INFOS : structure visuelle identique au bulletin officiel -----
     full_name = user.get_full_name() or ""
     classe = student.school_class.name if student.school_class else "1ère ANNEE DES HUMANITES SCIENTIFIQUES"
-    dob = getattr(user, "date_of_birth", None)
-    dob_str = dob.strftime("%d/%m/%Y") if dob else "....../....../.........."
+    dob = getattr(user, "date_of_birth", None) or getattr(student, "date_of_birth", None)
     sex_label = "M" if getattr(student, "gender", None) == "M" else "F" if getattr(student, "gender", None) == "F" else "........"
-    place_of_birth = getattr(student, "place_of_birth", None) or ""
+    place_of_birth = getattr(student, "place_of_birth", None) or getattr(user, "place_of_birth", None) or ""
+    if not dob or not place_of_birth:
+        try:
+            from apps.enrollment.models import EnrollmentApplication
+
+            app = (
+                EnrollmentApplication.objects.filter(generated_student_id=student.student_id)
+                .order_by("-created_at")
+                .first()
+            )
+            if app:
+                if not dob:
+                    dob = getattr(app, "date_of_birth", None)
+                if not place_of_birth:
+                    place_of_birth = getattr(app, "place_of_birth", "") or ""
+        except Exception:
+            # Le bulletin continue même si le module enrollment n'est pas disponible.
+            pass
+    dob_str = dob.strftime("%d/%m/%Y") if dob else "....../....../.........."
     n_perm = student.student_id or ""
 
     def _dots(value, total=42):
@@ -537,8 +554,8 @@ def generate_bulletin_rdc_pdf(report_card):
     eleve_line = f"{_dots(full_name, 30)} SEXE : {_dots(sex_label, 6)}"
     naissance_line = f"{_dots(place_of_birth, 20)} LE {dob_str}"
     info_data = [
-        ["VILLE :", _dots(city, 46), "ELEVE :", eleve_line],
-        ["COMMUNE /TER (1) :", _dots(commune, 40), "NE (E) A :", naissance_line],
+        ["VILLE :", (city, 46), "ELEVE :", eleve_line],
+        ["COMMUNE /TER (1) :",(commune, 40), "NE (E) A :", naissance_line],
         ["ECOLE :", _dots(school_name, 42), "CLASSE :", _dots(classe, 30)],
         ["CODE :", code_boxes, "N° PERM.", perm_boxes],
     ]
@@ -583,32 +600,37 @@ def generate_bulletin_rdc_pdf(report_card):
     story.append(titre_wrapper)
     story.append(Spacer(1, 0))
 
-    # ----- TABLEAU DES NOTES (structure officielle : 14 colonnes, 3 niveaux d'en-têtes) -----
-    # Colonnes : BRANCHES | PREMIER SEMESTRE (MAX., TRAVAUX JOURNAL. 1ère P./2è P., MAX. EXAM., TOTAL) | SECOND (3è P./4è P., idem) | TOTAL GENERAL | EXAMEN DE REPECHAGE (%, Sign. Prof.)
+    # ----- TABLEAU DES NOTES (structure officielle : 19 colonnes, 3 niveaux d'en-têtes) -----
+    # Colonnes réelles:
+    # BRANCHES (1) |
+    # S1 (7): MAX | 1ère P. | 2e P. | MAX.EXAM (2 colonnes) | TOTAL (2 colonnes) |
+    # S2 (7): MAX | 3e P. | 4e P. | MAX.EXAM (2 colonnes) | TOTAL (2 colonnes) |
+    # TOTAL GENERAL (2 colonnes) |
+    # EXAMEN DE REPECHAGE (2 colonnes: %, Sign. Prof.)
     HEADER_DARK = colors.HexColor("#dce8f5")
     HEADER_LIGHT = colors.HexColor("#f3f7fd")
     SOUS_TOTAL_BG = None
 
-    num_cols = 14
+    num_cols = 19
     header_row1 = [
         "BRANCHES",
-        "PREMIER SEMESTRE", "", "", "", "",
-        "SECOND SEMESTRE", "", "", "", "",
-        "TOTAL\nGENERAL",
+        "PREMIER SEMESTRE", "", "", "", "", "", "",
+        "SECOND SEMESTRE", "", "", "", "", "", "",
+        "TOTAL\nGENERAL", "",
         "EXAMEN DE REPECHAGE", "",
     ]
     header_row2 = [
         "",
-        "MAX.", "TRAVAUX\nJOURNAL.", "", "MAX. EXAM.", "TOTAL",
-        "MAX.", "TRAVAUX\nJOURNAL.", "", "MAX. EXAM.", "TOTAL",
-        "",
+        "MAX.", "TRAVAUX\nJOURNAL.", "", "MAX. EXAM.", "", "TOTAL", "",
+        "MAX.", "TRAVAUX\nJOURNAL.", "", "MAX. EXAM.", "", "TOTAL", "",
+        "", "",
         "%", "Sign. Prof.",
     ]
     header_row3 = [
         "",
-        "", "1ère P.", "2e P.", "", "",
-        "", "3e P.", "4e P.", "", "",
-        "", "", "",
+        "", "1ère P.", "2e P.", "", "", "", "",
+        "", "3e P.", "4e P.", "", "", "", "",
+        "", "", "", "",
     ]
     header_row1 = header_row1[:num_cols]
     header_row2 = header_row2[:num_cols]
@@ -692,9 +714,9 @@ def generate_bulletin_rdc_pdf(report_card):
             max_exam = max_p * 2
             return [
                 label,
-                str(int(max_p)), val(g.s1_p1), val(g.s1_p2), str(int(max_exam)), val(g.total_s1),
-                str(int(max_p)), val(g.s2_p3), val(g.s2_p4), str(int(max_exam)), val(g.total_s2),
-                val(g.total_general),
+                str(int(max_p)), val(g.s1_p1), val(g.s1_p2), str(int(max_exam)), "", val(g.total_s1), "",
+                str(int(max_p)), val(g.s2_p3), val(g.s2_p4), str(int(max_exam)), "", val(g.total_s2), "",
+                val(g.total_general), "",
                 val(g.reclamation_score) or "", "",
             ]
         if max_p is not None:
@@ -703,9 +725,9 @@ def generate_bulletin_rdc_pdf(report_card):
             tot_gen = max_p * 8
             return [
                 label,
-                str(int(max_p)), "", "", str(int(max_exam)), str(int(total_s)),
-                str(int(max_p)), "", "", str(int(max_exam)), str(int(total_s)),
-                str(int(tot_gen)), "", "",
+                str(int(max_p)), "", "", str(int(max_exam)), "", str(int(total_s)), "",
+                str(int(max_p)), "", "", str(int(max_exam)), "", str(int(total_s)), "",
+                str(int(tot_gen)), "", "", "",
             ]
         return [label] + [""] * (num_cols - 1)
 
@@ -724,9 +746,9 @@ def generate_bulletin_rdc_pdf(report_card):
                 m1, e1, t1, m2, e2, t2, tg = max_p[0], max_p[1], max_p[2], max_p[3], max_p[4], max_p[5], max_p[6]
                 row = [
                     "Sous - Total",
-                    str(m1), "", "", str(e1), str(t1),
-                    str(m2), "", "", str(e2), str(t2),
-                    str(tg), "", "",
+                    str(m1), "", "", str(e1), "", str(t1), "",
+                    str(m2), "", "", str(e2), "", str(t2), "",
+                    str(tg), "", "", "",
                 ]
             else:
                 row = ["Sous - Total"] + [""] * (num_cols - 1)
@@ -744,24 +766,29 @@ def generate_bulletin_rdc_pdf(report_card):
             data_rows.append(row[:num_cols])
 
     col_widths = _fit_widths([
-        1.48 * inch,
-        0.33 * inch, 0.37 * inch, 0.33 * inch, 0.37 * inch, 0.35 * inch,
-        0.33 * inch, 0.37 * inch, 0.33 * inch, 0.37 * inch, 0.35 * inch,
-        0.42 * inch,
-        0.32 * inch, 0.38 * inch,
+        1.48 * inch,  # BRANCHES
+        0.30 * inch, 0.33 * inch, 0.33 * inch, 0.31 * inch, 0.31 * inch, 0.31 * inch, 0.31 * inch,  # S1 (7)
+        0.30 * inch, 0.33 * inch, 0.33 * inch, 0.31 * inch, 0.31 * inch, 0.31 * inch, 0.31 * inch,  # S2 (7)
+        0.33 * inch, 0.33 * inch,  # TOTAL GENERAL (2)
+        0.32 * inch, 0.38 * inch,  # REPECHAGE (2)
     ])
     row_heights = [0.2 * inch, 0.2 * inch, 0.16 * inch] + [None] * (len(data_rows) - 3)
     table = Table(data_rows, colWidths=col_widths[:num_cols], rowHeights=row_heights)
     tbl_style = [
         ("SPAN", (0, 0), (0, 2)),
-        ("SPAN", (1, 0), (5, 0)),
-        ("SPAN", (6, 0), (10, 0)),
-        ("SPAN", (11, 0), (11, 2)),
-        ("SPAN", (12, 0), (13, 0)),
+        ("SPAN", (1, 0), (7, 0)),
+        ("SPAN", (8, 0), (14, 0)),
+        ("SPAN", (15, 0), (16, 1)),
+        ("SPAN", (17, 0), (18, 0)),
         ("SPAN", (2, 1), (3, 1)),
-        ("SPAN", (7, 1), (8, 1)),
+        ("SPAN", (4, 1), (5, 1)),
+        ("SPAN", (6, 1), (7, 1)),
+        ("SPAN", (9, 1), (10, 1)),
+        ("SPAN", (11, 1), (12, 1)),
+        ("SPAN", (13, 1), (14, 1)),
+        ("SPAN", (15, 2), (16, 2)),
         ("GRID", (0, 0), (-1, -1), 0.35, colors.black),
-        ("LINEBEFORE", (12, 0), (12, -1), 1.0, colors.black),
+        ("LINEBEFORE", (17, 0), (17, -1), 1.0, colors.black),
         ("ALIGN", (0, 0), (0, -1), "LEFT"),
         ("ALIGN", (1, 0), (-1, -1), "CENTER"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -779,14 +806,17 @@ def generate_bulletin_rdc_pdf(report_card):
         if len(data_rows[r]) and data_rows[r][0] == "Sous - Total":
             tbl_style.append(("FONTNAME", (0, r), (-1, r), "Helvetica-Bold"))
             # Sur le modèle officiel, les colonnes d'examen de repêchage sont barrées en noir
-            tbl_style.append(("BACKGROUND", (12, r), (13, r), colors.black))
-            tbl_style.append(("TEXTCOLOR", (12, r), (13, r), colors.white))
+            tbl_style.append(("BACKGROUND", (17, r), (18, r), colors.black))
+            tbl_style.append(("TEXTCOLOR", (17, r), (18, r), colors.white))
     # Lignes domaine / sous-domaine en bandeau bleu clair
     for r in range(3, len(data_rows)):
         cell0 = (data_rows[r][0] if data_rows[r] else "").strip()
         if cell0 and cell0 != "Sous - Total" and (
             cell0.startswith("DOMAINE") or cell0.startswith("Sous-domaine")
         ):
+            # Domaine / Sous-domaine en ligne unique centrée sur toute la largeur
+            tbl_style.append(("SPAN", (0, r), (18, r)))
+            tbl_style.append(("ALIGN", (0, r), (18, r), "CENTER"))
             tbl_style.append(("BACKGROUND", (0, r), (-1, r), HEADER_DARK))
             tbl_style.append(("TEXTCOLOR", (0, r), (-1, r), colors.black))
             tbl_style.append(("FONTNAME", (0, r), (-1, r), "Helvetica-Bold"))
@@ -812,7 +842,7 @@ def generate_bulletin_rdc_pdf(report_card):
         ["CONDUITE", conduite],
         ["SIGNATURE", ""],
     ]
-    footer_right_w = 2.02 * inch
+    footer_right_w = 1.95 * inch
     footer_left_w = full_w - footer_right_w
     footer_left_table = Table(footer_left_data, colWidths=[1.72 * inch, footer_left_w - 1.72 * inch])
     footer_left_table.setStyle(TableStyle([
@@ -825,20 +855,22 @@ def generate_bulletin_rdc_pdf(report_card):
         ("TOPPADDING", (0, 0), (-1, -1), 1),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
     ]))
-    footer_right_cells = [
-        "- PASSE (1)",
-        "- DOUBLE (1)",
-        "LE..../....../20....",
-        "Chef d'Etablissement",
-        "Sceau de l'Ecole",
-    ]
-    footer_right_text = "\n<br/>\n".join(footer_right_cells)
-    footer_right_para = Paragraph(footer_right_text, style_small)
+    footer_right_style = ParagraphStyle("footer_right_style", parent=style_small, fontSize=7, leading=8)
+    footer_right_text = (
+        "- PASSE (1)<br/>"
+        "- DOUBLE (1)<br/>"
+        "LE..../....../20....<br/>"
+        "Chef d'Etablissement<br/>"
+        "Sceau de l'Ecole"
+    )
+    footer_right_para = Paragraph(footer_right_text, footer_right_style)
     footer_table = Table([[footer_left_table, footer_right_para]], colWidths=[footer_left_w, footer_right_w])
     footer_table.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (0, 0), 0),
-        ("LEFTPADDING", (1, 0), (1, 0), 6),
+        ("LEFTPADDING", (1, 0), (1, 0), 4),
+        ("RIGHTPADDING", (1, 0), (1, 0), 2),
+        ("TOPPADDING", (1, 0), (1, 0), 2),
         ("BOX", (1, 0), (1, 0), 0.5, colors.black),
         ("BACKGROUND", (1, 0), (1, 0), colors.white),
     ]))
@@ -852,8 +884,6 @@ def generate_bulletin_rdc_pdf(report_card):
     ))
     story.append(Paragraph("- L'élève passe dans la classe supérieure (1)", style_small))
     story.append(Paragraph("- L'élève double la classe (1)", style_small))
-    story.append(Spacer(1, 1))
-    story.append(Paragraph("……………………………………………………………………………………………………............................................................................................................................(1)", style_small))
     story.append(Spacer(1, 1))
     sig_line = Table(
         [[
@@ -871,7 +901,7 @@ def generate_bulletin_rdc_pdf(report_card):
         ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
     ]))
     story.append(sig_line)
-    story.append(Spacer(1, 1))
+    story.append(Spacer(1, 0))
     story.append(Paragraph("(1) Biffer la mention inutile.", style_small))
     story.append(Paragraph("Note importante : Le bulletin est sans valeur s'il est raturé ou surchargé.", style_small))
     chef_line = Table(
