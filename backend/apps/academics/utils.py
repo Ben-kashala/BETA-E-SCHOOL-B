@@ -328,14 +328,33 @@ def generate_bulletin_rdc_pdf(report_card):
 
     buffer = BytesIO()
     margin_pt = 0.5 * inch
+    watermark_path = _bulletin_logo_path("Armoirie.png") or _bulletin_logo_path("rdc_arms.png")
 
     def _make_border_canvas(margin):
         class BorderCanvas(canvas.Canvas):
             def showPage(self):
                 self.saveState()
+                w, h = self._pagesize
+                self.setFillColor(colors.HexColor("#eef6ff"))
+                self.rect(0, 0, w, h, stroke=0, fill=1)
+                if watermark_path and os.path.isfile(watermark_path):
+                    try:
+                        self.setFillAlpha(0.08)
+                        size = 3.2 * inch
+                        self.drawImage(
+                            watermark_path,
+                            (w - size) / 2,
+                            (h - size) / 2 - 0.5 * inch,
+                            width=size,
+                            height=size,
+                            preserveAspectRatio=True,
+                            mask="auto",
+                        )
+                        self.setFillAlpha(1)
+                    except Exception:
+                        pass
                 self.setStrokeColor(colors.black)
                 self.setLineWidth(1.5)
-                w, h = self._pagesize
                 m = margin
                 self.rect(m, m, w - 2 * m, h - 2 * m)
                 self.restoreState()
@@ -431,8 +450,10 @@ def generate_bulletin_rdc_pdf(report_card):
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("LEFTPADDING", (0, 0), (-1, -1), 4),
         ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#dce8f5")),
+        ("BOX", (0, 0), (-1, -1), 0.5, colors.black),
     ]))
     story.append(header_table)
     # Ligne horizontale fine noire sous l'en-tête (pleine largeur)
@@ -445,42 +466,61 @@ def generate_bulletin_rdc_pdf(report_card):
     story.append(line_table)
     story.append(Spacer(1, 4))
 
-    # ----- BLOC INFOS : 2 colonnes (gauche: N° ID., PROVINCE, VILLE, COMMUNE/TER, ECOLE, CODE | droite: ELEVE, SEXE, NE(E) A, LE, CLASSE, N° PERM.) -----
+    # ----- BLOC INFOS : structure du modèle officiel -----
     full_name = user.get_full_name() or ""
-    classe = student.school_class.name if student.school_class else ""
+    classe = student.school_class.name if student.school_class else "1ère ANNEE DES HUMANITES SCIENTIFIQUES"
     dob = getattr(user, "date_of_birth", None)
-    dob_str = dob.strftime("%d/%m/%Y") if dob else "…./…./………."
-    sex_label = "M" if getattr(student, "gender", None) == "M" else "F" if getattr(student, "gender", None) == "F" else "…"
+    dob_str = dob.strftime("%d/%m/%Y") if dob else "....../....../.........."
+    sex_label = "M" if getattr(student, "gender", None) == "M" else "F" if getattr(student, "gender", None) == "F" else "........"
     place_of_birth = getattr(student, "place_of_birth", None) or ""
     n_perm = student.student_id or ""
 
-    # Deux colonnes : gauche (N° ID., PROVINCE, VILLE, COMMUNE/TER, ECOLE, CODE) | droite (ELEVE, SEXE, NE (E) A, LE, CLASSE, N° PERM.)
+    id_cells = ["N° ID."] + [""] * 22
+    id_table = Table([id_cells], colWidths=[0.55 * inch] + [0.28 * inch] * 22)
+    id_table.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.black),
+        ("FONTSIZE", (0, 0), (-1, -1), 7),
+        ("FONTNAME", (0, 0), (0, 0), "Helvetica-Bold"),
+    ]))
+    story.append(id_table)
+
+    province_table = Table(
+        [["PROVINCE EDUCATIONNELLE :", province]],
+        colWidths=[2.35 * inch, 4.35 * inch],
+    )
+    province_table.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.black),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("FONTNAME", (0, 0), (0, 0), "Helvetica-Bold"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 3),
+    ]))
+    story.append(province_table)
+
     info_data = [
-        ["N° ID.", "", "ELEVE :", full_name],
-        ["PROVINCE EDUCATIONNELLE :", province, "SEXE :", sex_label],
-        ["VILLE :", city, "NE (E) A :", place_of_birth],
-        ["COMMUNE/TER (1) :", commune, "LE", dob_str],
-        ["ECOLE :", school_name, "CLASSE :", classe],
-        ["CODE :", code_ecole, "N° PERM.", n_perm],
+        ["VILLE :", city, "ELEVE :", full_name, "SEXE :", sex_label],
+        ["COMMUNE /TER (1) :", commune, "NE (E) A :", place_of_birth, "LE", dob_str],
+        ["ECOLE :", school_name, "CLASSE :", classe, "", ""],
+        ["CODE :", code_ecole, "N° PERM.", n_perm, "", ""],
     ]
     info_table = Table(
         info_data,
-        colWidths=[1.5 * inch, 2.3 * inch, 1.1 * inch, 2.2 * inch],
+        colWidths=[1.25 * inch, 2.05 * inch, 1.0 * inch, 1.9 * inch, 0.6 * inch, 0.9 * inch],
     )
     info_table.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.25, colors.black),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("FONTSIZE", (0, 0), (-1, -1), 7),
         ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
         ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
+        ("FONTNAME", (4, 0), (4, -1), "Helvetica-Bold"),
         ("LEFTPADDING", (0, 0), (-1, -1), 3),
         ("RIGHTPADDING", (0, 0), (-1, -1), 3),
     ]))
     story.append(info_table)
-    story.append(Spacer(1, 5))
+    story.append(Spacer(1, 3))
 
     # ----- TITRE : BULLETIN DE LA ... ANNEE SCOLAIRE ... (encadré bordure noire fine) -----
-    titre_bulletin = f"BULLETIN DE LA {classe or '1ère ANNEE DES HUMANITES SCIENTIFIQUES'}   ANNEE SCOLAIRE {report_card.academic_year or '2024 - 2025'}"
+    titre_bulletin = f"BULLETIN DE LA 1ère ANNEE DES HUMANITES SCIENTIFIQUES    ANNEE SCOLAIRE {report_card.academic_year or '2024 - 2025'}"
     style_titre = ParagraphStyle(
         "bulletin_titre",
         parent=styles["Normal"],
@@ -502,27 +542,36 @@ def generate_bulletin_rdc_pdf(report_card):
     story.append(titre_wrapper)
     story.append(Spacer(1, 5))
 
-    # ----- TABLEAU DES NOTES (structure officielle) -----
-    # Colonnes : BRANCHES | S1: 1ère P, 2e P, 3e P, 4e P, %, Sign., Prof., MAX., EXAM., TOTAL | S2: idem | TOTAL | EXAMEN DE REPECHAGE
-    num_cols = 23
+    # ----- TABLEAU DES NOTES (structure officielle : 14 colonnes, 3 niveaux d'en-têtes) -----
+    # Colonnes : BRANCHES | PREMIER SEMESTRE (MAX., TRAVAUX JOURNAL. 1ère P./2è P., MAX. EXAM., TOTAL) | SECOND (3è P./4è P., idem) | TOTAL GENERAL | EXAMEN DE REPECHAGE (%, Sign. Prof.)
+    HEADER_DARK = colors.HexColor("#dce8f5")
+    HEADER_LIGHT = colors.HexColor("#f3f7fd")
+    SOUS_TOTAL_BG = None
+
+    num_cols = 14
     header_row1 = [
         "BRANCHES",
-        "PREMIER SEMESTRE", "", "", "", "", "", "", "", "",
-        "SECOND SEMESTRE", "", "", "", "", "", "", "", "", "",
-        "TOTAL",
-        "EXAMEN DE\nREPECHAGE",
+        "PREMIER SEMESTRE", "", "", "", "",
+        "SECOND SEMESTRE", "", "", "", "",
+        "TOTAL\nGENERAL",
+        "EXAMEN DE REPECHAGE", "",
     ]
     header_row2 = [
         "",
-        "1ère P.", "2e P.", "3e P.", "4e P.", "%", "Sign.", "Prof.", "MAX.", "EXAM.", "TOTAL",
-        "1ère P.", "2e P.", "3e P.", "4e P.", "%", "Sign.", "Prof.", "MAX.", "EXAM.", "TOTAL",
+        "MAX.", "TRAVAUX JOURNAL.", "", "MAX. EXAM.", "TOTAL",
+        "MAX.", "TRAVAUX JOURNAL.", "", "MAX. EXAM.", "TOTAL",
         "",
+        "%", "Sign. Prof.",
+    ]
+    header_row3 = [
         "",
+        "", "1ère P.", "2è P.", "", "",
+        "", "3è P.", "4è P.", "", "",
+        "", "", "",
     ]
     header_row1 = header_row1[:num_cols]
     header_row2 = header_row2[:num_cols]
-
-    data_rows = [header_row1, header_row2]
+    header_row3 = header_row3[:num_cols]
 
     grades = GradeBulletin.objects.filter(
         student=student,
@@ -539,62 +588,163 @@ def generate_bulletin_rdc_pdf(report_card):
             return ""
         return str(Decimal(str(v)).quantize(Decimal("0.01")))
 
-    # Données par domaine (comme sur le modèle officiel)
-    domains = {}
-    for g in grades:
-        if not g.subject:
-            continue
-        cs = cs_by_subject_id.get(g.subject_id)
-        domain = (getattr(cs, "domain", None) or "AUTRES").strip().upper() or "AUTRES"
-        domains.setdefault(domain, []).append((g, cs))
+    # Structure fixe 1ère Scientifique (modèle officiel) : (domain, sub_domain|None, subject_label|None, max_period)
+    # subject_label "Sous - Total" = ligne sous-total (fond noir) ; dernier élément = tuple (max_s1, exam_s1, total_s1, max_s2, exam_s2, total_s2, total_gen)
+    BULLETIN_1ERE_SCIENCE = [
+        ("DOMAINE DES SCIENCES", "Sous-domaine des mathématiques", "Algèbre, Stat. & Analy.", 40),
+        (None, None, "Géométrie et Trigo.", 20),
+        (None, None, "Dessin scientifique", 10),
+        (None, None, "Sous - Total", (70, 140, 280, 70, 140, 280, 560)),
+        (None, "Sous-domaine des Sciences de la Vie et de la Terre", "Biologie générale", 20),
+        (None, None, "microbiologie", 10),
+        (None, None, "Géologie", 10),
+        (None, None, "Sous - Total", (40, 80, 160, 40, 80, 160, 320)),
+        (None, "Sous-domaine des Sciences Physiques, Technologie et TIC", "Chimie", 30),
+        (None, None, "Physique", 30),
+        (None, None, "Tech. d'Info et Com (TIC)", 10),
+        (None, None, "Sous - Total", (70, 140, 280, 70, 140, 280, 560)),
+        ("DOMAINE DES LANGUES", None, "Français", 50),
+        (None, None, "Anglais", 30),
+        (None, None, "Sous - Total", (80, 160, 320, 80, 160, 320, 640)),
+        ("DOMAINE DE L'UNIVERS SOCIAL ET ENVIRONNEMENT", None, "Ed. civ. & morale", 10),
+        (None, None, "Géographie", 20),
+        (None, None, "Histoire", 20),
+        (None, None, "Education à la vie (1)", 10),
+        (None, None, "Sociologie africaine", 20),
+        (None, None, "Religion (1)", 10),
+        (None, None, "Sous - Total", (90, 180, 360, 90, 180, 360, 720)),
+        ("DOMAINE DU DEVELOPPEMENT PERSONNEL", None, "Educat. phys. & sport.", 10),
+        (None, None, "Sous - Total", (10, 20, 40, 10, 20, 40, 80)),
+    ]
 
-    for domain, items in sorted(domains.items(), key=lambda x: x[0]):
-        data_rows.append([domain] + [""] * (num_cols - 1))
-        for g, cs in items:
-            max_p = getattr(cs, "period_max", None) or 20
-            row = [
-                g.subject.name,
-                val(g.s1_p1), val(g.s1_p2), "", "",
-                "", "", "",
-                str(int(max_p)), val(g.s1_exam), val(g.total_s1),
-                val(g.s2_p3), val(g.s2_p4), "", "",
-                "", "", "",
-                str(int(max_p)), val(g.s2_exam), val(g.total_s2),
+    # Map GradeBulletin par nom de matière (normalisé)
+    grades_by_name = {}
+    for g in grades:
+        if g.subject:
+            n = (g.subject.name or "").strip()
+            grades_by_name[n] = (g, cs_by_subject_id.get(g.subject_id))
+            # alias courants
+            if "Algèbre" in n or "Algebre" in n:
+                grades_by_name["Algèbre, Stat. & Analy."] = (g, cs_by_subject_id.get(g.subject_id))
+            if "Géométrie" in n or "Geometrie" in n:
+                grades_by_name["Géométrie et Trigo."] = (g, cs_by_subject_id.get(g.subject_id))
+            if "Dessin" in n:
+                grades_by_name["Dessin scientifique"] = (g, cs_by_subject_id.get(g.subject_id))
+            if "Biologie" in n:
+                grades_by_name["Biologie générale"] = (g, cs_by_subject_id.get(g.subject_id))
+            if "Français" in n or "Francais" in n:
+                grades_by_name["Français"] = (g, cs_by_subject_id.get(g.subject_id))
+            if "Anglais" in n:
+                grades_by_name["Anglais"] = (g, cs_by_subject_id.get(g.subject_id))
+            if "Chimie" in n:
+                grades_by_name["Chimie"] = (g, cs_by_subject_id.get(g.subject_id))
+            if "Physique" in n:
+                grades_by_name["Physique"] = (g, cs_by_subject_id.get(g.subject_id))
+            if "TIC" in n or "Info" in n:
+                grades_by_name["Tech. d'Info et Com (TIC)"] = (g, cs_by_subject_id.get(g.subject_id))
+
+    def make_data_row(label, max_p, g_ctx):
+        """Une ligne de données : label, S1 (max, 1ère P, 2è P, exam, total), S2 (idem), total général, %, Sign. Prof."""
+        if g_ctx:
+            g, cs = g_ctx
+            max_p = max_p or (getattr(cs, "period_max", None) or 20)
+            return [
+                label,
+                str(int(max_p)), val(g.s1_p1), val(g.s1_p2), val(g.s1_exam), val(g.total_s1),
+                str(int(max_p)), val(g.s2_p3), val(g.s2_p4), val(g.s2_exam), val(g.total_s2),
                 val(g.total_general),
-                val(g.reclamation_score) or "",
+                val(g.reclamation_score) or "", "",
             ]
+        if max_p is not None:
+            max_exam = max_p * 2
+            total_s = max_p * 4
+            tot_gen = max_p * 8
+            return [
+                label,
+                str(int(max_p)), "", "", str(int(max_exam)), str(int(total_s)),
+                str(int(max_p)), "", "", str(int(max_exam)), str(int(total_s)),
+                str(int(tot_gen)), "", "",
+            ]
+        return [label] + [""] * (num_cols - 1)
+
+    data_rows = [header_row1, header_row2, header_row3]
+
+    for domain, sub_domain, subject_label, max_p in BULLETIN_1ERE_SCIENCE:
+        if domain:
+            current_domain = domain
+            data_rows.append([domain] + [""] * (num_cols - 1))
+        if sub_domain:
+            current_sub = sub_domain
+            data_rows.append([sub_domain] + [""] * (num_cols - 1))
+        if subject_label == "Sous - Total":
+            # Ligne sous-total : valeurs officielles (max_s1, exam_s1, total_s1, max_s2, exam_s2, total_s2, total_gen)
+            if isinstance(max_p, (list, tuple)) and len(max_p) >= 7:
+                m1, e1, t1, m2, e2, t2, tg = max_p[0], max_p[1], max_p[2], max_p[3], max_p[4], max_p[5], max_p[6]
+                row = [
+                    "Sous - Total",
+                    str(m1), "", "", str(e1), str(t1),
+                    str(m2), "", "", str(e2), str(t2),
+                    str(tg), "", "",
+                ]
+            else:
+                row = ["Sous - Total"] + [""] * (num_cols - 1)
             row = row[:num_cols]
             while len(row) < num_cols:
                 row.append("")
             data_rows.append(row[:num_cols])
-        # Sous-total domaine (optionnel, si on veut afficher comme le PDF)
-        # data_rows.append(["Sous - Total", ...])
+            continue
+        if subject_label:
+            g_ctx = grades_by_name.get(subject_label)
+            row = make_data_row(subject_label, max_p, g_ctx)
+            row = row[:num_cols]
+            while len(row) < num_cols:
+                row.append("")
+            data_rows.append(row[:num_cols])
 
     col_widths = [
-        1.5 * inch,
-        0.32 * inch, 0.32 * inch, 0.32 * inch, 0.32 * inch, 0.26 * inch, 0.26 * inch, 0.26 * inch, 0.3 * inch, 0.3 * inch, 0.35 * inch,
-        0.32 * inch, 0.32 * inch, 0.32 * inch, 0.32 * inch, 0.26 * inch, 0.26 * inch, 0.26 * inch, 0.3 * inch, 0.3 * inch, 0.35 * inch,
-        0.38 * inch,
-        0.42 * inch,
+        1.55 * inch,
+        0.35 * inch, 0.4 * inch, 0.35 * inch, 0.4 * inch, 0.38 * inch,
+        0.35 * inch, 0.4 * inch, 0.35 * inch, 0.4 * inch, 0.38 * inch,
+        0.45 * inch,
+        0.35 * inch, 0.4 * inch,
     ]
     table = Table(data_rows, colWidths=col_widths[:num_cols])
-    table.setStyle(TableStyle([
-        ("SPAN", (0, 0), (0, 1)),
-        ("SPAN", (1, 0), (10, 0)),
-        ("SPAN", (11, 0), (20, 0)),
-        ("SPAN", (21, 0), (21, 1)),
-        ("SPAN", (22, 0), (22, 1)),
+    tbl_style = [
+        ("SPAN", (0, 0), (0, 2)),
+        ("SPAN", (1, 0), (5, 0)),
+        ("SPAN", (6, 0), (10, 0)),
+        ("SPAN", (11, 0), (11, 2)),
+        ("SPAN", (12, 0), (13, 0)),
+        ("SPAN", (2, 1), (3, 1)),
+        ("SPAN", (7, 1), (8, 1)),
         ("GRID", (0, 0), (-1, -1), 0.25, colors.black),
-        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("ALIGN", (0, 0), (0, -1), "LEFT"),
+        ("ALIGN", (1, 0), (-1, -1), "CENTER"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("FONTNAME", (0, 0), (-1, 1), "Helvetica-Bold"),
+        ("FONTNAME", (0, 0), (-1, 2), "Helvetica-Bold"),
         ("FONTSIZE", (0, 0), (-1, -1), 6),
-        ("BACKGROUND", (0, 0), (-1, 1), colors.HexColor("#e8e8e8")),
-    ]))
+        ("BACKGROUND", (0, 0), (-1, 0), HEADER_DARK),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
+        ("BACKGROUND", (0, 1), (-1, 2), HEADER_LIGHT),
+    ]
+    # Lignes "Sous - Total" en gras
+    for r in range(3, len(data_rows)):
+        if len(data_rows[r]) and data_rows[r][0] == "Sous - Total":
+            tbl_style.append(("FONTNAME", (0, r), (-1, r), "Helvetica-Bold"))
+    # Lignes domaine / sous-domaine en bandeau bleu clair
+    for r in range(3, len(data_rows)):
+        cell0 = (data_rows[r][0] if data_rows[r] else "").strip()
+        if cell0 and cell0 != "Sous - Total" and (
+            cell0.startswith("DOMAINE") or cell0.startswith("Sous-domaine")
+        ):
+            tbl_style.append(("BACKGROUND", (0, r), (-1, r), HEADER_DARK))
+            tbl_style.append(("TEXTCOLOR", (0, r), (-1, r), colors.black))
+            tbl_style.append(("FONTNAME", (0, r), (-1, r), "Helvetica-Bold"))
+    table.setStyle(TableStyle(tbl_style))
     story.append(table)
     story.append(Spacer(1, 5))
 
-    # ----- MAXIMA GÉNÉRAUX, TOTAUX, POURCENTAGE, PLACE, APPLICATION, CONDUITE, SIGNATURE -----
+    # ----- SECTION RÉSUMÉ : gauche = MAXIMA, TOTAUX, POURCENTAGE, PLACE, APPLICATION, CONDUITE, SIGNATURE | droite = encadré - PASSE (1), - DOUBLE (1), LE..../....../20...., Chef d'Etablissement, Sceau de l'Ecole -----
     pct = ""
     if report_card.average_score is not None:
         pct = f"{float(report_card.average_score) * 5:.2f} %"
@@ -602,53 +752,78 @@ def generate_bulletin_rdc_pdf(report_card):
     appli = str(report_card.application) if report_card.application is not None else ""
     conduite = str(report_card.conduite) if report_card.conduite is not None else ""
 
-    footer_data = [
+    footer_left_data = [
         ["MAXIMA GENERAUX", ""],
         ["TOTAUX", ""],
-        ["- PASSE (1)", ""],
-        ["- DOUBLE (1)", ""],
-        ["LE…/.../20….", ""],
-        ["Chef d'Etablissement", "Sceau de l'Ecole"],
         ["POURCENTAGE", pct],
         ["PLACE / NBRE D'ELEVES", place],
         ["APPLICATION", appli],
         ["CONDUITE", conduite],
         ["SIGNATURE", ""],
     ]
-    footer_table = Table(
-        footer_data,
-        colWidths=[2.0 * inch, 4.5 * inch],
-    )
-    footer_table.setStyle(TableStyle([
+    footer_left_table = Table(footer_left_data, colWidths=[1.8 * inch, 2.8 * inch])
+    footer_left_table.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.25, colors.black),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("FONTSIZE", (0, 0), (-1, -1), 7),
-        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+    ]))
+    footer_right_cells = [
+        "- PASSE (1)",
+        "- DOUBLE (1)",
+        "LE..../....../20....",
+        "Chef d'Etablissement",
+        "Sceau de l'Ecole",
+    ]
+    footer_right_text = "\n<br/>\n".join(footer_right_cells)
+    footer_right_para = Paragraph(footer_right_text, style_small)
+    footer_table = Table(
+        [[footer_left_table, footer_right_para]],
+        colWidths=[4.6 * inch, 2.2 * inch],
+    )
+    footer_table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (0, 0), 0),
+        ("LEFTPADDING", (1, 0), (1, 0), 6),
+        ("BOX", (1, 0), (1, 0), 0.5, colors.black),
+        ("BACKGROUND", (1, 0), (1, 0), colors.white),
     ]))
     story.append(footer_table)
     story.append(Spacer(1, 6))
 
-    # ----- DÉCISIONS ET NOTES LÉGALES -----
+    # ----- DÉCISIONS ET MENTIONS LÉGALES (ordre comme capture 2) -----
     story.append(Paragraph(
-        "- L'élève ne pourra passer dans la classe supérieure s'il n'a subi avec succès un examen de repêchage en..................................................................................................……….",
+        "- L'élève ne pourra passer dans la classe supérieure s'il n'a subi avec succès un examen de repêchage en.......................................................................................(1)",
         style_small,
     ))
-    story.append(Paragraph("…………………………………………………………………………………………………….............................................................................................................................................................................................(1)", style_small))
     story.append(Paragraph("- L'élève passe dans la classe supérieure (1)", style_small))
     story.append(Paragraph("- L'élève double la classe (1)", style_small))
+    story.append(Spacer(1, 5))
+    # Ligne signatures : gauche Signature de l'élève, centre Sceau de l'Ecole, droite Fait à ... le....../....../20......
+    sig_line = Table([
+        [
+            Paragraph("<b>Signature de l'élève</b>", style_small),
+            Paragraph("<b>Sceau de l'Ecole</b>", style_small),
+            Paragraph(f"Fait à {city or '..............................................'} le....../....../20......", style_small),
+        ]
+    ], colWidths=[2.2 * inch, 2.2 * inch, 2.6 * inch])
+    sig_line.setStyle(TableStyle([
+        ("ALIGN", (0, 0), (0, 0), "LEFT"),
+        ("ALIGN", (1, 0), (1, 0), "CENTER"),
+        ("ALIGN", (2, 0), (2, 0), "RIGHT"),
+    ]))
+    story.append(sig_line)
     story.append(Spacer(1, 4))
     story.append(Paragraph("(1) Biffer la mention inutile.", style_small))
     story.append(Paragraph("Note importante : Le bulletin est sans valeur s'il est raturé ou surchargé.", style_small))
-    story.append(Paragraph("IGE/P.S./012", style_small))
     story.append(Paragraph(
-        "Interdiction formelle de reproduire ce bulletin sous peine des sanctions prévues par la loi.",
+        "<b>Interdiction formelle de reproduire ce bulletin sous peine des sanctions prévues par la loi.</b>",
         style_small,
     ))
     story.append(Spacer(1, 4))
-    story.append(Paragraph("Sceau de l'Ecole", style_small))
-    story.append(Paragraph(f"Fait à {city or '……………………'}, le……..…/…………/20……..", style_small))
-    story.append(Paragraph("Chef d'Etablissement,", style_small))
-    story.append(Paragraph("Signature de l'élève", style_small))
+    # En bas à droite : Chef d'Etablissement, puis IGE/P.S./012 en dessous
+    story.append(Paragraph("<b>Chef d'Etablissement,</b>", ParagraphStyle("right", parent=style_small, alignment=2)))
+    story.append(Paragraph("IGE/P.S./012", ParagraphStyle("right2", parent=style_small, alignment=2)))
 
     doc.build(story)
     buffer.seek(0)
