@@ -326,17 +326,22 @@ def generate_bulletin_rdc_pdf(report_card):
     from reportlab.lib.styles import ParagraphStyle
 
     buffer = BytesIO()
-    margin_pt = 0.4 * inch
+    # Marges élargies comme dans le doc principal (1ère capture)
+    margin_pt = 0.5 * inch
 
-    def draw_border(canvas, doc):
-        """Encadrement : bordure noire épaisse autour du bulletin."""
-        canvas.saveState()
-        canvas.setStrokeColor(colors.black)
-        canvas.setLineWidth(1.5)
-        w, h = doc.pagesize
-        m = margin_pt
-        canvas.rect(m, m, w - 2 * m, h - 2 * m)
-        canvas.restoreState()
+    def _make_border_canvas(margin):
+        """Canvas personnalisé : trace la bordure en fin de page pour qu'elle reste visible au-dessus du contenu."""
+        class BorderCanvas(canvas.Canvas):
+            def showPage(self):
+                self.saveState()
+                self.setStrokeColor(colors.black)
+                self.setLineWidth(1.5)
+                w, h = self._pagesize
+                m = margin
+                self.rect(m, m, w - 2 * m, h - 2 * m)
+                self.restoreState()
+                super().showPage()
+        return BorderCanvas
 
     doc = SimpleDocTemplate(
         buffer,
@@ -345,8 +350,7 @@ def generate_bulletin_rdc_pdf(report_card):
         rightMargin=margin_pt,
         topMargin=margin_pt,
         bottomMargin=margin_pt,
-        onFirstPage=draw_border,
-        onLaterPage=draw_border,
+        canvasmaker=_make_border_canvas(margin_pt),
     )
     styles = getSampleStyleSheet()
     style_title_main = ParagraphStyle(
@@ -404,9 +408,11 @@ def generate_bulletin_rdc_pdf(report_card):
     logo_left = _logo_or_spacer(left_logo_path)
     logo_right = _logo_or_spacer(right_logo_path)
 
+    # Titre en 3 lignes comme 1ère capture (REPUBLIQUE, MINISTERE, ET NOUVELLE CITOYENNETE)
     title_block = [
         Paragraph("<b>REPUBLIQUE DEMOCRATIQUE DU CONGO</b>", style_title_main),
-        Paragraph("<b>MINISTERE DE L'ENSEIGNEMENT PRIMAIRE, SECONDAIRE ET PROFESSIONNEL</b>", style_title_sub),
+        Paragraph("<b>MINISTERE DE L'EDUCATION NATIONALE</b>", style_title_sub),
+        Paragraph("<b>ET NOUVELLE CITOYENNETE</b>", style_title_sub),
     ]
 
     header_table = Table(
@@ -428,7 +434,7 @@ def generate_bulletin_rdc_pdf(report_card):
     story.append(header_table)
 
     # Ligne de séparation épaisse sous l'en-tête
-    sep = Table([[""]], colWidths=[7 * inch])
+    sep = Table([[""]], colWidths=[5 * inch])
     sep.setStyle(TableStyle([
         ("LINEABOVE", (0, 0), (-1, -1), 2, colors.black),
         ("TOPPADDING", (0, 0), (-1, -1), 0),
