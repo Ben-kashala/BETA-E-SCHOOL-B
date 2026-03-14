@@ -652,60 +652,59 @@ def generate_bulletin_rdc_pdf(report_card):
             return ""
         return str(Decimal(str(v)).quantize(Decimal("0.01")))
 
-    # Structure fixe 1ère Scientifique (modèle officiel) : (domain, sub_domain|None, subject_label|None, max_period)
-    # subject_label "Sous - Total" = ligne sous-total (fond noir) ; dernier élément = tuple (max_s1, exam_s1, total_s1, max_s2, exam_s2, total_s2, total_gen)
-    BULLETIN_1ERE_SCIENCE = [
-        ("DOMAINE DES SCIENCES", "Sous-domaine des mathématiques", "Algèbre, Stat. & Analy.", 40),
-        (None, None, "Géométrie et Trigo.", 20),
-        (None, None, "Dessin scientifique", 10),
-        (None, None, "Sous - Total", (70, 140, 280, 70, 140, 280, 560)),
-        (None, "Sous-domaine des Sciences de la Vie et de la Terre", "Biologie générale", 20),
-        (None, None, "microbiologie", 10),
-        (None, None, "Géologie", 10),
-        (None, None, "Sous - Total", (40, 80, 160, 40, 80, 160, 320)),
-        (None, "Sous-domaine des Sciences Physiques, Technologie et TIC", "Chimie", 30),
-        (None, None, "Physique", 30),
-        (None, None, "Tech. d'Info et Com (TIC)", 10),
-        (None, None, "Sous - Total", (70, 140, 280, 70, 140, 280, 560)),
-        ("DOMAINE DES LANGUES", None, "Français", 50),
-        (None, None, "Anglais", 30),
-        (None, None, "Sous - Total", (80, 160, 320, 80, 160, 320, 640)),
-        ("DOMAINE DE L'UNIVERS SOCIAL ET ENVIRONNEMENT", None, "Ed. civ. & morale", 10),
-        (None, None, "Géographie", 20),
-        (None, None, "Histoire", 20),
-        (None, None, "Education à la vie (1)", 10),
-        (None, None, "Sociologie africaine", 20),
-        (None, None, "Religion (1)", 10),
-        (None, None, "Sous - Total", (90, 180, 360, 90, 180, 360, 720)),
-        ("DOMAINE DU DEVELOPPEMENT PERSONNEL", None, "Educat. phys. & sport.", 10),
-        (None, None, "Sous - Total", (10, 20, 40, 10, 20, 40, 80)),
-    ]
+    # Données dynamiques : matières/domaines/sous-domaines/maxima provenant de la plateforme
+    class_subjects = []
+    if resolved_class:
+        class_subjects = list(
+            ClassSubject.objects.filter(school_class=resolved_class)
+            .select_related("subject")
+            .order_by("domain", "subject__name")
+        )
 
-    # Map GradeBulletin par nom de matière (normalisé)
-    grades_by_name = {}
+    grades_by_subject_id = {g.subject_id: g for g in grades if g.subject_id}
+
+    entries = []
+    for cs in class_subjects:
+        subject = getattr(cs, "subject", None)
+        if not subject:
+            continue
+        domain = ((getattr(cs, "domain", None) or "AUTRES").strip() or "AUTRES").upper()
+        sub_domain = (
+            getattr(cs, "sub_domain", None)
+            or getattr(cs, "subdomain", None)
+            or getattr(cs, "subcategory", None)
+            or None
+        )
+        if isinstance(sub_domain, str):
+            sub_domain = sub_domain.strip() or None
+        entries.append(
+            {
+                "subject_name": subject.name,
+                "subject_id": subject.id,
+                "max_p": int(getattr(cs, "period_max", None) or getattr(subject, "period_max", 20) or 20),
+                "domain": domain,
+                "sub_domain": sub_domain,
+                "grade": grades_by_subject_id.get(subject.id),
+            }
+        )
+
+    # Repli : bulletins existants sans ClassSubject (anciennes données) -> domaine AUTRES
     for g in grades:
-        if g.subject:
-            n = (g.subject.name or "").strip()
-            grades_by_name[n] = (g, cs_by_subject_id.get(g.subject_id))
-            # alias courants
-            if "Algèbre" in n or "Algebre" in n:
-                grades_by_name["Algèbre, Stat. & Analy."] = (g, cs_by_subject_id.get(g.subject_id))
-            if "Géométrie" in n or "Geometrie" in n:
-                grades_by_name["Géométrie et Trigo."] = (g, cs_by_subject_id.get(g.subject_id))
-            if "Dessin" in n:
-                grades_by_name["Dessin scientifique"] = (g, cs_by_subject_id.get(g.subject_id))
-            if "Biologie" in n:
-                grades_by_name["Biologie générale"] = (g, cs_by_subject_id.get(g.subject_id))
-            if "Français" in n or "Francais" in n:
-                grades_by_name["Français"] = (g, cs_by_subject_id.get(g.subject_id))
-            if "Anglais" in n:
-                grades_by_name["Anglais"] = (g, cs_by_subject_id.get(g.subject_id))
-            if "Chimie" in n:
-                grades_by_name["Chimie"] = (g, cs_by_subject_id.get(g.subject_id))
-            if "Physique" in n:
-                grades_by_name["Physique"] = (g, cs_by_subject_id.get(g.subject_id))
-            if "TIC" in n or "Info" in n:
-                grades_by_name["Tech. d'Info et Com (TIC)"] = (g, cs_by_subject_id.get(g.subject_id))
+        if g.subject_id in {e["subject_id"] for e in entries}:
+            continue
+        subj = g.subject
+        if not subj:
+            continue
+        entries.append(
+            {
+                "subject_name": subj.name,
+                "subject_id": subj.id,
+                "max_p": int(getattr(subj, "period_max", 20) or 20),
+                "domain": "AUTRES",
+                "sub_domain": None,
+                "grade": g,
+            }
+        )
 
     def make_data_row(label, max_p, g_ctx):
         """Une ligne de données : label, S1 (max, 1ère P, 2è P, exam, total), S2 (idem), total général, %, Sign. Prof."""
@@ -734,37 +733,56 @@ def generate_bulletin_rdc_pdf(report_card):
 
     data_rows = [header_row1, header_row2, header_row3]
 
-    for domain, sub_domain, subject_label, max_p in BULLETIN_1ERE_SCIENCE:
-        if domain:
-            current_domain = domain
-            data_rows.append([domain] + [""] * (num_cols - 1))
-        if sub_domain:
-            current_sub = sub_domain
-            data_rows.append([sub_domain] + [""] * (num_cols - 1))
-        if subject_label == "Sous - Total":
-            # Ligne sous-total : valeurs officielles (max_s1, exam_s1, total_s1, max_s2, exam_s2, total_s2, total_gen)
-            if isinstance(max_p, (list, tuple)) and len(max_p) >= 7:
-                m1, e1, t1, m2, e2, t2, tg = max_p[0], max_p[1], max_p[2], max_p[3], max_p[4], max_p[5], max_p[6]
-                row = [
-                    "Sous - Total",
-                    str(m1), "", "", str(e1), "", str(t1), "",
-                    str(m2), "", "", str(e2), "", str(t2), "",
-                    str(tg), "", "", "",
-                ]
-            else:
-                row = ["Sous - Total"] + [""] * (num_cols - 1)
-            row = row[:num_cols]
-            while len(row) < num_cols:
-                row.append("")
-            data_rows.append(row[:num_cols])
-            continue
-        if subject_label:
-            g_ctx = grades_by_name.get(subject_label)
-            row = make_data_row(subject_label, max_p, g_ctx)
-            row = row[:num_cols]
-            while len(row) < num_cols:
-                row.append("")
-            data_rows.append(row[:num_cols])
+    # Ordre stable des domaines selon les données de classe
+    domain_order = []
+    domain_groups = {}
+    for e in entries:
+        d = e["domain"]
+        if d not in domain_groups:
+            domain_groups[d] = []
+            domain_order.append(d)
+        domain_groups[d].append(e)
+
+    for domain in domain_order:
+        domain_items = domain_groups[domain]
+        data_rows.append([domain] + [""] * (num_cols - 1))
+
+        # Sous-domaines dynamiques (si non fournis, toutes les matières du domaine vont dans un seul groupe)
+        sub_order = []
+        sub_groups = {}
+        for e in domain_items:
+            s = e["sub_domain"] or ""
+            if s not in sub_groups:
+                sub_groups[s] = []
+                sub_order.append(s)
+            sub_groups[s].append(e)
+
+        for sub in sub_order:
+            items = sub_groups[sub]
+            if sub:
+                data_rows.append([sub] + [""] * (num_cols - 1))
+
+            subtotal_max = 0
+            for e in items:
+                subtotal_max += int(e["max_p"] or 0)
+                g_ctx = (e["grade"], cs_by_subject_id.get(e["subject_id"])) if e["grade"] else None
+                row = make_data_row(e["subject_name"], e["max_p"], g_ctx)
+                row = row[:num_cols]
+                while len(row) < num_cols:
+                    row.append("")
+                data_rows.append(row[:num_cols])
+
+            # Sous-total par sous-domaine (ou domaine sans sous-domaine)
+            emax = subtotal_max * 2
+            tsem = subtotal_max * 4
+            tgen = subtotal_max * 8
+            subtotal_row = [
+                "Sous - Total",
+                str(subtotal_max), "", "", str(emax), "", str(tsem), "",
+                str(subtotal_max), "", "", str(emax), "", str(tsem), "",
+                str(tgen), "", "", "",
+            ]
+            data_rows.append(subtotal_row[:num_cols])
 
     col_widths = _fit_widths([
         1.48 * inch,  # BRANCHES
