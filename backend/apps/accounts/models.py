@@ -4,6 +4,7 @@ User and authentication models
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from apps.schools.models import School
+from .constants import SUPERADMIN_USERNAME
 
 
 class User(AbstractUser):
@@ -91,6 +92,16 @@ class User(AbstractUser):
     def is_promoter(self):
         return self.role == 'PROMOTER'
 
+    @property
+    def is_protected_superadmin(self):
+        """True uniquement pour le superadmin propriétaire du système (Alidorsabue)."""
+        return self.username == SUPERADMIN_USERNAME and self.is_superuser
+
+    @property
+    def is_platform_admin(self):
+        """Admin plateforme : rôle ADMIN sans école rattachée. Peut créer écoles et admins d'école."""
+        return self.role == 'ADMIN' and self.school_id is None
+
 
 class Teacher(models.Model):
     """Extended profile for teachers"""
@@ -162,3 +173,41 @@ class Student(models.Model):
     
     def __str__(self):
         return f"{self.user.get_full_name()} - {self.student_id}"
+
+
+class PlatformSettings(models.Model):
+    """
+    Paramètres globaux de la plateforme (singleton, id=1).
+    Le superadmin peut bloquer l'accès : lorsque is_platform_locked=True,
+    seul le superadmin peut se connecter (API, admin Django, mobile, frontend).
+    """
+    is_platform_locked = models.BooleanField(
+        default=False,
+        verbose_name="Plateforme verrouillée",
+        help_text="Si coché, seul le superadmin peut se connecter (mobile, frontend, admin Django)."
+    )
+    locked_message = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        verbose_name="Message affiché aux utilisateurs bloqués",
+        help_text="Optionnel. Ex : Maintenance en cours."
+    )
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Dernière modification")
+
+    class Meta:
+        verbose_name = "Paramètres plateforme"
+        verbose_name_plural = "Paramètres plateforme"
+        db_table = "accounts_platform_settings"
+
+    def __str__(self):
+        return "Verrouillée" if self.is_platform_locked else "Ouverte"
+
+    @classmethod
+    def get_singleton(cls):
+        """Retourne l'unique instance (créée si besoin)."""
+        obj, _ = cls.objects.get_or_create(
+            pk=1,
+            defaults={"is_platform_locked": False}
+        )
+        return obj

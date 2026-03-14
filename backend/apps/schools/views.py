@@ -4,7 +4,7 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from django.db.models import Q, Sum
+from django.db.models import Q, Sum, Count
 from .models import School, Section, SchoolClass, Subject, ClassSubject, StudentClassEnrollment
 from apps.accounts.models import Student, User
 from apps.payments.models import Payment, SchoolExpense
@@ -20,6 +20,25 @@ class SchoolViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     filterset_fields = ['country', 'city', 'is_active']
     search_fields = ['name', 'code', 'email']
+
+    def get_queryset(self):
+        """Superadmin et admin plateforme voient toutes les écoles ; les autres uniquement leur école."""
+        user = self.request.user
+        qs = School.objects.filter(is_active=True)
+        if user.is_superuser or (getattr(user, 'is_platform_admin', False)):
+            return qs
+        if user.school_id:
+            return qs.filter(pk=user.school_id)
+        return qs.none()
+
+    def perform_create(self, serializer):
+        """Seul le superadmin ou un admin plateforme (ADMIN sans école) peut créer une école."""
+        user = self.request.user
+        if not (user.is_superuser or getattr(user, 'is_platform_admin', False)):
+            raise PermissionDenied(
+                "Seul le superadmin ou un administrateur plateforme (non rattaché à une école) peut créer une école."
+            )
+        serializer.save()
     
     @action(detail=False, methods=['get'])
     def my_school(self, request):
@@ -68,7 +87,7 @@ class SchoolViewSet(viewsets.ModelViewSet):
         students_counts = dict(
             Student.objects.filter(user__school_id__in=school_ids)
             .values_list('user__school_id')
-            .annotate(count=models.Count('id'))
+            .annotate(count=Count('id'))
         )
 
         # Paiements complétés par école
@@ -132,7 +151,7 @@ class SchoolViewSet(viewsets.ModelViewSet):
 
         # Écoles par type
         type_counts = dict(
-            schools.values_list('school_type').annotate(count=models.Count('id'))
+            schools.values_list('school_type').annotate(count=Count('id'))
         )
 
         # Élèves

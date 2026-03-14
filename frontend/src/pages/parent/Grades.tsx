@@ -2,6 +2,34 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import api from '@/services/api'
 import { Card } from '@/components/ui/Card'
+import { Download } from 'lucide-react'
+import toast from 'react-hot-toast'
+
+async function downloadBulletin(
+  studentId: number,
+  schoolClassId: number,
+  academicYear: string,
+  studentName: string
+) {
+  try {
+    const res = await api.get(`/auth/students/${studentId}/bulletin_pdf/`, {
+      params: { school_class: schoolClassId, academic_year: academicYear },
+      responseType: 'blob',
+    })
+    const url = window.URL.createObjectURL(new Blob([res.data]))
+    const a = document.createElement('a')
+    a.href = url
+    a.setAttribute('download', `bulletin_${studentName.replace(/\s+/g, '-')}_${academicYear.replace('/', '-')}.pdf`)
+    document.body.appendChild(a)
+    a.click()
+    window.URL.revokeObjectURL(url)
+    a.remove()
+    toast.success('Bulletin téléchargé.')
+  } catch (err: unknown) {
+    const msg = err && typeof err === 'object' && 'response' in err && (err as { response?: { data?: unknown } }).response?.data
+    toast.error(msg ? String(msg) : 'Impossible de télécharger le bulletin.')
+  }
+}
 
 export default function ParentGrades() {
   const [selectedStudent, setSelectedStudent] = useState<number | null>(null)
@@ -55,6 +83,42 @@ export default function ParentGrades() {
               </option>
             ))}
           </select>
+        </Card>
+      )}
+
+      {/* Téléchargement des bulletins */}
+      {children && children.length > 0 && (
+        <Card className="mb-6 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Télécharger les bulletins</h2>
+          <div className="space-y-4">
+            {children.map((child: any) => {
+              const name = [child.identity.user?.first_name, child.identity.user?.last_name].filter(Boolean).join(' ') || child.identity.student_id
+              const options = child.bulletin_downloads || []
+              if (options.length === 0) {
+                return (
+                  <p key={child.identity.id} className="text-sm text-gray-500 dark:text-gray-400">
+                    {name} — Aucun bulletin disponible pour le moment.
+                  </p>
+                )
+              }
+              return (
+                <div key={child.identity.id} className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{name} :</span>
+                  {options.map((opt: { school_class: number; school_class_name: string; academic_year: string }) => (
+                    <button
+                      key={`${opt.school_class}-${opt.academic_year}`}
+                      type="button"
+                      onClick={() => downloadBulletin(child.identity.id, opt.school_class, opt.academic_year, name)}
+                      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium transition-colors"
+                    >
+                      <Download className="w-4 h-4" />
+                      Bulletin {opt.academic_year}
+                    </button>
+                  ))}
+                </div>
+              )
+            })}
+          </div>
         </Card>
       )}
 

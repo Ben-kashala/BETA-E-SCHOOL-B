@@ -42,9 +42,10 @@ class UserModel {
   }
 
   String get fullName => '$firstName $lastName';
-  
+
   bool get isStudent => role == 'STUDENT';
   bool get isParent => role == 'PARENT';
   bool get isTeacher => role == 'TEACHER';
   bool get isAdmin => role == 'ADMIN';
+  bool get isPromoter => role == 'PROMOTER';
 }

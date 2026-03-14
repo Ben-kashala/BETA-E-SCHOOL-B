@@ -2,6 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import User, Teacher, Parent, Student
+from .constants import SUPERADMIN_USERNAME
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -40,15 +41,32 @@ class UserSerializer(serializers.ModelSerializer):
             representation['school'] = None
         return representation
     
+    def validate_username(self, value):
+        if value and value == SUPERADMIN_USERNAME:
+            raise serializers.ValidationError(
+                "Ce nom d'utilisateur est réservé au superadmin du système."
+            )
+        return value
+
     def create(self, validated_data):
+        if validated_data.get('username') == SUPERADMIN_USERNAME:
+            raise serializers.ValidationError(
+                {'username': "Ce nom d'utilisateur est réservé au superadmin du système."}
+            )
         password = validated_data.pop('password', None)
         user = User.objects.create(**validated_data)
         if password:
             user.set_password(password)
             user.save()
         return user
-    
+
     def update(self, instance, validated_data):
+        if getattr(instance, 'is_protected_superadmin', False):
+            request = self.context.get('request')
+            if request and request.user != instance:
+                raise serializers.ValidationError(
+                    "Le compte superadmin propriétaire du système ne peut être modifié que par lui-même."
+                )
         password = validated_data.pop('password', None)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
@@ -58,40 +76,93 @@ class UserSerializer(serializers.ModelSerializer):
         return instance
 
 
+def _normalize_phone_digits(phone):
+    """Retourne les chiffres du numéro de téléphone (pour comparaison)."""
+    if not phone:
+        return ''
+    return ''.join(c for c in str(phone) if c.isdigit())
+
+
+def get_user_from_login_identifier(identifier):
+    """
+    Retourne l'utilisateur correspondant à l'identifiant de connexion :
+    - si contient @ : recherche par email (insensible à la casse)
+    - si exactement 10 chiffres : recherche par téléphone (10 derniers chiffres)
+    - sinon : recherche par username
+    """
+    from django.contrib.auth import get_user_model
+    from django.db.models import Q
+    User = get_user_model()
+
+    identifier = (identifier or '').strip()
+    if not identifier:
+        return None
+
+    digits = _normalize_phone_digits(identifier)
+
+    # Email
+    if '@' in identifier:
+        return User.objects.filter(email__iexact=identifier).first()
+
+    # Téléphone : 10 chiffres exactement
+    if len(digits) == 10:
+        for user in User.objects.exclude(Q(phone__isnull=True) | Q(phone='')):
+            phone_digits = _normalize_phone_digits(user.phone)
+            if phone_digits == digits or (len(phone_digits) >= 10 and phone_digits[-10:] == digits):
+                return user
+        return None
+
+    # Username (par défaut)
+    try:
+        return User.objects.get(username=identifier)
+    except User.DoesNotExist:
+        return None
+
+
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['username'].error_messages['required'] = 'Le nom d\'utilisateur est requis'
+        self.fields['username'].error_messages['required'] = 'L\'identifiant (nom d\'utilisateur, email ou téléphone) est requis.'
         self.fields['password'].error_messages['required'] = 'Le mot de passe est requis'
     
     def validate(self, attrs):
-        username = attrs.get('username')
+        identifier = attrs.get('username')
         password = attrs.get('password')
         
-        # Vérifier si l'utilisateur existe
         from django.contrib.auth import get_user_model
         User = get_user_model()
         
-        try:
-            user = User.objects.get(username=username)
-        except User.DoesNotExist:
+        user = get_user_from_login_identifier(identifier)
+        if user is None:
             raise serializers.ValidationError({
-                'username': ['Nom d\'utilisateur incorrect. Veuillez vérifier votre nom d\'utilisateur.']
+                'username': ['Identifiant incorrect. Utilisez votre nom d\'utilisateur, email ou numéro de téléphone (10 chiffres).']
             })
         
-        # Vérifier si l'utilisateur est actif
         if not user.is_active:
             raise serializers.ValidationError({
                 'non_field_errors': ['Votre compte est désactivé. Veuillez contacter l\'administrateur.']
             })
         
-        # Vérifier le mot de passe
         if not user.check_password(password):
             raise serializers.ValidationError({
                 'password': ['Mot de passe incorrect. Veuillez vérifier votre mot de passe.']
             })
-        
-        # Si tout est correct, appeler la méthode parente
+
+        # Si la plateforme est verrouillée, seul le superadmin peut se connecter
+        from .models import PlatformSettings
+        try:
+            settings_obj = PlatformSettings.get_singleton()
+            if settings_obj.is_platform_locked and not getattr(user, 'is_protected_superadmin', False):
+                msg = settings_obj.locked_message or (
+                    'La plateforme est temporairement indisponible. '
+                    'Seul le superadmin peut se connecter.'
+                )
+                raise serializers.ValidationError({'non_field_errors': [msg]})
+        except Exception:
+            pass  # Si le modèle n'existe pas encore (migrations non appliquées), on laisse passer
+
+        # Pour SimpleJWT, on doit passer le vrai username
+        attrs['username'] = user.username
         data = super().validate(attrs)
         return data
     
@@ -127,12 +198,19 @@ class ChangePasswordSerializer(serializers.Serializer):
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True, required=True)
-    
+
     class Meta:
         model = User
-        fields = ['username', 'email', 'password', 'password2', 'first_name', 
-                 'last_name', 'phone', 'role']  # school retiré car assigné automatiquement dans la vue
-    
+        fields = ['username', 'email', 'password', 'password2', 'first_name',
+                  'last_name', 'phone', 'role']  # school retiré car assigné automatiquement dans la vue
+
+    def validate_username(self, value):
+        if value and value == SUPERADMIN_USERNAME:
+            raise serializers.ValidationError(
+                "Ce nom d'utilisateur est réservé au superadmin du système."
+            )
+        return value
+
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
             raise serializers.ValidationError({"password": "Les mots de passe ne correspondent pas."})

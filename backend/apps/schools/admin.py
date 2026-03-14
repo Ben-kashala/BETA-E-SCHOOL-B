@@ -38,24 +38,35 @@ class SchoolAdmin(SchoolScopedAdminMixin, admin.ModelAdmin):
     
     def get_queryset(self, request):
         qs = super().get_queryset(request)
+        # Admin plateforme : voit toutes les écoles
+        if request.user.is_authenticated and request.user.is_admin and request.user.school is None:
+            return qs
         # Les admins d'école ne peuvent voir que leur école
         if request.user.is_authenticated and request.user.is_admin and request.user.school and not request.user.is_superuser:
             return qs.filter(id=request.user.school.id)
         return qs
-    
+
     def get_list_filter(self, request):
         """Retirer les filtres pour les admins d'école car ils n'ont qu'une seule école"""
-        if request.user.is_superuser:
+        if request.user.is_superuser or (request.user.is_admin and request.user.school is None):
             return ['is_active', 'country', 'city']
         return ['is_active']  # Garder seulement is_active
-    
+
     def has_add_permission(self, request):
-        # Seuls les super-admins peuvent créer des écoles
-        return request.user.is_superuser
-    
+        """Superadmin et admin plateforme peuvent créer des écoles"""
+        if request.user.is_superuser:
+            return True
+        if request.user.is_authenticated and request.user.is_admin and request.user.school is None and request.user.is_staff:
+            return True
+        return False
+
     def has_delete_permission(self, request, obj=None):
-        # Seuls les super-admins peuvent supprimer des écoles
-        return request.user.is_superuser
+        """Superadmin et admin plateforme peuvent supprimer des écoles"""
+        if request.user.is_superuser:
+            return True
+        if request.user.is_authenticated and request.user.is_admin and request.user.school is None and request.user.is_staff:
+            return True
+        return False
     
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         """Empêcher la modification de l'école pour les admins d'école"""

@@ -25,10 +25,10 @@ class _AdminTeachersPageState extends ConsumerState<AdminTeachersPage> {
   Future<void> _loadTeachers() async {
     setState(() => _isLoading = true);
     try {
-      final response = await ApiService().get('/api/accounts/teachers/');
+      final response = await ApiService().get('/api/accounts/teachers/', useCache: false);
       setState(() {
-        _teachers = response.data is List 
-            ? response.data 
+        _teachers = response.data is List
+            ? response.data
             : (response.data['results'] ?? []);
         _applyFilters();
         _isLoading = false;
@@ -50,6 +50,199 @@ class _AdminTeachersPageState extends ConsumerState<AdminTeachersPage> {
     });
   }
 
+  void _showTeacherDetail(dynamic teacher) {
+    final user = teacher['user'] ?? {};
+    final name = '${user['first_name'] ?? ''} ${user['last_name'] ?? ''}'.trim();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Détail enseignant'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _detailRow(Icons.person, 'Nom', name.isEmpty ? '—' : name),
+              _detailRow(Icons.email, 'Email', user['email'] ?? '—'),
+              _detailRow(Icons.badge, 'Matricule', teacher['employee_id']?.toString() ?? '—'),
+              if (teacher['specialization'] != null && (teacher['specialization'] as String).isNotEmpty)
+                _detailRow(Icons.school, 'Spécialisation', teacher['specialization'] as String),
+              if (user['phone'] != null && (user['phone'] as String).isNotEmpty)
+                _detailRow(Icons.phone, 'Téléphone', user['phone'] as String),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Fermer'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: Theme.of(context).textTheme.labelSmall),
+                const SizedBox(height: 2),
+                Text(value, style: Theme.of(context).textTheme.bodyMedium),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCreateTeacher() {
+    final formKey = GlobalKey<FormState>();
+    final username = TextEditingController();
+    final email = TextEditingController();
+    final firstName = TextEditingController();
+    final lastName = TextEditingController();
+    final password = TextEditingController();
+    final password2 = TextEditingController();
+    final employeeId = TextEditingController();
+    bool loading = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx2, setModalState) {
+          return Padding(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text('Créer un enseignant', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 20),
+                    TextFormField(
+                      controller: username,
+                      decoration: const InputDecoration(labelText: 'Nom d\'utilisateur *'),
+                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Requis' : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: email,
+                      decoration: const InputDecoration(labelText: 'Email *'),
+                      keyboardType: TextInputType.emailAddress,
+                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Requis' : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: firstName,
+                      decoration: const InputDecoration(labelText: 'Prénom *'),
+                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Requis' : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: lastName,
+                      decoration: const InputDecoration(labelText: 'Nom *'),
+                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Requis' : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: password,
+                      decoration: const InputDecoration(labelText: 'Mot de passe *'),
+                      obscureText: true,
+                      validator: (v) => (v == null || v.length < 6) ? 'Min. 6 caractères' : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: password2,
+                      decoration: const InputDecoration(labelText: 'Confirmer le mot de passe *'),
+                      obscureText: true,
+                      validator: (v) => v != password.text ? 'Les mots de passe ne correspondent pas' : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: employeeId,
+                      decoration: const InputDecoration(labelText: 'Matricule (optionnel)'),
+                    ),
+                    const SizedBox(height: 24),
+                    if (loading)
+                      const Center(child: CircularProgressIndicator())
+                    else
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.of(ctx).pop(),
+                              child: const Text('Annuler'),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: FilledButton(
+                              onPressed: () async {
+                                if (!formKey.currentState!.validate()) return;
+                                setModalState(() => loading = true);
+                                try {
+                                  final registerRes = await ApiService().post('/api/auth/register/', data: {
+                                    'username': username.text.trim(),
+                                    'email': email.text.trim(),
+                                    'first_name': firstName.text.trim(),
+                                    'last_name': lastName.text.trim(),
+                                    'password': password.text,
+                                    'password2': password2.text,
+                                    'role': 'TEACHER',
+                                  });
+                                  final userId = registerRes.data is Map ? (registerRes.data as Map)['id'] as int? : null;
+                                  if (userId == null) {
+                                    setModalState(() => loading = false);
+                                    if (ctx.mounted) ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Utilisateur créé mais ID introuvable dans la réponse.')));
+                                    return;
+                                  }
+                                  await ApiService().post('/api/auth/teachers/', data: {
+                                    'user_id': userId,
+                                    if (employeeId.text.trim().isNotEmpty) 'employee_id': employeeId.text.trim(),
+                                  });
+                                  if (ctx.mounted) {
+                                    Navigator.of(ctx).pop();
+                                    ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Enseignant créé avec succès.')));
+                                    _loadTeachers();
+                                  }
+                                } catch (e) {
+                                  setModalState(() => loading = false);
+                                  if (ctx.mounted) {
+                                    ScaffoldMessenger.of(ctx).showSnackBar(
+                                      SnackBar(content: Text('Erreur: ${e.toString().replaceAll(RegExp(r'^Exception:?\s*'), '')}')),
+                                    );
+                                  }
+                                }
+                              },
+                              child: const Text('Créer'),
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -58,9 +251,7 @@ class _AdminTeachersPageState extends ConsumerState<AdminTeachersPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: () {
-              // TODO: Créer un enseignant
-            },
+            onPressed: _showCreateTeacher,
           ),
         ],
       ),
@@ -86,7 +277,6 @@ class _AdminTeachersPageState extends ConsumerState<AdminTeachersPage> {
                             final teacher = _filteredTeachers[index];
                             final user = teacher['user'] ?? {};
                             final name = '${user['first_name'] ?? ''} ${user['last_name'] ?? ''}'.trim();
-                            
                             return Card(
                               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                               child: ListTile(
@@ -96,9 +286,7 @@ class _AdminTeachersPageState extends ConsumerState<AdminTeachersPage> {
                                 title: Text(name.isEmpty ? 'Enseignant' : name),
                                 subtitle: Text(user['email'] ?? ''),
                                 trailing: const Icon(Icons.chevron_right),
-                                onTap: () {
-                                  // TODO: Voir les détails
-                                },
+                                onTap: () => _showTeacherDetail(teacher),
                               ),
                             );
                           },

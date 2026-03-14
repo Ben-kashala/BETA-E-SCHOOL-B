@@ -8,7 +8,7 @@ import { showErrorToast, showSuccessToast } from '@/utils/toast'
 import logoImage from '@/images/logo.png'
 
 const loginSchema = z.object({
-  username: z.string().min(1, 'Le nom d\'utilisateur est requis'),
+  username: z.string().min(1, 'L\'identifiant est requis (nom d\'utilisateur, email ou téléphone)'),
   password: z.string().min(1, 'Le mot de passe est requis'),
 })
 
@@ -116,15 +116,18 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             <div>
               <label htmlFor="username" className="block text-sm font-medium text-eschool-header-text mb-2">
-                Nom d'utilisateur
+                Identifiant
               </label>
               <input
                 {...register('username')}
                 type="text"
                 id="username"
                 className="input bg-white border-eschool-header-text/30 text-eschool-header-text placeholder:text-eschool-header-text/50 focus:ring-eschool-body"
-                placeholder="Entrez votre nom d'utilisateur"
+                placeholder="Nom d'utilisateur, email ou téléphone (10 chiffres)"
               />
+              <p className="mt-1 text-xs text-eschool-header-text/60">
+                Vous pouvez utiliser votre nom d'utilisateur, votre email ou votre numéro de téléphone (10 chiffres).
+              </p>
               {errors.username && (
                 <p className="mt-1 text-sm text-red-600">{errors.username.message}</p>
               )}
@@ -155,7 +158,8 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="mt-6 text-center text-sm text-eschool-header-text/70">
+          <div className="mt-6 text-center text-sm text-eschool-header-text/70 space-y-1">
+            <p>Une fois connecté, vous pouvez changer votre mot de passe dans votre profil (menu utilisateur).</p>
             <p>Plateforme scolaire digitale pour l'Afrique</p>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/network/api_service.dart';
 
 class AdminEnrollmentsPage extends ConsumerStatefulWidget {
@@ -100,6 +101,57 @@ class _AdminEnrollmentsPageState extends ConsumerState<AdminEnrollmentsPage> {
     }
   }
 
+  void _showEnrollmentDetail(BuildContext context, Map<String, dynamic> enrollment) {
+    final name = '${enrollment['first_name'] ?? ''} ${enrollment['last_name'] ?? ''}'.trim();
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(name.isEmpty ? 'Détail inscription' : name),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Classe demandée: ${enrollment['requested_class_name'] ?? 'N/A'}'),
+              const SizedBox(height: 8),
+              Text('Statut: ${_getStatusLabel(enrollment['status'] ?? '')}'),
+              if (enrollment['created_at'] != null) ...[
+                const SizedBox(height: 8),
+                Text('Date: ${enrollment['created_at']}'),
+              ],
+              if (enrollment['notes'] != null && '${enrollment['notes']}'.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text('Notes: ${enrollment['notes']}'),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Fermer'),
+          ),
+          if (enrollment['status'] == 'PENDING') ...[
+            TextButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                _approveEnrollment(enrollment['id'] as int);
+              },
+              child: const Text('Approuver'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                _rejectEnrollment(enrollment['id'] as int);
+              },
+              child: const Text('Rejeter'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -108,9 +160,7 @@ class _AdminEnrollmentsPageState extends ConsumerState<AdminEnrollmentsPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: () {
-              // TODO: Créer une nouvelle inscription
-            },
+            onPressed: () => context.push('/admin/enrollments/new'),
           ),
         ],
       ),
@@ -159,9 +209,7 @@ class _AdminEnrollmentsPageState extends ConsumerState<AdminEnrollmentsPage> {
                               ],
                             ],
                           ),
-                          onTap: () {
-                            // TODO: Voir les détails
-                          },
+                          onTap: () => _showEnrollmentDetail(context, enrollment),
                         ),
                       );
                     },

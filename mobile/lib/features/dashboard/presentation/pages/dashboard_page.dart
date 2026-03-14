@@ -39,11 +39,13 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           : (data is Map && data['results'] != null
               ? data['results'] as List
               : <dynamic>[]);
-      
+
       // Charger les détails pour chaque enfant (notes, présences)
       final detailsMap = <int, Map<String, dynamic>>{};
       for (var item in list) {
-        final identity = item is Map ? (item['identity'] as Map?) ?? item : <String, dynamic>{};
+        final identity = item is Map
+            ? (item['identity'] as Map?) ?? item
+            : <String, dynamic>{};
         final studentId = identity['id'];
         if (studentId != null) {
           try {
@@ -52,10 +54,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               '/api/academics/grades/',
               queryParameters: {'student': studentId.toString()},
             );
-            final grades = gradesResponse.data is List 
-                ? gradesResponse.data 
+            final grades = gradesResponse.data is List
+                ? gradesResponse.data
                 : (gradesResponse.data['results'] ?? []);
-            
+
             detailsMap[studentId] = {
               'grades': grades,
               'attendance_by_week': item['attendance_by_week'] ?? [],
@@ -66,16 +68,21 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           }
         }
       }
-      
+
       if (mounted) {
         setState(() {
-          _childrenDashboard = list is List<dynamic> ? list : List<dynamic>.from(list);
+          _childrenDashboard = List<dynamic>.from(list);
           _childrenDetails = detailsMap;
           _childrenLoading = false;
         });
       }
     } catch (_) {
-      if (mounted) setState(() { _childrenDashboard = []; _childrenLoading = false; });
+      if (mounted) {
+        setState(() {
+          _childrenDashboard = [];
+          _childrenLoading = false;
+        });
+      }
     }
   }
 
@@ -88,6 +95,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     final isAdmin = user?.role == 'ADMIN';
     final isAccountant = user?.role == 'ACCOUNTANT';
     final isDisciplineOfficer = user?.role == 'DISCIPLINE_OFFICER';
+    final isPromoter = user?.role == 'PROMOTER';
 
     return Scaffold(
       appBar: AppBar(
@@ -95,9 +103,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {
-              // TODO: Ouvrir les notifications
-            },
+            onPressed: () => context.push('/communication'),
           ),
           IconButton(
             icon: const Icon(Icons.person_outline),
@@ -131,12 +137,22 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        user?.fullName ?? (isStudent ? 'Élève' : 
-                          isParent ? 'Parent' :
-                          isTeacher ? 'Enseignant' :
-                          isAdmin ? 'Administrateur' :
-                          isAccountant ? 'Comptable' :
-                          isDisciplineOfficer ? 'Chargé de discipline' : 'Utilisateur'),
+                        user?.fullName ??
+                            (isStudent
+                                ? 'Élève'
+                                : isParent
+                                    ? 'Parent'
+                                    : isTeacher
+                                        ? 'Enseignant'
+                                        : isAdmin
+                                            ? 'Administrateur'
+                                            : isAccountant
+                                                ? 'Comptable'
+                                                : isDisciplineOfficer
+                                                    ? 'Chargé de discipline'
+                                                    : isPromoter
+                                                        ? 'Promoteur'
+                                                        : 'Utilisateur'),
                         style: Theme.of(context).textTheme.headlineMedium,
                       ),
                       if (isStudent && user?.studentId != null) ...[
@@ -151,7 +167,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 ),
               ),
               const SizedBox(height: 24),
-              
+
               // Contenu selon le rôle
               if (isStudent) ...[
                 // Dashboard Élève
@@ -220,7 +236,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 ),
                 const SizedBox(height: 16),
                 if (_childrenLoading)
-                  const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
+                  const Center(
+                      child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: CircularProgressIndicator()))
                 else if (_childrenDashboard.isEmpty)
                   Card(
                     child: Padding(
@@ -233,15 +252,21 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   )
                 else
                   ...(_childrenDashboard.map<Widget>((item) {
-                    final identity = item is Map ? (item['identity'] as Map?) ?? item : <String, dynamic>{};
+                    final identity = item is Map
+                        ? (item['identity'] as Map?) ?? item
+                        : <String, dynamic>{};
                     final userData = identity['user'];
                     final userName = userData is Map
-                        ? '${userData['first_name'] ?? ''} ${userData['last_name'] ?? ''} ${userData['middle_name'] ?? ''}'.trim()
+                        ? '${userData['first_name'] ?? ''} ${userData['last_name'] ?? ''} ${userData['middle_name'] ?? ''}'
+                            .trim()
                         : (identity['user_name'] as String? ?? '');
-                    final className = identity['class_name'] as String? ?? identity['school_class_academic_year'] as String? ?? '';
+                    final className = identity['class_name'] as String? ??
+                        identity['school_class_academic_year'] as String? ??
+                        '';
                     final studentId = identity['id'];
-                    final details = studentId != null ? _childrenDetails[studentId] : null;
-                    
+                    final details =
+                        studentId != null ? _childrenDetails[studentId] : null;
+
                     return Card(
                       margin: const EdgeInsets.only(bottom: 16),
                       child: Column(
@@ -252,10 +277,13 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                               child: Icon(Icons.person),
                             ),
                             title: Text(userName.isEmpty ? 'Enfant' : userName),
-                            subtitle: Text(className.isEmpty ? 'Classe' : className),
+                            subtitle:
+                                Text(className.isEmpty ? 'Classe' : className),
                             trailing: const Icon(Icons.chevron_right),
                             onTap: () {
-                              if (studentId != null) context.push('/students/$studentId');
+                              if (studentId != null) {
+                                context.push('/students/$studentId');
+                              }
                             },
                           ),
                           // Graphiques de progression
@@ -263,9 +291,12 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                             Padding(
                               padding: const EdgeInsets.all(16),
                               child: ProgressChartsWidget(
-                                attendanceData: List<Map<String, dynamic>>.from(details['attendance_by_week'] ?? []),
-                                gradesData: List<Map<String, dynamic>>.from(details['grades'] ?? []),
-                                averageScore: details['average_score']?.toDouble(),
+                                attendanceData: List<Map<String, dynamic>>.from(
+                                    details['attendance_by_week'] ?? []),
+                                gradesData: List<Map<String, dynamic>>.from(
+                                    details['grades'] ?? []),
+                                averageScore:
+                                    details['average_score']?.toDouble(),
                               ),
                             ),
                         ],
@@ -400,6 +431,30 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                       color: Colors.indigo,
                       onTap: () => context.push('/teacher/tutoring'),
                     ),
+                    _DashboardCard(
+                      icon: Icons.library_books,
+                      title: 'Bibliothèque',
+                      color: Colors.lightGreen,
+                      onTap: () => context.push('/teacher/library'),
+                    ),
+                    _DashboardCard(
+                      icon: Icons.event,
+                      title: 'Réunions',
+                      color: Colors.deepOrange,
+                      onTap: () => context.push('/teacher/meetings'),
+                    ),
+                    _DashboardCard(
+                      icon: Icons.message,
+                      title: 'Communication',
+                      color: Colors.cyan,
+                      onTap: () => context.push('/teacher/communication'),
+                    ),
+                    _DashboardCard(
+                      icon: Icons.cast_for_education,
+                      title: 'E-learning',
+                      color: Colors.teal,
+                      onTap: () => context.push('/teacher/elearning'),
+                    ),
                   ],
                 ),
               ] else if (isAdmin) ...[
@@ -465,6 +520,42 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                       color: Colors.cyan,
                       onTap: () => context.push('/admin/communication'),
                     ),
+                    _DashboardCard(
+                      icon: Icons.event,
+                      title: 'Réunions',
+                      color: Colors.deepOrange,
+                      onTap: () => context.push('/admin/meetings'),
+                    ),
+                    _DashboardCard(
+                      icon: Icons.school,
+                      title: 'Encadrement',
+                      color: Colors.lightBlue,
+                      onTap: () => context.push('/admin/tutoring'),
+                    ),
+                    _DashboardCard(
+                      icon: Icons.money_off,
+                      title: 'Dépenses',
+                      color: Colors.red,
+                      onTap: () => context.push('/admin/expenses'),
+                    ),
+                    _DashboardCard(
+                      icon: Icons.account_balance_wallet,
+                      title: 'Caisse',
+                      color: Colors.amber,
+                      onTap: () => context.push('/admin/caisse'),
+                    ),
+                    _DashboardCard(
+                      icon: Icons.cast_for_education,
+                      title: 'E-learning',
+                      color: Colors.teal,
+                      onTap: () => context.push('/admin/elearning'),
+                    ),
+                    _DashboardCard(
+                      icon: Icons.history_edu,
+                      title: 'Anciens élèves',
+                      color: Colors.blueGrey,
+                      onTap: () => context.push('/admin/former-students'),
+                    ),
                   ],
                 ),
               ] else if (isAccountant) ...[
@@ -527,7 +618,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                       icon: Icons.gavel,
                       title: 'Discipline',
                       color: Colors.brown,
-                      onTap: () => context.push('/discipline-officer/discipline'),
+                      onTap: () =>
+                          context.push('/discipline-officer/discipline'),
                     ),
                     _DashboardCard(
                       icon: Icons.event,
@@ -539,7 +631,37 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                       icon: Icons.message,
                       title: 'Communication',
                       color: Colors.cyan,
-                      onTap: () => context.push('/discipline-officer/communication'),
+                      onTap: () =>
+                          context.push('/discipline-officer/communication'),
+                    ),
+                  ],
+                ),
+              ] else if (isPromoter) ...[
+                // Dashboard Promoteur
+                Text(
+                  'Actions rapides',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 16),
+                GridView.count(
+                  crossAxisCount: 2,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
+                  childAspectRatio: 1.05,
+                  children: [
+                    _DashboardCard(
+                      icon: Icons.dashboard,
+                      title: 'Tableau de bord',
+                      color: Colors.blue,
+                      onTap: () => context.push('/promoter'),
+                    ),
+                    _DashboardCard(
+                      icon: Icons.school,
+                      title: 'Mes écoles',
+                      color: Colors.green,
+                      onTap: () => context.push('/promoter/schools'),
                     ),
                   ],
                 ),
@@ -548,7 +670,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           ),
         ),
       ),
-      bottomNavigationBar: _wrapBottomNavSafe(context, _buildBottomNavigationBar(context, isStudent, isParent, isTeacher, isAdmin, isAccountant, isDisciplineOfficer)),
+      bottomNavigationBar: _wrapBottomNavSafe(
+          context,
+          _buildBottomNavigationBar(context, isStudent, isParent, isTeacher,
+              isAdmin, isAccountant, isDisciplineOfficer, isPromoter)),
     );
   }
 
@@ -557,7 +682,15 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     return SafeArea(child: child);
   }
 
-  Widget? _buildBottomNavigationBar(BuildContext context, bool isStudent, bool isParent, bool isTeacher, bool isAdmin, bool isAccountant, bool isDisciplineOfficer) {
+  Widget? _buildBottomNavigationBar(
+      BuildContext context,
+      bool isStudent,
+      bool isParent,
+      bool isTeacher,
+      bool isAdmin,
+      bool isAccountant,
+      bool isDisciplineOfficer,
+      bool isPromoter) {
     if (isStudent) {
       return NavigationBar(
         selectedIndex: 0,
@@ -581,7 +714,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           NavigationDestination(icon: Icon(Icons.home), label: 'Accueil'),
           NavigationDestination(icon: Icon(Icons.book), label: 'Cours'),
           NavigationDestination(icon: Icon(Icons.assignment), label: 'Devoirs'),
-          NavigationDestination(icon: Icon(Icons.library_books), label: 'Bibliothèque'),
+          NavigationDestination(
+              icon: Icon(Icons.library_books), label: 'Bibliothèque'),
         ],
       );
     } else if (isParent) {
@@ -657,7 +791,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         },
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home), label: 'Accueil'),
-          NavigationDestination(icon: Icon(Icons.person_add), label: 'Inscriptions'),
+          NavigationDestination(
+              icon: Icon(Icons.person_add), label: 'Inscriptions'),
           NavigationDestination(icon: Icon(Icons.people), label: 'Élèves'),
           NavigationDestination(icon: Icon(Icons.class_), label: 'Classes'),
         ],
@@ -685,7 +820,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           NavigationDestination(icon: Icon(Icons.home), label: 'Accueil'),
           NavigationDestination(icon: Icon(Icons.payment), label: 'Paiements'),
           NavigationDestination(icon: Icon(Icons.money_off), label: 'Dépenses'),
-          NavigationDestination(icon: Icon(Icons.account_balance_wallet), label: 'Caisse'),
+          NavigationDestination(
+              icon: Icon(Icons.account_balance_wallet), label: 'Caisse'),
         ],
       );
     } else if (isDisciplineOfficer) {
@@ -702,12 +838,39 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             case 2:
               context.push('/discipline-officer/meetings');
               break;
+            case 3:
+              context.push('/discipline-officer/communication');
+              break;
           }
         },
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home), label: 'Accueil'),
           NavigationDestination(icon: Icon(Icons.gavel), label: 'Discipline'),
           NavigationDestination(icon: Icon(Icons.event), label: 'Réunions'),
+          NavigationDestination(icon: Icon(Icons.message), label: 'Communication'),
+        ],
+      );
+    } else if (isPromoter) {
+      return NavigationBar(
+        selectedIndex: 0,
+        onDestinationSelected: (index) {
+          switch (index) {
+            case 0:
+              context.go('/dashboard');
+              break;
+            case 1:
+              context.push('/promoter');
+              break;
+            case 2:
+              context.push('/promoter/schools');
+              break;
+          }
+        },
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.home), label: 'Accueil'),
+          NavigationDestination(
+              icon: Icon(Icons.dashboard), label: 'Dashboard'),
+          NavigationDestination(icon: Icon(Icons.school), label: 'Écoles'),
         ],
       );
     }

@@ -19,6 +19,9 @@ class SchoolScopedAdminMixin:
         if request.user.is_superuser:
             return qs
         
+        # Admin plateforme (ADMIN sans école) : voit tout comme le superadmin
+        if request.user.is_authenticated and request.user.is_admin and request.user.school is None:
+            return qs
         # Si l'utilisateur est un admin d'école, filtrer par son école
         if request.user.is_authenticated and request.user.is_admin and request.user.school:
             # Vérifier si le modèle a un champ 'school'
@@ -42,27 +45,30 @@ class SchoolScopedAdminMixin:
         return qs
     
     def has_module_permission(self, request):
-        """Permet aux admins d'école de voir les modules dans Django Admin"""
+        """Permet aux admins (plateforme ou école) de voir les modules dans Django Admin"""
         if request.user.is_superuser:
             return True
-        if request.user.is_authenticated and request.user.is_admin and request.user.school and request.user.is_staff:
+        if request.user.is_authenticated and request.user.is_admin and request.user.is_staff:
             return True
         return False
-    
+
     def has_add_permission(self, request):
-        """Les admins d'école peuvent ajouter des objets pour leur école"""
+        """Superadmin et admins (plateforme ou école) peuvent ajouter des objets"""
         if request.user.is_superuser:
             return True
-        if request.user.is_authenticated and request.user.is_admin and request.user.school and request.user.is_staff:
+        if request.user.is_authenticated and request.user.is_admin and request.user.is_staff:
             return True
         return False
     
     def has_view_permission(self, request, obj=None):
-        """Les admins d'école peuvent voir les objets de leur école"""
+        """Les admins (plateforme ou école) peuvent voir les objets"""
         if request.user.is_superuser:
             return True
-        if request.user.is_authenticated and request.user.is_admin and request.user.school and request.user.is_staff:
+        if request.user.is_authenticated and request.user.is_admin and request.user.is_staff:
             if obj is None:
+                return True
+            # Admin plateforme : peut tout voir
+            if request.user.school is None:
                 return True
             # Vérifier que l'objet appartient à l'école de l'admin
             if hasattr(obj, 'school'):
@@ -71,13 +77,15 @@ class SchoolScopedAdminMixin:
                 return obj.user.school == request.user.school
             return True
         return False
-    
+
     def has_change_permission(self, request, obj=None):
-        """Les admins d'école peuvent modifier les objets de leur école"""
+        """Les admins (plateforme ou école) peuvent modifier les objets"""
         if request.user.is_superuser:
             return True
-        if request.user.is_authenticated and request.user.is_admin and request.user.school and request.user.is_staff:
+        if request.user.is_authenticated and request.user.is_admin and request.user.is_staff:
             if obj is None:
+                return True
+            if request.user.school is None:
                 return True
             # Vérifier que l'objet appartient à l'école de l'admin
             if hasattr(obj, 'school'):
@@ -86,13 +94,15 @@ class SchoolScopedAdminMixin:
                 return obj.user.school == request.user.school
             return True
         return False
-    
+
     def has_delete_permission(self, request, obj=None):
-        """Les admins d'école peuvent supprimer les objets de leur école"""
+        """Les admins (plateforme ou école) peuvent supprimer les objets"""
         if request.user.is_superuser:
             return True
-        if request.user.is_authenticated and request.user.is_admin and request.user.school and request.user.is_staff:
+        if request.user.is_authenticated and request.user.is_admin and request.user.is_staff:
             if obj is None:
+                return True
+            if request.user.school is None:
                 return True
             # Vérifier que l'objet appartient à l'école de l'admin
             if hasattr(obj, 'school'):
@@ -101,7 +111,7 @@ class SchoolScopedAdminMixin:
                 return obj.user.school == request.user.school
             return True
         return False
-    
+
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         """
         Filtre les choix dans les ForeignKey pour ne montrer que l'école de l'admin

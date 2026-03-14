@@ -10,7 +10,8 @@ from rest_framework.exceptions import PermissionDenied, NotFound
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from django.contrib.auth import get_user_model
-from .models import User, Teacher, Parent, Student
+from .models import User, Teacher, Parent, Student, PlatformSettings
+from .constants import SUPERADMIN_USERNAME
 from .serializers import (
     UserSerializer, CustomTokenObtainPairSerializer, RegisterSerializer,
     ChangePasswordSerializer,
@@ -41,6 +42,10 @@ class UserViewSet(viewsets.ModelViewSet):
         user = self.request.user
         queryset = User.objects.all()
 
+        # Superadmin ou admin plateforme (ADMIN sans école) : voient tous les utilisateurs
+        if user.is_superuser or getattr(user, 'is_platform_admin', False):
+            return queryset
+
         # Promoteur : voit uniquement les utilisateurs de SES écoles (multi-écoles)
         if getattr(user, 'is_promoter', False):
             school_ids = list(user.promoted_schools.values_list('id', flat=True))
@@ -68,8 +73,36 @@ class UserViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(id=user.id)  # Parents see only themselves
         elif user.is_student:
             queryset = queryset.filter(id=user.id)  # Students see only themselves
-        
+
         return queryset
+
+    def perform_create(self, serializer):
+        """Interdire la création d'un utilisateur avec le username du superadmin protégé."""
+        username = serializer.validated_data.get('username', '')
+        if username and username == SUPERADMIN_USERNAME:
+            raise PermissionDenied(
+                "Ce nom d'utilisateur est réservé au superadmin du système. "
+                "Utilisez un autre nom d'utilisateur."
+            )
+        super().perform_create(serializer)
+
+    def perform_update(self, serializer):
+        """Seul le superadmin protégé peut modifier son propre compte."""
+        instance = serializer.instance
+        if getattr(instance, 'is_protected_superadmin', False) and self.request.user != instance:
+            raise PermissionDenied(
+                "Le compte superadmin propriétaire du système ne peut être modifié que par lui-même."
+            )
+        super().perform_update(serializer)
+
+    def perform_destroy(self, instance):
+        """Seul le superadmin protégé peut supprimer son propre compte (en pratique on évite la suppression)."""
+        if getattr(instance, 'is_protected_superadmin', False):
+            if self.request.user != instance:
+                raise PermissionDenied(
+                    "Le compte superadmin propriétaire du système ne peut pas être supprimé par un autre utilisateur."
+                )
+        super().perform_destroy(instance)
     
     @action(detail=False, methods=['get'], url_path='school-staff')
     def school_staff(self, request):
@@ -336,10 +369,36 @@ class StudentViewSet(viewsets.ModelViewSet):
                     'excused': agg['excused'] or 0,
                     'total': total,
                 })
+            # Options de téléchargement de bulletins (classe + année)
+            bulletin_downloads = []
+            seen = set()
+            if student.school_class_id:
+                ac = (getattr(student.school_class, 'academic_year', None) or student.academic_year or '').strip()
+                if ac:
+                    key = (student.school_class_id, ac)
+                    if key not in seen:
+                        seen.add(key)
+                        bulletin_downloads.append({
+                            'school_class': student.school_class_id,
+                            'school_class_name': student.school_class.name if student.school_class else '',
+                            'academic_year': ac,
+                        })
+            for gb in GradeBulletin.objects.filter(student=student).values('school_class_id', 'academic_year').distinct():
+                sc_id = gb['school_class_id']
+                ac = (gb['academic_year'] or '').strip()
+                if sc_id and ac and (sc_id, ac) not in seen:
+                    seen.add((sc_id, ac))
+                    sc = SchoolClass.objects.filter(pk=sc_id).first()
+                    bulletin_downloads.append({
+                        'school_class': sc_id,
+                        'school_class_name': sc.name if sc else '',
+                        'academic_year': ac,
+                    })
             result.append({
                 'identity': identity,
                 'average_score': average_score,
                 'attendance_by_week': attendance_by_week,
+                'bulletin_downloads': bulletin_downloads,
             })
         return Response(result)
 
@@ -569,6 +628,42 @@ class StudentViewSet(viewsets.ModelViewSet):
         buffer = generate_bulletin_grade_pdf(student, school_class, academic_year)
         fn = f'bulletin_{student.id}_{school_class.id}_{academic_year.replace("/", "-")}.pdf'
         return FileResponse(buffer, content_type='application/pdf', as_attachment=True, filename=fn)
+
+
+@api_view(['GET', 'PATCH'])
+@permission_classes([permissions.AllowAny])  # GET public pour afficher le statut ; PATCH vérifié en interne
+def platform_settings(request):
+    """
+    GET : état du verrouillage (public, pour afficher le message avant connexion).
+    PATCH : modifier le verrouillage (réservé au superadmin protégé).
+    """
+    try:
+        ps = PlatformSettings.get_singleton()
+    except Exception:
+        return Response(
+            {'is_platform_locked': False, 'locked_message': None},
+            status=status.HTTP_200_OK
+        )
+    if request.method == 'GET':
+        return Response({
+            'is_platform_locked': ps.is_platform_locked,
+            'locked_message': ps.locked_message,
+        }, status=status.HTTP_200_OK)
+    if request.method == 'PATCH':
+        if not request.user.is_authenticated or not getattr(request.user, 'is_protected_superadmin', False):
+            raise PermissionDenied('Seul le superadmin peut modifier le verrouillage de la plateforme.')
+        is_locked = request.data.get('is_platform_locked')
+        msg = request.data.get('locked_message')
+        if is_locked is not None:
+            ps.is_platform_locked = bool(is_locked)
+        if 'locked_message' in request.data:
+            ps.locked_message = str(msg).strip() if msg else None
+        ps.save()
+        return Response({
+            'is_platform_locked': ps.is_platform_locked,
+            'locked_message': ps.locked_message,
+        }, status=status.HTTP_200_OK)
+    return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
 @api_view(['GET'])

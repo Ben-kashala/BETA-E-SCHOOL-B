@@ -1,8 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 import api from '@/services/api'
 import { Card } from '@/components/ui/Card'
-import { FileText, Calendar, CreditCard, BookOpen, User, BookMarked, GraduationCap, CheckCircle, XCircle } from 'lucide-react'
+import { FileText, Calendar, CreditCard, BookOpen, User, BookMarked, GraduationCap, CheckCircle, XCircle, Download } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import toast from 'react-hot-toast'
+
+interface BulletinOption {
+  school_class: number
+  school_class_name: string
+  academic_year: string
+}
 
 interface ChildData {
   identity: {
@@ -15,6 +22,7 @@ interface ChildData {
     academic_year?: string
   }
   average_score: number | null
+  bulletin_downloads?: BulletinOption[]
   attendance_by_week: Array<{
     week_start: string
     week_end: string
@@ -25,6 +33,27 @@ interface ChildData {
     excused: number
     total: number
   }>
+}
+
+async function downloadBulletin(studentId: number, schoolClassId: number, academicYear: string, studentName: string) {
+  try {
+    const res = await api.get(`/auth/students/${studentId}/bulletin_pdf/`, {
+      params: { school_class: schoolClassId, academic_year: academicYear },
+      responseType: 'blob',
+    })
+    const url = window.URL.createObjectURL(new Blob([res.data]))
+    const a = document.createElement('a')
+    a.href = url
+    a.setAttribute('download', `bulletin_${studentName.replace(/\s+/g, '-')}_${academicYear.replace('/', '-')}.pdf`)
+    document.body.appendChild(a)
+    a.click()
+    window.URL.revokeObjectURL(url)
+    a.remove()
+    toast.success('Bulletin téléchargé.')
+  } catch (err: unknown) {
+    const msg = err && typeof err === 'object' && 'response' in err && (err as { response?: { data?: unknown } }).response?.data
+    toast.error(msg ? String(msg) : 'Impossible de télécharger le bulletin.')
+  }
 }
 
 export default function ParentDashboard() {
@@ -52,7 +81,7 @@ export default function ParentDashboard() {
 
       {children.length > 0 ? (
         <div className="space-y-6">
-          {children.map(({ identity, average_score, attendance_by_week }: ChildData) => (
+          {children.map(({ identity, average_score, attendance_by_week, bulletin_downloads }: ChildData) => (
             <Card key={identity.id} className="p-6">
               <h2 className="text-xl font-semibold mb-4 flex items-center gap-2 text-gray-900 dark:text-gray-100">
                 <User className="w-5 h-5" />
@@ -91,6 +120,32 @@ export default function ParentDashboard() {
                   </div>
                 </div>
               </div>
+
+              {/* Télécharger le bulletin */}
+              {bulletin_downloads && bulletin_downloads.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">Bulletin scolaire</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {bulletin_downloads.map((opt) => (
+                      <button
+                        key={`${opt.school_class}-${opt.academic_year}`}
+                        type="button"
+                        onClick={() => downloadBulletin(
+                          identity.id,
+                          opt.school_class,
+                          opt.academic_year,
+                          `${identity.user?.first_name ?? ''} ${identity.user?.last_name ?? ''}`.trim() || identity.student_id
+                        )}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium transition-colors"
+                      >
+                        <Download className="w-4 h-4" />
+                        Télécharger {opt.academic_year}
+                        {bulletin_downloads.length > 1 ? ` (${opt.school_class_name})` : ''}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Présences et absences par semaine */}
               <div>

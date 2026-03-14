@@ -7,6 +7,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth.models import Permission
 from django.conf import settings
 from .models import User
+from .constants import SUPERADMIN_USERNAME
 
 # Mots de passe par défaut pour les parents et élèves
 # Ces valeurs peuvent être surchargées via les variables d'environnement
@@ -15,22 +16,32 @@ DEFAULT_STUDENT_PASSWORD = getattr(settings, 'DEFAULT_STUDENT_PASSWORD', 'Eleve@
 
 
 @receiver(pre_save, sender=User)
-def auto_activate_staff_for_school_admin(sender, instance, **kwargs):
+def enforce_unique_protected_superadmin(sender, instance, **kwargs):
     """
-    Active automatiquement is_staff pour les administrateurs d'école
-    afin qu'ils puissent accéder à Django Admin
+    Seul l'utilisateur Alidorsabue peut avoir is_superuser=True.
+    Tout autre utilisateur qui tenterait d'avoir is_superuser est forcé à False.
     """
-    if instance.is_admin and instance.school:
+    if instance.is_superuser and instance.username != SUPERADMIN_USERNAME:
+        instance.is_superuser = False
+
+
+@receiver(pre_save, sender=User)
+def auto_activate_staff_for_admin(sender, instance, **kwargs):
+    """
+    Active automatiquement is_staff pour les administrateurs (école ou plateforme)
+    afin qu'ils puissent accéder à Django Admin.
+    """
+    if instance.role == 'ADMIN':
         instance.is_staff = True
 
 
 @receiver(post_save, sender=User)
 def grant_admin_permissions_to_school_admin(sender, instance, created, **kwargs):
     """
-    Donne automatiquement toutes les permissions nécessaires aux administrateurs d'école
-    pour qu'ils puissent voir et modifier les objets dans Django Admin
+    Donne automatiquement toutes les permissions nécessaires aux administrateurs
+    (d'école ou plateforme) pour qu'ils puissent voir et modifier les objets dans Django Admin.
     """
-    if instance.is_admin and instance.school and instance.is_staff:
+    if instance.role == 'ADMIN' and instance.is_staff:
         # Donner toutes les permissions à l'administrateur d'école
         # Cela permet d'accéder à tous les modèles dans Django Admin
         # Le filtrage par école sera géré par SchoolScopedAdminMixin

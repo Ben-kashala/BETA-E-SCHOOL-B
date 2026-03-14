@@ -1,26 +1,24 @@
 """
-Commande pour créer un SUPERADMIN (gère tout : écoles et admins d'école).
+Commande pour créer le SUPERADMIN propriétaire du système (premier utilisateur au déploiement).
 Usage: python manage.py seed_initial
 
 Variables d'environnement optionnelles:
-- ADMIN_USERNAME (défaut: Alidorsabue)
+- ADMIN_USERNAME (défaut: Alidorsabue — doit rester ce nom pour le superadmin protégé)
 - ADMIN_EMAIL (défaut: alidorsabue@africait.com)
 - ADMIN_PASSWORD (obligatoire en prod, sans ça la commande ne crée rien)
 - SCHOOL_NAME (défaut: COLLEGE VITAL MAURICE) - optionnel, pour créer une première école
 - SCHOOL_CODE (défaut: CVMA) - optionnel, pour créer une première école
 
-Note: Cette commande crée un SUPERADMIN (is_superuser=True) qui peut :
-- Créer et gérer toutes les écoles
-- Créer et gérer les admins d'école
-- Voir toutes les données de toutes les écoles
-
-Les admins d'école (role='ADMIN' + school défini + is_staff=True mais pas is_superuser) 
-ne peuvent gérer que leur école.
+Le superadmin créé (Alidorsabue) est protégé : aucun autre utilisateur ne peut le modifier
+ni le supprimer. Lui seul peut modifier son propre compte. Les admins plateforme (ADMIN sans
+école) peuvent créer des écoles et des admins d'école, mais ne peuvent jamais toucher au
+compte superadmin.
 """
 import os
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from apps.schools.models import School
+from apps.accounts.constants import SUPERADMIN_USERNAME
 
 User = get_user_model()
 
@@ -29,7 +27,7 @@ class Command(BaseCommand):
     help = "Crée un SUPERADMIN (gère tout) depuis les variables d'environnement"
 
     def handle(self, *args, **options):
-        username = os.environ.get('ADMIN_USERNAME', 'Alidorsabue')
+        username = os.environ.get('ADMIN_USERNAME', SUPERADMIN_USERNAME)
         email = os.environ.get('ADMIN_EMAIL', 'alidorsabue@africait.com')
         password = os.environ.get('ADMIN_PASSWORD', "Virgi@1996Ali@")
         school_name = os.environ.get('SCHOOL_NAME', 'COLLEGE VITAL MAURICE')

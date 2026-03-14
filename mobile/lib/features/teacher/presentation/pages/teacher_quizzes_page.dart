@@ -15,9 +15,12 @@ class _TeacherQuizzesPageState extends ConsumerState<TeacherQuizzesPage> {
   List<dynamic> _quizzes = [];
   List<dynamic> _filteredQuizzes = [];
   bool _isLoading = true;
+  String? _errorMessage;
   String _searchQuery = '';
   String? _selectedSubject;
   String? _selectedClass;
+  String _statusFilter = 'ALL';
+  String _sortBy = 'date_desc';
   List<dynamic> _subjects = [];
   List<dynamic> _classes = [];
 
@@ -37,45 +40,94 @@ class _TeacherQuizzesPageState extends ConsumerState<TeacherQuizzesPage> {
       ]);
 
       setState(() {
-        _quizzes = quizzesRes.data is List 
-            ? quizzesRes.data 
+        _quizzes = quizzesRes.data is List
+            ? quizzesRes.data
             : (quizzesRes.data['results'] ?? []);
-        _subjects = subjectsRes.data is List 
-            ? subjectsRes.data 
+        _subjects = subjectsRes.data is List
+            ? subjectsRes.data
             : (subjectsRes.data['results'] ?? []);
-        _classes = classesRes.data is List 
-            ? classesRes.data 
+        _classes = classesRes.data is List
+            ? classesRes.data
             : (classesRes.data['results'] ?? []);
         _applyFilters();
+        _errorMessage = null;
         _isLoading = false;
       });
-    } catch (e) {
-      setState(() => _isLoading = false);
+    } catch (_) {
+      setState(() {
+        _errorMessage = 'Impossible de charger les quiz.';
+        _isLoading = false;
+      });
     }
   }
 
   void _applyFilters() {
-    setState(() {
-      _filteredQuizzes = _quizzes.where((quiz) {
-        if (_searchQuery.isNotEmpty) {
-          final title = (quiz['title'] ?? '').toString().toLowerCase();
-          if (!title.contains(_searchQuery.toLowerCase())) {
-            return false;
-          }
+    final filtered = _quizzes.where((quiz) {
+      if (_searchQuery.isNotEmpty) {
+        final title = (quiz['title'] ?? '').toString().toLowerCase();
+        if (!title.contains(_searchQuery.toLowerCase())) {
+          return false;
         }
-        if (_selectedSubject != null) {
-          if (quiz['subject']?['id'] != int.parse(_selectedSubject!)) {
-            return false;
-          }
+      }
+      if (_selectedSubject != null) {
+        if (quiz['subject']?['id'] != int.parse(_selectedSubject!)) {
+          return false;
         }
-        if (_selectedClass != null) {
-          if (quiz['school_class']?['id'] != int.parse(_selectedClass!)) {
-            return false;
-          }
+      }
+      if (_selectedClass != null) {
+        if (quiz['school_class']?['id'] != int.parse(_selectedClass!)) {
+          return false;
         }
-        return true;
-      }).toList();
+      }
+      if (_statusFilter == 'PUBLISHED' && quiz['is_published'] != true) {
+        return false;
+      }
+      if (_statusFilter == 'DRAFT' && quiz['is_published'] == true) {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    filtered.sort((a, b) {
+      if (_sortBy == 'title') {
+        return (a['title'] ?? '')
+            .toString()
+            .compareTo((b['title'] ?? '').toString());
+      }
+      final ad =
+          DateTime.tryParse('${a['start_date'] ?? a['created_at'] ?? ''}') ??
+              DateTime(1970);
+      final bd =
+          DateTime.tryParse('${b['start_date'] ?? b['created_at'] ?? ''}') ??
+              DateTime(1970);
+      return _sortBy == 'date_asc' ? ad.compareTo(bd) : bd.compareTo(ad);
     });
+
+    setState(() => _filteredQuizzes = filtered);
+  }
+
+  Future<void> _togglePublished(Map<String, dynamic> quiz) async {
+    final id = quiz['id'];
+    if (id == null) return;
+    final isPublished = quiz['is_published'] == true;
+    try {
+      await ApiService().patch(
+        '/api/elearning/quizzes/$id/',
+        data: {'is_published': !isPublished},
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content:
+                Text(!isPublished ? 'Quiz publié.' : 'Quiz en brouillon.')),
+      );
+      await _loadData();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Échec de mise à jour du statut.')),
+      );
+    }
   }
 
   @override
@@ -94,6 +146,56 @@ class _TeacherQuizzesPageState extends ConsumerState<TeacherQuizzesPage> {
       ),
       body: Column(
         children: [
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+            child: Row(
+              children: [
+                ChoiceChip(
+                  label: const Text('Tous'),
+                  selected: _statusFilter == 'ALL',
+                  onSelected: (_) {
+                    _statusFilter = 'ALL';
+                    _applyFilters();
+                  },
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text('Publiés'),
+                  selected: _statusFilter == 'PUBLISHED',
+                  onSelected: (_) {
+                    _statusFilter = 'PUBLISHED';
+                    _applyFilters();
+                  },
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text('Brouillons'),
+                  selected: _statusFilter == 'DRAFT',
+                  onSelected: (_) {
+                    _statusFilter = 'DRAFT';
+                    _applyFilters();
+                  },
+                ),
+                const SizedBox(width: 14),
+                DropdownButton<String>(
+                  value: _sortBy,
+                  items: const [
+                    DropdownMenuItem(
+                        value: 'date_desc', child: Text('Date (récent)')),
+                    DropdownMenuItem(
+                        value: 'date_asc', child: Text('Date (ancien)')),
+                    DropdownMenuItem(value: 'title', child: Text('Titre')),
+                  ],
+                  onChanged: (v) {
+                    if (v == null) return;
+                    _sortBy = v;
+                    _applyFilters();
+                  },
+                ),
+              ],
+            ),
+          ),
           SearchFilterBar(
             hintText: 'Rechercher un quiz...',
             onSearchChanged: (value) {
@@ -104,19 +206,23 @@ class _TeacherQuizzesPageState extends ConsumerState<TeacherQuizzesPage> {
               FilterOption(
                 key: 'subject',
                 label: 'Matière',
-                values: _subjects.map((s) => FilterValue(
-                  value: s['id'].toString(),
-                  label: s['name'] ?? 'Matière',
-                )).toList(),
+                values: _subjects
+                    .map((s) => FilterValue(
+                          value: s['id'].toString(),
+                          label: s['name'] ?? 'Matière',
+                        ))
+                    .toList(),
                 selectedValue: _selectedSubject,
               ),
               FilterOption(
                 key: 'class',
                 label: 'Classe',
-                values: _classes.map((c) => FilterValue(
-                  value: c['id'].toString(),
-                  label: c['name'] ?? 'Classe',
-                )).toList(),
+                values: _classes
+                    .map((c) => FilterValue(
+                          value: c['id'].toString(),
+                          label: c['name'] ?? 'Classe',
+                        ))
+                    .toList(),
                 selectedValue: _selectedClass,
               ),
             ],
@@ -137,37 +243,91 @@ class _TeacherQuizzesPageState extends ConsumerState<TeacherQuizzesPage> {
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : _filteredQuizzes.isEmpty
-                    ? const Center(child: Text('Aucun quiz'))
-                    : RefreshIndicator(
-                        onRefresh: _loadData,
-                        child: ListView.builder(
-                          itemCount: _filteredQuizzes.length,
-                          itemBuilder: (context, index) {
-                            final quiz = _filteredQuizzes[index];
-                            return Card(
-                              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              child: ListTile(
-                                leading: const Icon(Icons.quiz),
-                                title: Text(quiz['title'] ?? 'Quiz'),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Classe: ${quiz['school_class']?['name'] ?? 'N/A'}'),
-                                    Text('Matière: ${quiz['subject']?['name'] ?? 'N/A'}'),
-                                    if (quiz['time_limit'] != null)
-                                      Text('Durée: ${quiz['time_limit']} min'),
-                                  ],
-                                ),
-                                trailing: const Icon(Icons.chevron_right),
-                                onTap: () {
-                                  // TODO: Voir les détails
-                                },
+                : _errorMessage != null
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(_errorMessage!),
+                              const SizedBox(height: 8),
+                              ElevatedButton(
+                                onPressed: _loadData,
+                                child: const Text('Réessayer'),
                               ),
-                            );
-                          },
+                            ],
+                          ),
                         ),
-                      ),
+                      )
+                    : _filteredQuizzes.isEmpty
+                        ? const Center(child: Text('Aucun quiz'))
+                        : RefreshIndicator(
+                            onRefresh: _loadData,
+                            child: ListView.builder(
+                              itemCount: _filteredQuizzes.length,
+                              itemBuilder: (context, index) {
+                                final quiz = _filteredQuizzes[index];
+                                return Card(
+                                  margin: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 8),
+                                  child: ListTile(
+                                    leading: const Icon(Icons.quiz),
+                                    title: Text(quiz['title'] ?? 'Quiz'),
+                                    subtitle: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                            'Classe: ${quiz['school_class']?['name'] ?? 'N/A'}'),
+                                        Text(
+                                            'Matière: ${quiz['subject']?['name'] ?? 'N/A'}'),
+                                        Text(
+                                          'Statut: ${quiz['is_published'] == true ? 'Publié' : 'Brouillon'}',
+                                        ),
+                                        if (quiz['time_limit'] != null)
+                                          Text(
+                                              'Durée: ${quiz['time_limit']} min'),
+                                      ],
+                                    ),
+                                    trailing: PopupMenuButton<String>(
+                                      onSelected: (value) async {
+                                        if (value == 'detail') {
+                                          context.push(
+                                              '/teacher/quizzes/${quiz['id']}');
+                                        } else if (value == 'publish') {
+                                          await _togglePublished(
+                                              Map<String, dynamic>.from(
+                                                  quiz as Map));
+                                        }
+                                      },
+                                      itemBuilder: (_) => [
+                                        const PopupMenuItem(
+                                          value: 'detail',
+                                          child: Text('Ouvrir détails'),
+                                        ),
+                                        PopupMenuItem(
+                                          value: 'publish',
+                                          child: Text(
+                                            quiz['is_published'] == true
+                                                ? 'Passer en brouillon'
+                                                : 'Publier',
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    onTap: () {
+                                      final id = quiz['id'];
+                                      if (id == null) {
+                                        return;
+                                      }
+                                      context.push('/teacher/quizzes/$id');
+                                    },
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
           ),
         ],
       ),

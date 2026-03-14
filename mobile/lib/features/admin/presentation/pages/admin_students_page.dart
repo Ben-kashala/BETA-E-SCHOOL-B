@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/network/api_service.dart';
 
 class AdminStudentsPage extends ConsumerStatefulWidget {
@@ -51,9 +52,7 @@ class _AdminStudentsPageState extends ConsumerState<AdminStudentsPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: () {
-              // TODO: Créer un nouvel élève
-            },
+            onPressed: () => context.push('/admin/enrollments'),
           ),
         ],
       ),
@@ -102,7 +101,10 @@ class _AdminStudentsPageState extends ConsumerState<AdminStudentsPage> {
                               subtitle: Text('ID: ${student['student_id'] ?? 'N/A'}'),
                               trailing: const Icon(Icons.chevron_right),
                               onTap: () {
-                                // TODO: Voir les détails de l'élève
+                                final id = student['id'];
+                                if (id != null) {
+                                  context.push('/students/$id');
+                                }
                               },
                             ),
                           );

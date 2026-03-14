@@ -112,14 +112,15 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 TextFormField(
                   controller: _usernameController,
                   decoration: const InputDecoration(
-                    labelText: 'Nom d\'utilisateur ou Email',
+                    labelText: 'Identifiant',
+                    hintText: 'Nom d\'utilisateur, email ou téléphone (10 chiffres)',
                     prefixIcon: Icon(Icons.person),
                   ),
-                  keyboardType: TextInputType.emailAddress,
+                  keyboardType: TextInputType.text,
                   textInputAction: TextInputAction.next,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'Veuillez entrer votre nom d\'utilisateur';
+                      return 'Veuillez entrer votre identifiant (nom d\'utilisateur, email ou téléphone)';
                     }
                     return null;
                   },

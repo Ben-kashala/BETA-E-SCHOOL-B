@@ -1,7 +1,154 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/providers/auth_provider.dart';
+import '../../../../core/network/api_service.dart';
+
+void _showChangePasswordDialog(BuildContext context) {
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => const _ChangePasswordDialog(),
+  );
+}
+
+class _ChangePasswordDialog extends StatefulWidget {
+  const _ChangePasswordDialog();
+
+  @override
+  State<_ChangePasswordDialog> createState() => _ChangePasswordDialogState();
+}
+
+class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _currentController = TextEditingController();
+  final _newController = TextEditingController();
+  final _confirmController = TextEditingController();
+  bool _obscureCurrent = true;
+  bool _obscureNew = true;
+  bool _obscureConfirm = true;
+  bool _loading = false;
+
+  @override
+  void dispose() {
+    _currentController.dispose();
+    _newController.dispose();
+    _confirmController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (_newController.text != _confirmController.text) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Les nouveaux mots de passe ne correspondent pas.')),
+      );
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      await ApiService().post(
+        '/api/auth/users/change_password/',
+        data: {
+          'current_password': _currentController.text,
+          'new_password': _newController.text,
+          'new_password2': _confirmController.text,
+        },
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Mot de passe modifié avec succès.'), backgroundColor: Colors.green),
+      );
+    } on DioException catch (e) {
+      if (!mounted) return;
+      String msg = 'Erreur lors du changement de mot de passe.';
+      final data = e.response?.data;
+      if (data is Map) {
+        for (final key in ['current_password', 'new_password', 'new_password2', 'non_field_errors', 'detail']) {
+          final v = data[key];
+          if (v is String) { msg = v; break; }
+          if (v is List && v.isNotEmpty && v[0] is String) { msg = v[0] as String; break; }
+        }
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg), backgroundColor: Colors.red),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Changer le mot de passe'),
+      content: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: _currentController,
+                obscureText: _obscureCurrent,
+                decoration: InputDecoration(
+                  labelText: 'Mot de passe actuel',
+                  suffixIcon: IconButton(
+                    icon: Icon(_obscureCurrent ? Icons.visibility : Icons.visibility_off),
+                    onPressed: () => setState(() => _obscureCurrent = !_obscureCurrent),
+                  ),
+                ),
+                validator: (v) => (v == null || v.isEmpty) ? 'Requis' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _newController,
+                obscureText: _obscureNew,
+                decoration: InputDecoration(
+                  labelText: 'Nouveau mot de passe',
+                  suffixIcon: IconButton(
+                    icon: Icon(_obscureNew ? Icons.visibility : Icons.visibility_off),
+                    onPressed: () => setState(() => _obscureNew = !_obscureNew),
+                  ),
+                ),
+                validator: (v) => (v == null || v.length < 6) ? 'Au moins 6 caractères' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _confirmController,
+                obscureText: _obscureConfirm,
+                decoration: InputDecoration(
+                  labelText: 'Confirmer le nouveau mot de passe',
+                  suffixIcon: IconButton(
+                    icon: Icon(_obscureConfirm ? Icons.visibility : Icons.visibility_off),
+                    onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                  ),
+                ),
+                validator: (v) => (v == null || v.isEmpty) ? 'Requis' : null,
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _loading ? null : () => Navigator.of(context).pop(),
+          child: const Text('Annuler'),
+        ),
+        ElevatedButton(
+          onPressed: _loading ? null : _submit,
+          child: _loading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Modifier'),
+        ),
+      ],
+    );
+  }
+}
 
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
@@ -75,6 +222,13 @@ class ProfilePage extends ConsumerWidget {
             Card(
               child: Column(
                 children: [
+                  ListTile(
+                    leading: const Icon(Icons.lock_outline),
+                    title: const Text('Changer le mot de passe'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _showChangePasswordDialog(context),
+                  ),
+                  const Divider(),
                   ListTile(
                     leading: const Icon(Icons.settings),
                     title: const Text('Préférences'),
