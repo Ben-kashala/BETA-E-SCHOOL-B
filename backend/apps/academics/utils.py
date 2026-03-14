@@ -334,30 +334,31 @@ def generate_bulletin_rdc_pdf(report_card):
         class BorderCanvas(canvas.Canvas):
             def showPage(self):
                 self.saveState()
-                w, h = self._pagesize
-                self.setFillColor(colors.HexColor("#eef6ff"))
-                self.rect(0, 0, w, h, stroke=0, fill=1)
-                if watermark_path and os.path.isfile(watermark_path):
-                    try:
-                        self.setFillAlpha(0.08)
-                        size = 3.2 * inch
-                        self.drawImage(
-                            watermark_path,
-                            (w - size) / 2,
-                            (h - size) / 2 - 0.5 * inch,
-                            width=size,
-                            height=size,
-                            preserveAspectRatio=True,
-                            mask="auto",
-                        )
+                try:
+                    w, h = self._pagesize
+                    self.setFillColor(colors.HexColor("#eef6ff"))
+                    self.rect(0, 0, w, h, stroke=0, fill=1)
+                    if watermark_path and os.path.isfile(watermark_path):
+                        try:
+                            self.setFillAlpha(0.08)
+                            size = 3.2 * inch
+                            self.drawImage(
+                                watermark_path,
+                                (w - size) / 2,
+                                (h - size) / 2 - 0.5 * inch,
+                                width=size,
+                                height=size,
+                                preserveAspectRatio=True,
+                            )
+                        except Exception:
+                            pass
                         self.setFillAlpha(1)
-                    except Exception:
-                        pass
-                self.setStrokeColor(colors.black)
-                self.setLineWidth(1.2)
-                m = margin
-                self.rect(m, m, w - 2 * m, h - 2 * m)
-                self.restoreState()
+                    self.setStrokeColor(colors.black)
+                    self.setLineWidth(1.2)
+                    m = margin
+                    self.rect(m, m, w - 2 * m, h - 2 * m)
+                finally:
+                    self.restoreState()
                 super().showPage()
         return BorderCanvas
 
@@ -551,12 +552,12 @@ def generate_bulletin_rdc_pdf(report_card):
         ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
 
-    eleve_line = f"{_dots(full_name, 30)} SEXE : {_dots(sex_label, 6)}"
-    naissance_line = f"{_dots(place_of_birth, 20)} LE {dob_str}"
+    eleve_line = f"{(full_name, 30)} SEXE : {(sex_label, 6)}"
+    naissance_line = f"{(place_of_birth, 20)} LE {dob_str}"
     info_data = [
         ["VILLE :", (city, 46), "ELEVE :", eleve_line],
         ["COMMUNE /TER (1) :",(commune, 40), "NE (E) A :", naissance_line],
-        ["ECOLE :", _dots(school_name, 42), "CLASSE :", _dots(classe, 30)],
+        ["ECOLE :", (school_name, 42), "CLASSE :", (classe, 30)],
         ["CODE :", code_boxes, "N° PERM.", perm_boxes],
     ]
     info_table = Table(

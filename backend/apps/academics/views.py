@@ -800,5 +800,6 @@ class ReportCardViewSet(viewsets.ModelViewSet):
             report_card.pdf_file = pdf_file
             report_card.save(update_fields=['pdf_file'])
         except Exception as e:
+            logging.getLogger(__name__).exception("download_pdf: %s", e)
             return Response({'error': 'Échec de la génération du PDF', 'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return FileResponse(report_card.pdf_file.open(), content_type='application/pdf')

@@ -177,7 +177,7 @@ class StudentViewSet(viewsets.ModelViewSet):
         user = self.request.user
         queryset = Student.objects.select_related(
             'user', 'school_class', 'school_class__titulaire', 'school_class__titulaire__user', 'parent'
-        ).all()
+        ).order_by('id')
 
         # Promoteur : élèves dans toutes ses écoles
         if getattr(user, 'is_promoter', False):
@@ -588,7 +588,7 @@ def bulletin_pdf_download(request, pk):
             {'error': 'Les paramètres school_class et academic_year sont obligatoires.'},
             status=status.HTTP_400_BAD_REQUEST
         )
-    qs = Student.objects.select_related('user', 'school_class', 'parent').all()
+    qs = Student.objects.select_related('user', 'school_class', 'parent').order_by('id')
     if request.user.school:
         qs = qs.filter(user__school=request.user.school)
     if getattr(request.user, 'is_parent', False):
