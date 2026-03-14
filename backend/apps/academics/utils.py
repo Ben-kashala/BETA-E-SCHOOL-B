@@ -582,8 +582,8 @@ def generate_bulletin_rdc_pdf(report_card):
     ]
     header_row3 = [
         "",
-        "", "1ère P.", "2è P.", "", "",
-        "", "3è P.", "4è P.", "", "",
+        "", "1ère P.", "2e P.", "", "",
+        "", "3e P.", "4e P.", "", "",
         "", "", "",
     ]
     header_row1 = header_row1[:num_cols]
@@ -825,7 +825,7 @@ def generate_bulletin_rdc_pdf(report_card):
     story.append(Paragraph("- L'élève passe dans la classe supérieure (1)", style_small))
     story.append(Paragraph("- L'élève double la classe (1)", style_small))
     story.append(Spacer(1, 2))
-    story.append(Paragraph("…………………………………………………………………………………………………….............................................................................................................................................................................................(1)", style_small))
+    story.append(Paragraph("……………………………………………………………………………………………………............................................................................................................................(1)", style_small))
     story.append(Spacer(1, 0))
     story.append(Paragraph("(1) Biffer la mention inutile.", style_small))
     story.append(Paragraph("Note importante : Le bulletin est sans valeur s'il est raturé ou surchargé.", style_small))
@@ -835,27 +835,10 @@ def generate_bulletin_rdc_pdf(report_card):
         style_small,
     ))
     story.append(Spacer(1, 1))
-    bottom_sig = Table(
-        [[
-            Paragraph("Sceau de l'Ecole", style_small),
-            Paragraph(f"Fait à {city or '………………………………………'}, le……..…/…………/20……..", style_small),
-            Paragraph("Chef d'Etablissement,", style_small),
-            Paragraph("Signature de l'élève", style_small),
-        ]],
-        colWidths=_fit_widths([1.55 * inch, 2.35 * inch, 1.4 * inch, 1.2 * inch]),
-    )
-    bottom_sig.setStyle(TableStyle([
-        ("ALIGN", (0, 0), (0, 0), "LEFT"),
-        ("ALIGN", (1, 0), (1, 0), "LEFT"),
-        ("ALIGN", (2, 0), (2, 0), "RIGHT"),
-        ("ALIGN", (3, 0), (3, 0), "RIGHT"),
-        ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ("TOPPADDING", (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-    ]))
-    story.append(bottom_sig)
+    story.append(Paragraph("Sceau de l'Ecole", style_small))
+    story.append(Paragraph(f"Fait à {city or '………………………………………'}, le……..…/…………/20……..", style_small))
+    story.append(Paragraph("Chef d'Etablissement,", ParagraphStyle("right3", parent=style_small, alignment=2)))
+    story.append(Paragraph("Signature de l'élève", style_small))
 
     doc.build(story)
     buffer.seek(0)
