@@ -327,7 +327,7 @@ def generate_bulletin_rdc_pdf(report_card):
     from reportlab.lib.styles import ParagraphStyle
 
     buffer = BytesIO()
-    margin_pt = 0.2 * inch
+    margin_pt = 0.08 * inch
     watermark_path = _bulletin_logo_path("Armoirie.png") or _bulletin_logo_path("rdc_arms.png")
 
     def _make_border_canvas(margin):
@@ -354,7 +354,7 @@ def generate_bulletin_rdc_pdf(report_card):
                     except Exception:
                         pass
                 self.setStrokeColor(colors.black)
-                self.setLineWidth(1.5)
+                self.setLineWidth(1.2)
                 m = margin
                 self.rect(m, m, w - 2 * m, h - 2 * m)
                 self.restoreState()
@@ -370,6 +370,12 @@ def generate_bulletin_rdc_pdf(report_card):
         bottomMargin=margin_pt,
         canvasmaker=_make_border_canvas(margin_pt),
     )
+    full_w = doc.width
+
+    def _fit_widths(widths):
+        total = sum(widths) or 1
+        factor = full_w / total
+        return [w * factor for w in widths]
     styles = getSampleStyleSheet()
     # En-tête : texte en blanc sur fond sombre (ou noir pour impression)
     style_title_main = ParagraphStyle(
@@ -415,7 +421,7 @@ def generate_bulletin_rdc_pdf(report_card):
     code_ecole = getattr(school, "code", "") if school else ""
 
     # ----- EN-TÊTE : Drapeau gauche, 3 lignes centrées, Armoiries droite -----
-    logo_w, logo_h = 1.05 * inch, 0.78 * inch
+    logo_w, logo_h = 1.1 * inch, 0.76 * inch
     left_logo_path = (
         _bulletin_logo_path("Drapeau.png")
         or _bulletin_logo_path("drapeau_RDC.png")
@@ -460,14 +466,14 @@ def generate_bulletin_rdc_pdf(report_card):
     ]))
     story.append(header_table)
     # Ligne horizontale fine noire sous l'en-tête (pleine largeur)
-    line_table = Table([[""]], colWidths=[doc.width])
+    line_table = Table([[""]], colWidths=[full_w])
     line_table.setStyle(TableStyle([
         ("LINEABOVE", (0, 0), (-1, -1), 1, colors.black),
         ("TOPPADDING", (0, 0), (-1, -1), 0),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
     ]))
     story.append(line_table)
-    story.append(Spacer(1, 1))
+    story.append(Spacer(1, 0))
 
     # ----- BLOC INFOS : structure du modèle officiel -----
     full_name = user.get_full_name() or ""
@@ -479,7 +485,9 @@ def generate_bulletin_rdc_pdf(report_card):
     n_perm = student.student_id or ""
 
     id_cells = ["N° ID."] + [""] * 22
-    id_table = Table([id_cells], colWidths=[0.52 * inch] + [0.272 * inch] * 22)
+    id_label_w = 0.55 * inch
+    id_cell_w = (full_w - id_label_w) / 22
+    id_table = Table([id_cells], colWidths=[id_label_w] + [id_cell_w] * 22)
     id_table.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.25, colors.black),
         ("FONTSIZE", (0, 0), (-1, -1), 6.2),
@@ -491,7 +499,7 @@ def generate_bulletin_rdc_pdf(report_card):
 
     province_table = Table(
         [["PROVINCE EDUCATIONNELLE :", province]],
-        colWidths=[2.35 * inch, 4.35 * inch],
+        colWidths=[2.35 * inch, full_w - 2.35 * inch],
     )
     province_table.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.25, colors.black),
@@ -511,7 +519,7 @@ def generate_bulletin_rdc_pdf(report_card):
     ]
     info_table = Table(
         info_data,
-        colWidths=[1.22 * inch, 2.0 * inch, 0.95 * inch, 1.84 * inch, 0.58 * inch, 0.9 * inch],
+        colWidths=_fit_widths([1.22 * inch, 2.0 * inch, 0.95 * inch, 1.84 * inch, 0.58 * inch, 0.9 * inch]),
     )
     info_table.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.25, colors.black),
@@ -526,7 +534,7 @@ def generate_bulletin_rdc_pdf(report_card):
         ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
     ]))
     story.append(info_table)
-    story.append(Spacer(1, 1))
+    story.append(Spacer(1, 0))
 
     # ----- TITRE : BULLETIN DE LA ... ANNEE SCOLAIRE ... (encadré bordure noire fine) -----
     titre_bulletin = f"BULLETIN DE LA 1ère ANNEE DES HUMANITES SCIENTIFIQUES    ANNEE SCOLAIRE {report_card.academic_year or '2024 - 2025'}"
@@ -541,7 +549,7 @@ def generate_bulletin_rdc_pdf(report_card):
         spaceAfter=2,
     )
     titre_para = Paragraph(f"<b>{titre_bulletin}</b>", style_titre)
-    titre_wrapper = Table([[titre_para]], colWidths=[doc.width])
+    titre_wrapper = Table([[titre_para]], colWidths=[full_w])
     titre_wrapper.setStyle(TableStyle([
         ("BOX", (0, 0), (-1, -1), 0.5, colors.black),
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
@@ -549,7 +557,7 @@ def generate_bulletin_rdc_pdf(report_card):
         ("BACKGROUND", (0, 0), (-1, -1), colors.white),
     ]))
     story.append(titre_wrapper)
-    story.append(Spacer(1, 2))
+    story.append(Spacer(1, 0))
 
     # ----- TABLEAU DES NOTES (structure officielle : 14 colonnes, 3 niveaux d'en-têtes) -----
     # Colonnes : BRANCHES | PREMIER SEMESTRE (MAX., TRAVAUX JOURNAL. 1ère P./2è P., MAX. EXAM., TOTAL) | SECOND (3è P./4è P., idem) | TOTAL GENERAL | EXAMEN DE REPECHAGE (%, Sign. Prof.)
@@ -711,14 +719,15 @@ def generate_bulletin_rdc_pdf(report_card):
                 row.append("")
             data_rows.append(row[:num_cols])
 
-    col_widths = [
+    col_widths = _fit_widths([
         1.48 * inch,
         0.33 * inch, 0.37 * inch, 0.33 * inch, 0.37 * inch, 0.35 * inch,
         0.33 * inch, 0.37 * inch, 0.33 * inch, 0.37 * inch, 0.35 * inch,
         0.42 * inch,
         0.32 * inch, 0.38 * inch,
-    ]
-    table = Table(data_rows, colWidths=col_widths[:num_cols])
+    ])
+    row_heights = [0.18 * inch, 0.18 * inch, 0.14 * inch] + [None] * (len(data_rows) - 3)
+    table = Table(data_rows, colWidths=col_widths[:num_cols], rowHeights=row_heights)
     tbl_style = [
         ("SPAN", (0, 0), (0, 2)),
         ("SPAN", (1, 0), (5, 0)),
@@ -756,7 +765,7 @@ def generate_bulletin_rdc_pdf(report_card):
             tbl_style.append(("FONTNAME", (0, r), (-1, r), "Helvetica-Bold"))
     table.setStyle(TableStyle(tbl_style))
     story.append(table)
-    story.append(Spacer(1, 1))
+    story.append(Spacer(1, 0))
 
     # ----- SECTION RÉSUMÉ : gauche = MAXIMA, TOTAUX, POURCENTAGE, PLACE, APPLICATION, CONDUITE, SIGNATURE | droite = encadré - PASSE (1), - DOUBLE (1), LE..../....../20...., Chef d'Etablissement, Sceau de l'Ecole -----
     pct = ""
@@ -775,7 +784,9 @@ def generate_bulletin_rdc_pdf(report_card):
         ["CONDUITE", conduite],
         ["SIGNATURE", ""],
     ]
-    footer_left_table = Table(footer_left_data, colWidths=[1.72 * inch, 2.7 * inch])
+    footer_right_w = 2.02 * inch
+    footer_left_w = full_w - footer_right_w
+    footer_left_table = Table(footer_left_data, colWidths=[1.72 * inch, footer_left_w - 1.72 * inch])
     footer_left_table.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.25, colors.black),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -795,7 +806,7 @@ def generate_bulletin_rdc_pdf(report_card):
     ]
     footer_right_text = "\n<br/>\n".join(footer_right_cells)
     footer_right_para = Paragraph(footer_right_text, style_small)
-    footer_table = Table([[footer_left_table, footer_right_para]], colWidths=[4.42 * inch, 2.02 * inch])
+    footer_table = Table([[footer_left_table, footer_right_para]], colWidths=[footer_left_w, footer_right_w])
     footer_table.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (0, 0), 0),
@@ -804,7 +815,7 @@ def generate_bulletin_rdc_pdf(report_card):
         ("BACKGROUND", (1, 0), (1, 0), colors.white),
     ]))
     story.append(footer_table)
-    story.append(Spacer(1, 1))
+    story.append(Spacer(1, 0))
 
     # ----- DÉCISIONS ET MENTIONS LÉGALES (ordre comme capture 2) -----
     story.append(Paragraph(
@@ -815,7 +826,7 @@ def generate_bulletin_rdc_pdf(report_card):
     story.append(Paragraph("- L'élève double la classe (1)", style_small))
     story.append(Spacer(1, 2))
     story.append(Paragraph("…………………………………………………………………………………………………….............................................................................................................................................................................................(1)", style_small))
-    story.append(Spacer(1, 1))
+    story.append(Spacer(1, 0))
     story.append(Paragraph("(1) Biffer la mention inutile.", style_small))
     story.append(Paragraph("Note importante : Le bulletin est sans valeur s'il est raturé ou surchargé.", style_small))
     story.append(Paragraph("IGE/P.S./012", style_small))
@@ -831,7 +842,7 @@ def generate_bulletin_rdc_pdf(report_card):
             Paragraph("Chef d'Etablissement,", style_small),
             Paragraph("Signature de l'élève", style_small),
         ]],
-        colWidths=[1.55 * inch, 2.35 * inch, 1.4 * inch, 1.2 * inch],
+        colWidths=_fit_widths([1.55 * inch, 2.35 * inch, 1.4 * inch, 1.2 * inch]),
     )
     bottom_sig.setStyle(TableStyle([
         ("ALIGN", (0, 0), (0, 0), "LEFT"),
