@@ -327,7 +327,7 @@ def generate_bulletin_rdc_pdf(report_card):
     from reportlab.lib.styles import ParagraphStyle
 
     buffer = BytesIO()
-    margin_pt = 0.32 * inch
+    margin_pt = 0.2 * inch
     watermark_path = _bulletin_logo_path("Armoirie.png") or _bulletin_logo_path("rdc_arms.png")
 
     def _make_border_canvas(margin):
@@ -398,6 +398,9 @@ def generate_bulletin_rdc_pdf(report_card):
         "small",
         parent=styles["Normal"],
         fontSize=6.4,
+        leading=6.6,
+        spaceBefore=0,
+        spaceAfter=0,
     )
     story = []
 
@@ -457,7 +460,7 @@ def generate_bulletin_rdc_pdf(report_card):
     ]))
     story.append(header_table)
     # Ligne horizontale fine noire sous l'en-tête (pleine largeur)
-    line_table = Table([[""]], colWidths=[7 * inch])
+    line_table = Table([[""]], colWidths=[doc.width])
     line_table.setStyle(TableStyle([
         ("LINEABOVE", (0, 0), (-1, -1), 1, colors.black),
         ("TOPPADDING", (0, 0), (-1, -1), 0),
@@ -538,7 +541,7 @@ def generate_bulletin_rdc_pdf(report_card):
         spaceAfter=2,
     )
     titre_para = Paragraph(f"<b>{titre_bulletin}</b>", style_titre)
-    titre_wrapper = Table([[titre_para]], colWidths=[7 * inch])
+    titre_wrapper = Table([[titre_para]], colWidths=[doc.width])
     titre_wrapper.setStyle(TableStyle([
         ("BOX", (0, 0), (-1, -1), 0.5, colors.black),
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
@@ -729,7 +732,7 @@ def generate_bulletin_rdc_pdf(report_card):
         ("ALIGN", (1, 0), (-1, -1), "CENTER"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("FONTNAME", (0, 0), (-1, 2), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 5.6),
+        ("FONTSIZE", (0, 0), (-1, -1), 5.2),
         ("LEFTPADDING", (0, 0), (-1, -1), 1),
         ("RIGHTPADDING", (0, 0), (-1, -1), 1),
         ("TOPPADDING", (0, 0), (-1, -1), 0),
@@ -753,7 +756,7 @@ def generate_bulletin_rdc_pdf(report_card):
             tbl_style.append(("FONTNAME", (0, r), (-1, r), "Helvetica-Bold"))
     table.setStyle(TableStyle(tbl_style))
     story.append(table)
-    story.append(Spacer(1, 2))
+    story.append(Spacer(1, 1))
 
     # ----- SECTION RÉSUMÉ : gauche = MAXIMA, TOTAUX, POURCENTAGE, PLACE, APPLICATION, CONDUITE, SIGNATURE | droite = encadré - PASSE (1), - DOUBLE (1), LE..../....../20...., Chef d'Etablissement, Sceau de l'Ecole -----
     pct = ""
@@ -772,7 +775,7 @@ def generate_bulletin_rdc_pdf(report_card):
         ["CONDUITE", conduite],
         ["SIGNATURE", ""],
     ]
-    footer_left_table = Table(footer_left_data, colWidths=[1.75 * inch, 2.75 * inch])
+    footer_left_table = Table(footer_left_data, colWidths=[1.72 * inch, 2.7 * inch])
     footer_left_table.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.25, colors.black),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -792,10 +795,7 @@ def generate_bulletin_rdc_pdf(report_card):
     ]
     footer_right_text = "\n<br/>\n".join(footer_right_cells)
     footer_right_para = Paragraph(footer_right_text, style_small)
-    footer_table = Table(
-        [[footer_left_table, footer_right_para]],
-        colWidths=[4.5 * inch, 2.1 * inch],
-    )
+    footer_table = Table([[footer_left_table, footer_right_para]], colWidths=[4.42 * inch, 2.02 * inch])
     footer_table.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (0, 0), 0),
@@ -804,7 +804,7 @@ def generate_bulletin_rdc_pdf(report_card):
         ("BACKGROUND", (1, 0), (1, 0), colors.white),
     ]))
     story.append(footer_table)
-    story.append(Spacer(1, 2))
+    story.append(Spacer(1, 1))
 
     # ----- DÉCISIONS ET MENTIONS LÉGALES (ordre comme capture 2) -----
     story.append(Paragraph(
@@ -814,31 +814,37 @@ def generate_bulletin_rdc_pdf(report_card):
     story.append(Paragraph("- L'élève passe dans la classe supérieure (1)", style_small))
     story.append(Paragraph("- L'élève double la classe (1)", style_small))
     story.append(Spacer(1, 2))
-    # Ligne signatures : gauche Signature de l'élève, centre Sceau de l'Ecole, droite Fait à ... le....../....../20......
-    sig_line = Table([
-        [
-            Paragraph("<b>Signature de l'élève</b>", style_small),
-            Paragraph("<b>Sceau de l'Ecole</b>", style_small),
-            Paragraph(f"Fait à {city or '..............................................'} le....../....../20......", style_small),
-        ]
-    ], colWidths=[2.15 * inch, 2.1 * inch, 2.35 * inch])
-    sig_line.setStyle(TableStyle([
-        ("ALIGN", (0, 0), (0, 0), "LEFT"),
-        ("ALIGN", (1, 0), (1, 0), "CENTER"),
-        ("ALIGN", (2, 0), (2, 0), "RIGHT"),
-    ]))
-    story.append(sig_line)
-    story.append(Spacer(1, 2))
+    story.append(Paragraph("…………………………………………………………………………………………………….............................................................................................................................................................................................(1)", style_small))
+    story.append(Spacer(1, 1))
     story.append(Paragraph("(1) Biffer la mention inutile.", style_small))
     story.append(Paragraph("Note importante : Le bulletin est sans valeur s'il est raturé ou surchargé.", style_small))
+    story.append(Paragraph("IGE/P.S./012", style_small))
     story.append(Paragraph(
         "<b>Interdiction formelle de reproduire ce bulletin sous peine des sanctions prévues par la loi.</b>",
         style_small,
     ))
     story.append(Spacer(1, 1))
-    # En bas à droite : Chef d'Etablissement, puis IGE/P.S./012 en dessous
-    story.append(Paragraph("<b>Chef d'Etablissement,</b>", ParagraphStyle("right", parent=style_small, alignment=2)))
-    story.append(Paragraph("IGE/P.S./012", ParagraphStyle("right2", parent=style_small, alignment=2)))
+    bottom_sig = Table(
+        [[
+            Paragraph("Sceau de l'Ecole", style_small),
+            Paragraph(f"Fait à {city or '………………………………………'}, le……..…/…………/20……..", style_small),
+            Paragraph("Chef d'Etablissement,", style_small),
+            Paragraph("Signature de l'élève", style_small),
+        ]],
+        colWidths=[1.55 * inch, 2.35 * inch, 1.4 * inch, 1.2 * inch],
+    )
+    bottom_sig.setStyle(TableStyle([
+        ("ALIGN", (0, 0), (0, 0), "LEFT"),
+        ("ALIGN", (1, 0), (1, 0), "LEFT"),
+        ("ALIGN", (2, 0), (2, 0), "RIGHT"),
+        ("ALIGN", (3, 0), (3, 0), "RIGHT"),
+        ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    story.append(bottom_sig)
 
     doc.build(story)
     buffer.seek(0)
