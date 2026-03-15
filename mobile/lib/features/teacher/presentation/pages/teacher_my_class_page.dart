@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 import '../../../../core/network/api_service.dart';
 import '../../../../core/widgets/search_filter_bar.dart';
 
@@ -85,20 +87,31 @@ class _TeacherMyClassPageState extends ConsumerState<TeacherMyClassPage> {
 
   Future<void> _downloadBulletin(int studentId, int? schoolClassId, String? academicYear) async {
     if (schoolClassId == null || academicYear == null) return;
-    
+
     try {
-      final api = ApiService();
-      final baseUrl = api.baseUrl;
-      final url = '$baseUrl/api/accounts/students/$studentId/bulletin_pdf/?school_class=$schoolClassId&academic_year=${Uri.encodeComponent(academicYear)}';
-      
-      // TODO: Implémenter le téléchargement du PDF
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Téléchargement: $url')),
-      );
+      final baseUrl = ApiService().baseUrl;
+      final suffix = baseUrl.endsWith('/') ? '' : '/';
+      final url = '$baseUrl${suffix}api/auth/students/$studentId/bulletin_pdf/?school_class=$schoolClassId&academic_year=${Uri.encodeComponent(academicYear)}';
+
+      final appDir = await getApplicationDocumentsDirectory();
+      final dir = Directory('${appDir.path}/downloads/bulletins');
+      if (!await dir.exists()) await dir.create(recursive: true);
+      final safeYear = academicYear.replaceAll(RegExp(r'[^0-9-]'), '_');
+      final filePath = '${dir.path}/bulletin_${studentId}_$safeYear.pdf';
+
+      await ApiService().downloadFile(url, filePath);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Bulletin enregistré: $filePath')),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e')),
+        );
+      }
     }
   }
 

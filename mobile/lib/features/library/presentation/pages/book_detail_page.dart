@@ -80,15 +80,35 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     });
 
     try {
+      final urlRaw = _book!['book_file'] ?? _book!['file_url'] ?? _book!['pdf_url'];
+      if (urlRaw == null || urlRaw.toString().trim().isEmpty) {
+        throw Exception('Fichier non disponible pour ce livre');
+      }
+      String downloadUrl = urlRaw.toString();
+      if (!downloadUrl.startsWith('http')) {
+        final base = ApiService().baseUrl;
+        final origin = Uri.parse(base).origin;
+        downloadUrl = origin + (downloadUrl.startsWith('/') ? downloadUrl : '/$downloadUrl');
+      }
+
       final appDir = await getApplicationDocumentsDirectory();
       final downloadDir = Directory('${appDir.path}/downloads/books');
       if (!await downloadDir.exists()) {
         await downloadDir.create(recursive: true);
       }
+      final fileName = downloadUrl.split('/').last;
+      final safeName = fileName.contains('.') ? fileName : 'book_${widget.bookId}.pdf';
+      final filePath = '${downloadDir.path}/book_${widget.bookId}_$safeName';
 
-      // TODO: Implémenter le téléchargement réel avec progression
-      // Simuler pour l'instant
-      await Future.delayed(const Duration(seconds: 2));
+      await ApiService().downloadFile(
+        downloadUrl,
+        filePath,
+        onReceiveProgress: (received, total) {
+          if (mounted && total > 0) {
+            setState(() => _progress = received / total);
+          }
+        },
+      );
 
       final db = DatabaseService.database;
       await db.insert('library_books', {
@@ -97,9 +117,9 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         'author': _book!['author'],
         'description': _book!['description'],
         'cover_url': _book!['cover_url'],
-        'file_path': downloadDir.path,
+        'file_path': filePath,
         'is_downloaded': 1,
-        'progress': 0.0,
+        'progress': 1.0,
         'created_at': DateTime.now().millisecondsSinceEpoch,
         'updated_at': DateTime.now().millisecondsSinceEpoch,
       });

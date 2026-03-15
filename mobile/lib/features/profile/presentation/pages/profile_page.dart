@@ -12,6 +12,69 @@ void _showChangePasswordDialog(BuildContext context) {
   );
 }
 
+void _showHelpDialog(BuildContext context) {
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Aide'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Bienvenue sur E-School.'),
+            const SizedBox(height: 12),
+            const Text('Fonctionnalités principales :'),
+            const SizedBox(height: 8),
+            const Text('• Tableau de bord : vue d\'ensemble de votre activité'),
+            const Text('• Cours & Devoirs : accédez à vos contenus et rendus'),
+            const Text('• Notes & Bulletins : consultez vos résultats'),
+            const Text('• Paiements : suivez les frais scolaires'),
+            const Text('• Réunions : dates des rencontres parent-enseignant'),
+            const Text('• Bibliothèque : livres et ressources'),
+            const SizedBox(height: 12),
+            const Text('En cas de problème, contactez l\'administration de votre école.'),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('Fermer'),
+        ),
+      ],
+    ),
+  );
+}
+
+void _showAboutDialog(BuildContext context) {
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('À propos'),
+      content: const SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('E-School', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            SizedBox(height: 8),
+            Text('Application mobile de gestion scolaire.'),
+            SizedBox(height: 12),
+            Text('Plateforme digitale pour les écoles : cours, notes, paiements, réunions et plus.'),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('Fermer'),
+        ),
+      ],
+    ),
+  );
+}
+
 class _ChangePasswordDialog extends StatefulWidget {
   const _ChangePasswordDialog();
 
@@ -242,18 +305,14 @@ class ProfilePage extends ConsumerWidget {
                     leading: const Icon(Icons.help_outline),
                     title: const Text('Aide'),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      // TODO: Page d'aide
-                    },
+                    onTap: () => _showHelpDialog(context),
                   ),
                   const Divider(),
                   ListTile(
                     leading: const Icon(Icons.info_outline),
                     title: const Text('À propos'),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      // TODO: Page à propos
-                    },
+                    onTap: () => _showAboutDialog(context),
                   ),
                 ],
               ),

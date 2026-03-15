@@ -15,6 +15,7 @@ class LibraryPage extends ConsumerStatefulWidget {
 class _LibraryPageState extends ConsumerState<LibraryPage> {
   List<dynamic> _books = [];
   List<dynamic> _filteredBooks = [];
+  List<dynamic> _categories = [];
   bool _isLoading = true;
   String _searchQuery = '';
   String? _selectedCategory;
@@ -23,13 +24,22 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   void initState() {
     super.initState();
     _loadBooks();
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final response = await ApiService().get('/api/library/categories/', useCache: false);
+      setState(() {
+        _categories = response.data is List ? response.data : (response.data['results'] ?? []);
+      });
+    } catch (_) {
+      setState(() => _categories = []);
+    }
   }
 
   Future<void> _loadBooks() async {
-    setState(() {
-      _isLoading = true;
-    });
-
+    setState(() => _isLoading = true);
     try {
       final response = await ApiService().get('/api/library/books/');
       setState(() {
@@ -40,9 +50,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
         _isLoading = false;
       });
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
     }
   }
 
@@ -88,8 +96,11 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                 key: 'category',
                 label: 'Catégorie',
                 values: [
-                  FilterValue(value: 'all', label: 'Toutes'),
-                  // TODO: Charger les catégories depuis l'API
+                  const FilterValue(value: 'all', label: 'Toutes'),
+                  ..._categories.map((c) => FilterValue(
+                        value: (c['id'] ?? c['name']).toString(),
+                        label: c['name'] ?? 'Catégorie',
+                      )),
                 ],
                 selectedValue: _selectedCategory,
               ),

@@ -48,10 +48,14 @@ import '../../features/promoter/presentation/pages/promoter_dashboard_page.dart'
 import '../../features/promoter/presentation/pages/promoter_schools_page.dart';
 import '../providers/auth_provider.dart';
 
+/// Clé utilisée pour la navigation depuis les notifications (hors build).
+final globalNavigatorKey = GlobalKey<NavigatorState>();
+
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
 
   return GoRouter(
+    navigatorKey: globalNavigatorKey,
     initialLocation: '/splash',
     redirect: (context, state) {
       final isAuthenticated = authState.isAuthenticated;
@@ -376,7 +380,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/teacher/class-subjects',
-        builder: (context, state) => const TeacherClassSubjectsPage(),
+        builder: (context, state) => TeacherClassSubjectsPage(
+          initialClassId: state.extra as int?,
+        ),
       ),
       GoRoute(
         path: '/teacher/students',

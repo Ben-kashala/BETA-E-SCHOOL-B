@@ -1,8 +1,10 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/foundation.dart';
+import 'package:go_router/go_router.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tz_data;
 import '../preferences/preferences_service.dart';
+import '../router/app_router.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -44,8 +46,17 @@ class NotificationService {
   }
 
   void _onNotificationTapped(NotificationResponse response) {
-    // TODO: Gérer la navigation selon le type de notification
     debugPrint('Notification tapped: ${response.payload}');
+    final payload = response.payload?.trim();
+    final path = payload != null && payload.isNotEmpty ? payload : '/dashboard';
+    final ctx = globalNavigatorKey.currentContext;
+    if (ctx != null) {
+      try {
+        GoRouter.of(ctx).go(path);
+      } catch (e) {
+        debugPrint('Navigation from notification failed: $e');
+      }
+    }
   }
 
   Future<void> showNotification({

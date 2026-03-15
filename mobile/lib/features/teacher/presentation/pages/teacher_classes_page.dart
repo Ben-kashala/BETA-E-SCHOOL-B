@@ -62,7 +62,7 @@ class _TeacherClassesPageState extends ConsumerState<TeacherClassesPage> {
                           subtitle: Text('Niveau: ${classItem['level'] ?? 'N/A'}'),
                           trailing: const Icon(Icons.chevron_right),
                           onTap: () {
-                            // TODO: Navigation vers détails de la classe
+                            context.push('/teacher/class-subjects', extra: classItem['id'] as int?);
                           },
                         ),
                       );

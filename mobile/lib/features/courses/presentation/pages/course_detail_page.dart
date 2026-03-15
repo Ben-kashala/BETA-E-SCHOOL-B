@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/network/api_service.dart';
 import '../../../../core/database/database_service.dart';
 import 'dart:io';
@@ -21,6 +22,7 @@ class _CourseDetailPageState extends ConsumerState<CourseDetailPage> {
   bool _isLoading = true;
   bool _isDownloaded = false;
   bool _isDownloading = false;
+  double _downloadProgress = 0.0;
 
   @override
   void initState() {
@@ -81,25 +83,39 @@ class _CourseDetailPageState extends ConsumerState<CourseDetailPage> {
 
     setState(() {
       _isDownloading = true;
+      _downloadProgress = 0.0;
     });
 
     try {
       final appDir = await getApplicationDocumentsDirectory();
-      final downloadDir = Directory('${appDir.path}/downloads');
+      final downloadDir = Directory('${appDir.path}/downloads/courses');
       if (!await downloadDir.exists()) {
         await downloadDir.create(recursive: true);
       }
 
-      // Télécharger le contenu du cours
-      // TODO: Implémenter le téléchargement réel
+      String? contentPath = downloadDir.path;
+      final contentUrl = _course!['content_url']?.toString() ?? _course!['video_url']?.toString();
+      if (contentUrl != null && contentUrl.startsWith('http')) {
+        final ext = contentUrl.contains('.pdf') ? 'pdf' : (contentUrl.contains('.mp4') ? 'mp4' : 'html');
+        final filePath = '${downloadDir.path}/course_${widget.courseId}.$ext';
+        await ApiService().downloadFile(
+          contentUrl,
+          filePath,
+          onReceiveProgress: (received, total) {
+            if (mounted && total > 0) {
+              setState(() => _downloadProgress = received / total);
+            }
+          },
+        );
+        contentPath = filePath;
+      }
 
-      // Enregistrer dans la base de données
       final db = DatabaseService.database;
       await db.insert('downloaded_courses', {
         'course_id': widget.courseId,
         'title': _course!['title'],
         'description': _course!['description'],
-        'content_path': downloadDir.path,
+        'content_path': contentPath,
         'downloaded_at': DateTime.now().millisecondsSinceEpoch,
         'is_complete': 1,
       });
@@ -146,12 +162,20 @@ class _CourseDetailPageState extends ConsumerState<CourseDetailPage> {
       appBar: AppBar(
         title: Text(_course!['title'] ?? 'Cours'),
         actions: [
-          IconButton(
-            icon: _isDownloaded
-                ? const Icon(Icons.check_circle)
-                : const Icon(Icons.download),
-            onPressed: _isDownloaded || _isDownloading ? null : _downloadCourse,
-          ),
+          if (_isDownloading)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(value: _downloadProgress > 0 ? _downloadProgress : null),
+              ),
+            )
+          else
+            IconButton(
+              icon: _isDownloaded ? const Icon(Icons.check_circle) : const Icon(Icons.download),
+              onPressed: _isDownloaded || _isDownloading ? null : _downloadCourse,
+            ),
         ],
       ),
       body: SingleChildScrollView(
@@ -182,8 +206,18 @@ class _CourseDetailPageState extends ConsumerState<CourseDetailPage> {
               ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
-              onPressed: () {
-                // TODO: Ouvrir le cours
+              onPressed: () async {
+                final url = _course!['content_url']?.toString() ?? _course!['video_url']?.toString();
+                if (url != null && url.trim().isNotEmpty) {
+                  final uri = Uri.tryParse(url);
+                  if (uri != null && await canLaunchUrl(uri)) {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  } else if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Lien non disponible')));
+                  }
+                } else if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Contenu à venir')));
+                }
               },
               icon: const Icon(Icons.play_arrow),
               label: const Text('Commencer le cours'),

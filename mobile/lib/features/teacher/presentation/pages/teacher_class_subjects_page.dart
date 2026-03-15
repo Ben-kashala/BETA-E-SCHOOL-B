@@ -4,7 +4,9 @@ import '../../../../core/network/api_service.dart';
 import '../../../../core/widgets/search_filter_bar.dart';
 
 class TeacherClassSubjectsPage extends ConsumerStatefulWidget {
-  const TeacherClassSubjectsPage({super.key});
+  const TeacherClassSubjectsPage({super.key, this.initialClassId});
+
+  final int? initialClassId;
 
   @override
   ConsumerState<TeacherClassSubjectsPage> createState() => _TeacherClassSubjectsPageState();
@@ -37,7 +39,11 @@ class _TeacherClassSubjectsPageState extends ConsumerState<TeacherClassSubjectsP
           ? classesRes.data 
           : (classesRes.data['results'] ?? []);
       
-      final firstClassId = classes.isNotEmpty ? classes.first['id'] as int? : null;
+      int? classToSelect = widget.initialClassId;
+      final classIds = classes.map((c) => c['id'] as int?).toSet();
+      if (classToSelect == null || !classIds.contains(classToSelect)) {
+        classToSelect = classes.isNotEmpty ? classes.first['id'] as int? : null;
+      }
       setState(() {
         _classes = classes;
         _allSubjects = subjectsRes.data is List 
@@ -46,13 +52,11 @@ class _TeacherClassSubjectsPageState extends ConsumerState<TeacherClassSubjectsP
         _teachers = teachersRes.data is List 
             ? teachersRes.data 
             : (teachersRes.data['results'] ?? []);
-        if (firstClassId != null && _selectedClassId == null) {
-          _selectedClassId = firstClassId;
-        }
+        _selectedClassId = classToSelect;
         _isLoading = false;
       });
-      if (firstClassId != null) {
-        await _loadClassSubjects(firstClassId);
+      if (classToSelect != null) {
+        await _loadClassSubjects(classToSelect);
       }
     } catch (e) {
       setState(() => _isLoading = false);

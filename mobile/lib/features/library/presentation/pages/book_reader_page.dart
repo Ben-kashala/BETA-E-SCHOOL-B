@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:dio/dio.dart';
 import 'dart:io';
 import '../../../../core/network/api_service.dart';
 import '../../../../core/database/database_service.dart';
+import '../../../../core/database/hive_service.dart';
 
 class BookReaderPage extends ConsumerStatefulWidget {
   final int bookId;
@@ -24,6 +25,7 @@ class BookReaderPage extends ConsumerStatefulWidget {
 
 class _BookReaderPageState extends ConsumerState<BookReaderPage> {
   PdfViewerController? _pdfViewerController;
+  PdfTextSearchResult? _searchResult;
   String? _pdfPath;
   bool _isLoading = true;
   bool _isDownloading = false;
@@ -31,6 +33,7 @@ class _BookReaderPageState extends ConsumerState<BookReaderPage> {
   int _currentPage = 1;
   int _totalPages = 0;
   bool _showControls = true;
+  double _zoomLevel = 1.0;
 
   @override
   void initState() {
@@ -85,10 +88,15 @@ class _BookReaderPageState extends ConsumerState<BookReaderPage> {
       // Obtenir l'URL du PDF
       final bookResponse = await ApiService().get('/api/library/books/${widget.bookId}/');
       final book = bookResponse.data as Map<String, dynamic>;
-      final pdfUrl = widget.initialUrl ?? book['file_url'] ?? book['pdf_url'];
+      final pdfUrl = widget.initialUrl ?? book['book_file'] ?? book['file_url'] ?? book['pdf_url'];
 
-      if (pdfUrl == null) {
+      if (pdfUrl == null || pdfUrl.toString().trim().isEmpty) {
         throw Exception('URL du PDF non disponible');
+      }
+      String downloadUrl = pdfUrl.toString();
+      if (!downloadUrl.startsWith('http')) {
+        final origin = Uri.parse(ApiService().baseUrl).origin;
+        downloadUrl = origin + (downloadUrl.startsWith('/') ? downloadUrl : '/$downloadUrl');
       }
 
       // Télécharger le fichier
@@ -98,18 +106,15 @@ class _BookReaderPageState extends ConsumerState<BookReaderPage> {
         await downloadDir.create(recursive: true);
       }
 
-      final fileName = pdfUrl.split('/').last;
-      final filePath = '${downloadDir.path}/$fileName';
+      final fileName = downloadUrl.split('/').last;
+      final filePath = '${downloadDir.path}/book_${widget.bookId}_${fileName.contains('.') ? fileName : 'document.pdf'}';
 
-      final dio = Dio();
-      await dio.download(
-        pdfUrl,
+      await ApiService().downloadFile(
+        downloadUrl,
         filePath,
         onReceiveProgress: (received, total) {
-          if (total > 0) {
-            setState(() {
-              _downloadProgress = received / total;
-            });
+          if (total > 0 && mounted) {
+            setState(() => _downloadProgress = received / total);
           }
         },
       );
@@ -165,6 +170,102 @@ class _BookReaderPageState extends ConsumerState<BookReaderPage> {
     }
   }
 
+  void _restoreBookmark() {
+    final page = HiveService.getSetting<int>('pdf_bookmark_${widget.bookId}');
+    if (page != null && page > 0 && _pdfViewerController != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _pdfViewerController?.jumpToPage(page);
+      });
+    }
+  }
+
+  void _saveBookmark() {
+    HiveService.saveSetting('pdf_bookmark_${widget.bookId}', _currentPage);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Signet enregistré (page $_currentPage)')),
+      );
+    }
+  }
+
+  void _zoomIn() {
+    if (_pdfViewerController == null) return;
+    setState(() {
+      _zoomLevel = (_zoomLevel + 0.25).clamp(0.5, 3.0);
+      _pdfViewerController!.zoomLevel = _zoomLevel;
+    });
+  }
+
+  void _showFullscreen() {
+    if (_pdfPath == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (ctx) => Scaffold(
+          appBar: AppBar(
+            title: const Text('Lecteur PDF'),
+            leading: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.of(ctx).pop(),
+            ),
+          ),
+          body: SfPdfViewer.file(File(_pdfPath!), controller: PdfViewerController()),
+        ),
+      ),
+    );
+  }
+
+  void _showSearchDialog() {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rechercher'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(hintText: 'Texte à rechercher'),
+          onSubmitted: (text) {
+            if (text.trim().isEmpty) return;
+            Navigator.of(ctx).pop();
+            _runSearch(text.trim());
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (controller.text.trim().isEmpty) return;
+              Navigator.of(ctx).pop();
+              _runSearch(controller.text.trim());
+            },
+            child: const Text('Rechercher'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _runSearch(String text) {
+    _searchResult?.clear();
+    _searchResult = _pdfViewerController?.searchText(text);
+    if (_searchResult == null) return;
+    if (kIsWeb) {
+      setState(() {});
+    } else {
+      _searchResult!.addListener(() {
+        if (mounted) setState(() {});
+      });
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Recherche: « $text »')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -184,15 +285,28 @@ class _BookReaderPageState extends ConsumerState<BookReaderPage> {
               actions: [
                 IconButton(
                   icon: const Icon(Icons.search),
-                  onPressed: () {
-                    // TODO: Recherche dans le PDF
-                  },
+                  onPressed: _showSearchDialog,
                 ),
+                if (_searchResult != null && _searchResult!.hasResult) ...[
+                  IconButton(
+                    icon: const Icon(Icons.clear),
+                    onPressed: () {
+                      _searchResult?.clear();
+                      setState(() {});
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.navigate_before),
+                    onPressed: () => _searchResult?.previousInstance(),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.navigate_next),
+                    onPressed: () => _searchResult?.nextInstance(),
+                  ),
+                ],
                 IconButton(
                   icon: const Icon(Icons.bookmark),
-                  onPressed: () {
-                    // TODO: Ajouter un signet
-                  },
+                  onPressed: _saveBookmark,
                 ),
               ],
             )
@@ -221,10 +335,13 @@ class _BookReaderPageState extends ConsumerState<BookReaderPage> {
                       SfPdfViewer.file(
                         File(_pdfPath!),
                         controller: _pdfViewerController,
+                        currentSearchTextHighlightColor: Colors.yellow,
+                        otherSearchTextHighlightColor: Colors.orange,
                         onDocumentLoaded: (details) {
                           setState(() {
                             _totalPages = details.document.pages.count;
                           });
+                          _restoreBookmark();
                         },
                         onPageChanged: (details) {
                           setState(() {
@@ -294,17 +411,13 @@ class _BookReaderPageState extends ConsumerState<BookReaderPage> {
                                       children: [
                                         TextButton.icon(
                                           icon: const Icon(Icons.zoom_in, color: Colors.white),
-                                          label: const Text('Zoom', style: TextStyle(color: Colors.white)),
-                                          onPressed: () {
-                                            // TODO: Zoom
-                                          },
+                                          label: Text('Zoom ${(_zoomLevel * 100).toInt()}%', style: const TextStyle(color: Colors.white)),
+                                          onPressed: _zoomIn,
                                         ),
                                         TextButton.icon(
                                           icon: const Icon(Icons.fullscreen, color: Colors.white),
                                           label: const Text('Plein écran', style: TextStyle(color: Colors.white)),
-                                          onPressed: () {
-                                            // TODO: Plein écran
-                                          },
+                                          onPressed: _showFullscreen,
                                         ),
                                       ],
                                     ),

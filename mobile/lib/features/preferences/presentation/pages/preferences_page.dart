@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/database/hive_service.dart';
 import '../../../../core/preferences/preferences_service.dart';
 
 class PreferencesPage extends ConsumerStatefulWidget {
@@ -238,12 +239,14 @@ class _PreferencesPageState extends ConsumerState<PreferencesPage> {
                           child: const Text('Annuler'),
                         ),
                         ElevatedButton(
-                          onPressed: () {
-                            // TODO: Effacer le cache
-                            Navigator.of(context).pop();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Cache effacé')),
-                            );
+                          onPressed: () async {
+                            await HiveService.clearCache();
+                            if (context.mounted) Navigator.of(context).pop();
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Cache effacé')),
+                              );
+                            }
                           },
                           child: const Text('Effacer'),
                         ),
