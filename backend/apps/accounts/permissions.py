@@ -10,7 +10,7 @@ class PlatformLockPermission(permissions.BasePermission):
     Si la plateforme est verrouillée, seul le superadmin protégé peut accéder.
     Les requêtes non authentifiées sont autorisées (pour la page de login, etc.).
     """
-    message = 'La plateforme est temporairement indisponible. Seul le superadmin peut se connecter.'
+    message = 'La plateforme est temporairement indisponible.'
 
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:

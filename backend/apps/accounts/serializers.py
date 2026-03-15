@@ -155,7 +155,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             if settings_obj.is_platform_locked and not getattr(user, 'is_protected_superadmin', False):
                 msg = settings_obj.locked_message or (
                     'La plateforme est temporairement indisponible. '
-                    'Seul le superadmin peut se connecter.'
                 )
                 raise serializers.ValidationError({'non_field_errors': [msg]})
         except serializers.ValidationError:
