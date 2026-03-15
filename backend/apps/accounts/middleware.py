@@ -57,7 +57,7 @@ class PlatformLockMiddleware:
                 if ps.is_platform_locked and not getattr(request.user, 'is_protected_superadmin', False):
                     logout(request)
                     request.session.flush()
-                    msg = ps.locked_message or 'La plateforme est temporairement indisponible. Seul le superadmin peut se connecter.'
+                    msg = ps.locked_message or 'La plateforme est temporairement indisponible.'
                     messages.error(request, msg)
                     return redirect(f'/{admin_path}/login/?next={request.path}')
             except Exception:
