@@ -158,8 +158,11 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                     'Seul le superadmin peut se connecter.'
                 )
                 raise serializers.ValidationError({'non_field_errors': [msg]})
+        except serializers.ValidationError:
+            raise  # Ne pas avaler l'erreur de verrouillage
         except Exception:
-            pass  # Si le modèle n'existe pas encore (migrations non appliquées), on laisse passer
+            # Table absente (migrations non appliquées) ou erreur DB : on laisse passer
+            pass
 
         # Pour SimpleJWT, on doit passer le vrai username
         attrs['username'] = user.username

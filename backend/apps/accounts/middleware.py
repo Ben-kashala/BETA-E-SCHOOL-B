@@ -61,7 +61,7 @@ class PlatformLockMiddleware:
                     messages.error(request, msg)
                     return redirect(f'/{admin_path}/login/?next={request.path}')
             except Exception:
-                pass
+                pass  # Ne pas bloquer l'admin si la table n'existe pas encore
 
         return self.get_response(request)
 
