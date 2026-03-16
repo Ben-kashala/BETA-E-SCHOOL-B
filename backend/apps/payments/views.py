@@ -733,10 +733,19 @@ class SchoolExpenseViewSet(viewsets.ModelViewSet):
     search_fields = ['title', 'description', 'reference']
 
     def get_queryset(self):
+        user = self.request.user
         queryset = SchoolExpense.objects.all()
-        if self.request.user.school:
-            queryset = queryset.filter(school=self.request.user.school)
-        if not (self.request.user.is_admin or self.request.user.is_accountant):
+        # Portée par école : responsable/comptable → son école, promoteur → ses écoles promues
+        if getattr(user, 'school', None):
+            queryset = queryset.filter(school=user.school)
+        elif getattr(user, 'is_promoter', False):
+            school_ids = list(getattr(user, 'promoted_schools', []).values_list('id', flat=True))
+            if school_ids:
+                queryset = queryset.filter(school_id__in=school_ids)
+            else:
+                queryset = queryset.none()
+        # Rôles autorisés : admin, comptable, promoteur (lecture)
+        if not (getattr(user, 'is_admin', False) or getattr(user, 'is_accountant', False) or getattr(user, 'is_promoter', False)):
             queryset = queryset.none()
         return queryset
 
@@ -762,11 +771,11 @@ class SchoolExpenseViewSet(viewsets.ModelViewSet):
         if fee_type and school and getattr(fee_type, 'school_id', None) != school.id:
             from rest_framework.exceptions import ValidationError
             raise ValidationError({'deduct_from_fee_type': 'Le type de frais doit appartenir à votre école.'})
-        # Seul le responsable (admin) peut approuver ou rejeter une dépense
+        # Seul le responsable (admin) ou le promoteur peut approuver ou rejeter une dépense
         if new_status in ('APPROVED', 'REJECTED'):
-            if not getattr(user, 'is_admin', False):
+            if not (getattr(user, 'is_admin', False) or getattr(user, 'is_promoter', False)):
                 from rest_framework.exceptions import PermissionDenied
-                raise PermissionDenied('Seul le responsable de l\'école peut autoriser ou rejeter une dépense.')
+                raise PermissionDenied('Seuls le responsable de l\'école ou le promoteur peuvent autoriser ou rejeter une dépense.')
         instance = serializer.save()
         # Quand une dépense passe à Payée : déduction en caisse (sortie)
         if instance.status == 'PAID' and old_instance.status != 'PAID':
@@ -798,10 +807,19 @@ class CashMovementViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixi
     pagination_class = CaissePagination
 
     def get_queryset(self):
+        user = self.request.user
         queryset = CashMovement.objects.all()
-        if self.request.user.school:
-            queryset = queryset.filter(school=self.request.user.school)
-        if not (self.request.user.is_admin or self.request.user.is_accountant):
+        # Portée par école : responsable/comptable → son école, promoteur → ses écoles promues
+        if getattr(user, 'school', None):
+            queryset = queryset.filter(school=user.school)
+        elif getattr(user, 'is_promoter', False):
+            school_ids = list(getattr(user, 'promoted_schools', []).values_list('id', flat=True))
+            if school_ids:
+                queryset = queryset.filter(school_id__in=school_ids)
+            else:
+                queryset = queryset.none()
+        # Rôles autorisés : admin, comptable, promoteur (lecture)
+        if not (getattr(user, 'is_admin', False) or getattr(user, 'is_accountant', False) or getattr(user, 'is_promoter', False)):
             queryset = queryset.none()
         return queryset.select_related('created_by', 'school').order_by('-created_at')
 
@@ -850,16 +868,26 @@ class CashMovementViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixi
 
     @action(detail=False, methods=['get'], url_path='balance')
     def balance(self, request):
-        """Soldes par devise (entrées - sorties), inclut CashMovement + paiements/dépenses orphelins."""
-        school = getattr(request.user, 'school', None)
-        if not school:
-            logger.info("Caisse balance: utilisateur sans école, retour []")
+        """Soldes par devise (entrées - sorties), inclut CashMovement + paiements/dépenses orphelins.
+
+        - Admin/Comptable : solde de son école (request.user.school)
+        - Promoteur : solde agrégé de toutes ses écoles promues
+        """
+        user = request.user
+        school = getattr(user, 'school', None)
+        school_ids = []
+        if school:
+            school_ids = [school.id]
+        elif getattr(user, 'is_promoter', False):
+            school_ids = list(getattr(user, 'promoted_schools', []).values_list('id', flat=True))
+        if not school_ids:
+            logger.info("Caisse balance: utilisateur sans école associée, retour []")
             return Response([])
         decimal_field = DecimalField(max_digits=12, decimal_places=2)
         zero = Value(Decimal('0'), output_field=decimal_field)
         qs = (
             CashMovement.objects
-            .filter(school=school)
+            .filter(school_id__in=school_ids)
             .values('currency')
             .annotate(
                 total_in=Coalesce(Sum('amount', filter=Q(movement_type='IN'), output_field=decimal_field), zero),
