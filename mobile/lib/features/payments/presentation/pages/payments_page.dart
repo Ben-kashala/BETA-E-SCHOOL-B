@@ -128,14 +128,6 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage> {
 
   Future<void> _downloadReceipt(int paymentId, String paymentIdStr) async {
     try {
-      final status = await Permission.storage.request();
-      if (!status.isGranted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Permission de stockage requise')),
-        );
-        return;
-      }
-
       final dio = Dio();
       final api = ApiService();
       final token = await api.getToken();

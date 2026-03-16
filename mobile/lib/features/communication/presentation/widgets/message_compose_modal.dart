@@ -4,7 +4,14 @@ import 'package:dio/dio.dart';
 import '../../../../core/network/api_service.dart';
 
 class MessageComposeModal extends ConsumerStatefulWidget {
-  const MessageComposeModal({super.key});
+  final String? initialSubject;
+  final List<int>? preselectedRecipientIds;
+
+  const MessageComposeModal({
+    super.key,
+    this.initialSubject,
+    this.preselectedRecipientIds,
+  });
 
   @override
   ConsumerState<MessageComposeModal> createState() => _MessageComposeModalState();
@@ -22,6 +29,12 @@ class _MessageComposeModalState extends ConsumerState<MessageComposeModal> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialSubject != null && widget.initialSubject!.isNotEmpty) {
+      _subjectController.text = widget.initialSubject!;
+    }
+    if (widget.preselectedRecipientIds != null) {
+      _selectedRecipients = List<int>.from(widget.preselectedRecipientIds!);
+    }
     _loadRecipients();
   }
 

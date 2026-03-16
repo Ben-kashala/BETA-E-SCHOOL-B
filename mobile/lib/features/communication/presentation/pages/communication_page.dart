@@ -334,10 +334,40 @@ class _CommunicationPageState extends ConsumerState<CommunicationPage>
       ),
       floatingActionButton: _selectedMessage == null
           ? null
-          : FloatingActionButton.extended(
-              onPressed: () => setState(() => _selectedMessage = null),
-              icon: const Icon(Icons.close),
-              label: const Text('Fermer message'),
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                FloatingActionButton.extended(
+                  heroTag: 'reply_message_fab',
+                  onPressed: () {
+                    final msg = _selectedMessage!;
+                    final senderId = msg['sender'] as int?;
+                    final subject = (msg['subject'] ?? '').toString();
+                    final replySubject =
+                        subject.toLowerCase().startsWith('re:') ? subject : 'Re: $subject';
+
+                    if (senderId == null) return;
+
+                    showDialog(
+                      context: context,
+                      builder: (ctx) => MessageComposeModal(
+                        initialSubject: replySubject,
+                        preselectedRecipientIds: [senderId],
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.reply),
+                  label: const Text('Répondre'),
+                ),
+                const SizedBox(height: 12),
+                FloatingActionButton.extended(
+                  heroTag: 'close_message_fab',
+                  onPressed: () => setState(() => _selectedMessage = null),
+                  icon: const Icon(Icons.close),
+                  label: const Text('Fermer message'),
+                ),
+              ],
             ),
       bottomSheet: _selectedMessage == null
           ? null
