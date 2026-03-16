@@ -223,17 +223,15 @@ class _GradesPageState extends ConsumerState<GradesPage> {
     return Colors.red;
   }
 
-  Future<void> _downloadBulletin(int? schoolClassId, String? academicYear) async {
-    if (schoolClassId == null || academicYear == null) return;
-    
+  Future<void> _openReportCardPdf(int reportCardId) async {
     try {
       final user = ref.read(authProvider).user;
       final studentId = user?.id;
-      if (studentId == null) return;
+      if (studentId == null) return; // Sécurité minimale
       
       final api = ApiService();
       final baseUrl = api.baseUrl;
-      final url = '$baseUrl/api/accounts/students/$studentId/bulletin_pdf/?school_class=$schoolClassId&academic_year=${Uri.encodeComponent(academicYear)}';
+      final url = '$baseUrl/api/academics/report-cards/$reportCardId/download_pdf/';
       
       if (await canLaunchUrl(Uri.parse(url))) {
         await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
@@ -242,6 +240,49 @@ class _GradesPageState extends ConsumerState<GradesPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Erreur: $e')),
       );
+    }
+  }
+
+  Future<void> _downloadOfficialBulletinForStudent(int studentId, {String? academicYear}) async {
+    try {
+      final params = <String, dynamic>{
+        'student': studentId.toString(),
+        'term': 'AN',
+        'is_published': 'true',
+      };
+      if (academicYear != null && academicYear.isNotEmpty) {
+        params['academic_year'] = academicYear;
+      }
+
+      final res = await ApiService().get<dynamic>(
+        '/api/academics/report-cards/',
+        queryParameters: params,
+        useCache: false,
+      );
+      final data = res.data;
+      final list = data is List
+          ? data
+          : (data is Map && data['results'] != null)
+              ? (data['results'] as List)
+              : <dynamic>[];
+      if (list.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Aucun bulletin officiel trouvé pour cette année.')),
+          );
+        }
+        return;
+      }
+      final first = list.first as Map<dynamic, dynamic>;
+      final reportCardId = first['id'] as int?;
+      if (reportCardId == null) return;
+      await _openReportCardPdf(reportCardId);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur lors du téléchargement du bulletin: $e')),
+        );
+      }
     }
   }
 
@@ -258,7 +299,7 @@ class _GradesPageState extends ConsumerState<GradesPage> {
           title: const Text('Mes Notes'),
           bottom: TabBar(
             tabs: const [
-              Tab(text: 'Bulletins RDC', icon: Icon(Icons.description)),
+            Tab(text: 'Bulletins RDC', icon: Icon(Icons.description)),
               Tab(text: 'Notes détaillées', icon: Icon(Icons.list)),
             ],
           ),
@@ -310,6 +351,19 @@ class _GradesPageState extends ConsumerState<GradesPage> {
                   });
                   _loadGrades();
                 },
+              ),
+            ),
+          // Bouton bulletin officiel pour l'enfant sélectionné (parents)
+          if (isParent && _selectedChildId != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => _downloadOfficialBulletinForStudent(_selectedChildId!),
+                  icon: const Icon(Icons.download),
+                  label: const Text('Télécharger le bulletin officiel'),
+                ),
               ),
             ),
           // Barre de recherche et filtres
@@ -466,9 +520,17 @@ class _GradesPageState extends ConsumerState<GradesPage> {
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
                           ElevatedButton.icon(
-                            onPressed: () => _downloadBulletin(schoolClassId, academicYear),
+                            onPressed: () {
+                              final first = bulletins.isNotEmpty && bulletins.first is Map
+                                  ? bulletins.first as Map
+                                  : null;
+                              final int? studentId = first != null ? first['student'] as int? : null;
+                              if (studentId != null) {
+                                _downloadOfficialBulletinForStudent(studentId, academicYear: academicYear);
+                              }
+                            },
                             icon: const Icon(Icons.download),
-                            label: const Text('Télécharger PDF'),
+                            label: const Text('Télécharger bulletin officiel'),
                           ),
                         ],
                       ),
@@ -528,14 +590,18 @@ class _GradesPageState extends ConsumerState<GradesPage> {
                 child: ListTile(
                   title: Text('${card['academic_year'] ?? ''} - ${card['class_name'] ?? ''}'),
                   subtitle: Text('Décision: ${card['decision'] ?? '-'}'),
-                  trailing: card['school_class'] != null && card['academic_year'] != null
+                  trailing: card['academic_year'] != null
                       ? IconButton(
                           icon: const Icon(Icons.download),
                           onPressed: () {
-                            _downloadBulletin(
-                              card['school_class'],
-                              card['academic_year'],
-                            );
+                            final int? studentId =
+                                (card['student'] as int?) ?? (card['student_id'] as int?) ?? null;
+                            if (studentId != null) {
+                              _downloadOfficialBulletinForStudent(
+                                studentId,
+                                academicYear: card['academic_year'] as String?,
+                              );
+                            }
                           },
                         )
                       : null,

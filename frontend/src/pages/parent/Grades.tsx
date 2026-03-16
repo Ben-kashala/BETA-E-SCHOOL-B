@@ -11,23 +11,33 @@ async function downloadOfficialBulletin(
   studentName: string
 ) {
   try {
-    // 1) Récupérer le bulletin officiel (ReportCard AN publié) pour l'élève et l'année
-    const rcRes = await api.get('/academics/report-cards/', {
-      params: {
-        student: studentId,
-        academic_year: academicYear,
-        term: 'AN',
-        is_published: true,
-      },
-    })
+    const baseParams: Record<string, string> = {
+      student: String(studentId),
+      academic_year: academicYear,
+    }
 
-    const results = Array.isArray(rcRes.data) ? rcRes.data : rcRes.data?.results || []
-    if (!results.length) {
+    // 1) Essayer bulletin annuel officiel publié
+    const attempts: Record<string, string>[] = [
+      { ...baseParams, term: 'AN', is_published: 'true' },
+      { ...baseParams, is_published: 'true' },
+      { ...baseParams },
+    ]
+
+    let reportCard: any | null = null
+    for (const params of attempts) {
+      const rcRes = await api.get('/academics/report-cards/', { params })
+      const arr = Array.isArray(rcRes.data) ? rcRes.data : rcRes.data?.results || []
+      if (arr.length > 0) {
+        // Optionnel : trier pour prendre le plus récent
+        reportCard = arr[0]
+        break
+      }
+    }
+
+    if (!reportCard) {
       toast.error("Aucun bulletin officiel trouvé pour cette année.")
       return
     }
-
-    const reportCard = results[0]
 
     // 2) Télécharger le PDF officiel du bulletin
     const pdfRes = await api.get(`/academics/report-cards/${reportCard.id}/download_pdf/`, {
@@ -69,9 +79,31 @@ export default function ParentGrades() {
         if (selectedStudent) {
           params['student'] = selectedStudent.toString()
         }
+        // 1) Essayer les notes classiques
         const response = await api.get('/academics/grades/', { params })
-        console.log('Grades response:', response.data)
-        return response.data
+        const primary = response.data
+        const primaryItems = Array.isArray(primary) ? primary : primary?.results || []
+        if (primaryItems.length > 0) {
+          return primary
+        }
+
+        // 2) Fallback : utiliser les bulletins RDC comme source de notes (par matière)
+        if (!selectedStudent) {
+          return { results: [] }
+        }
+        const bRes = await api.get('/academics/grade-bulletins/', {
+          params: { student: String(selectedStudent) },
+        })
+        const bData = bRes.data
+        const bulletins = Array.isArray(bData) ? bData : bData?.results || []
+        const mapped = bulletins.map((b: any) => ({
+          id: b.id,
+          student_name: b.student_name,
+          subject_name: b.subject_name,
+          term: 'AN',
+          total_score: b.total_general,
+        }))
+        return { results: mapped }
       } catch (error: any) {
         console.error('Erreur lors du chargement des notes:', error)
         console.error('Response:', error?.response?.data)

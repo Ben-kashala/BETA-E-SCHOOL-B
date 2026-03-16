@@ -62,9 +62,14 @@ class _MessageComposeModalState extends ConsumerState<MessageComposeModal> {
 
     setState(() => _isLoading = true);
     try {
+      // L'API attend au minimum un champ `recipient` (un seul),
+      // tout en supportant potentiellement une liste `recipients`.
+      final primaryRecipient = _selectedRecipients.first;
+
       await ApiService().post(
         '/api/communication/messages/',
         data: {
+          'recipient': primaryRecipient,
           'recipients': _selectedRecipients,
           'subject': _subjectController.text.trim(),
           'message': _messageController.text.trim(),
