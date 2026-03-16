@@ -85,7 +85,10 @@ class _StudentDetailPageState extends ConsumerState<StudentDetailPage> with Sing
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(identity['student_id'] ?? 'Fiche élève'),
+        title: Text(
+          identity['student_id']?.toString() ?? 'Fiche élève',
+          overflow: TextOverflow.ellipsis,
+        ),
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
@@ -101,13 +104,15 @@ class _StudentDetailPageState extends ConsumerState<StudentDetailPage> with Sing
           // Onglet Identité
           SingleChildScrollView(
             padding: const EdgeInsets.all(16),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildInfoRow('Matricule', identity['student_id'] ?? '-'),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width - 32),
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildInfoRow('Matricule', identity['student_id']?.toString() ?? '-'),
                     _buildInfoRow('Nom complet', identity['user_name'] ?? '${user['first_name'] ?? ''} ${user['last_name'] ?? ''}'.trim()),
                     if (user['date_of_birth'] != null)
                       _buildInfoRow('Date de naissance', DateFormat('dd/MM/yyyy').format(DateTime.parse(user['date_of_birth']))),
@@ -121,10 +126,11 @@ class _StudentDetailPageState extends ConsumerState<StudentDetailPage> with Sing
                       _buildInfoRow('Date d\'inscription', DateFormat('dd/MM/yyyy').format(DateTime.parse(identity['enrollment_date']))),
                     _buildInfoRow('Ancien élève', identity['is_former_student'] == true ? 'Oui' : 'Non'),
                     if (identity['is_former_student'] == true && identity['graduation_year'] != null)
-                      _buildInfoRow('Année de sortie', identity['graduation_year']),
+                      _buildInfoRow('Année de sortie', identity['graduation_year'].toString()),
                     if (identity['blood_group'] != null || identity['allergies'] != null)
                       _buildInfoRow('Groupe sanguin / Allergies', '${identity['blood_group'] ?? ''} ${identity['allergies'] ?? ''}'.trim()),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -192,9 +198,9 @@ class _StudentDetailPageState extends ConsumerState<StudentDetailPage> with Sing
                             cells: [
                               DataCell(Text(b['subject_name'] ?? '-')),
                               DataCell(Text(b['academic_year'] ?? '-')),
-                              DataCell(Text(b['total_s1'] != null ? b['total_s1'].toStringAsFixed(1) : '-')),
-                              DataCell(Text(b['total_s2'] != null ? b['total_s2'].toStringAsFixed(1) : '-')),
-                              DataCell(Text(b['total_general'] != null ? b['total_general'].toStringAsFixed(1) : '-')),
+                              DataCell(Text(_formatScore(b['total_s1']))),
+                              DataCell(Text(_formatScore(b['total_s2']))),
+                              DataCell(Text(_formatScore(b['total_general']))),
                             ],
                           );
                         }).toList(),
@@ -261,6 +267,25 @@ class _StudentDetailPageState extends ConsumerState<StudentDetailPage> with Sing
     );
   }
 
+  /// Formate une note (l'API peut renvoyer num, String ou autre).
+  String _formatScore(dynamic v) {
+    if (v == null) return '-';
+
+    // Toujours passer par num.tryParse pour éviter d'appeler toStringAsFixed sur une String.
+    num? parsed;
+    if (v is num) {
+      parsed = v;
+    } else {
+      parsed = num.tryParse(v.toString());
+    }
+
+    if (parsed == null) {
+      return v.toString();
+    }
+
+    return parsed.toStringAsFixed(1);
+  }
+
   Widget _buildInfoRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -274,7 +299,7 @@ class _StudentDetailPageState extends ConsumerState<StudentDetailPage> with Sing
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
-          Expanded(child: Text(value)),
+          Expanded(child: Text(value, overflow: TextOverflow.ellipsis, maxLines: 5)),
         ],
       ),
     );

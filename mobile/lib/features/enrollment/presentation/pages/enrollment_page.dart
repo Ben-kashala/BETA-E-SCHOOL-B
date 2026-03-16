@@ -135,6 +135,7 @@ class _EnrollmentPageState extends ConsumerState<EnrollmentPage> {
         'mother_name': _motherNameController.text.trim().isEmpty ? null : _motherNameController.text.trim(),
         'parent_phone': _phoneController.text.trim(),
         'parent_email': _emailController.text.trim(),
+        if (_selectedSchool != null) 'school': _selectedSchool,
       };
 
       // Ajouter à la queue de synchronisation

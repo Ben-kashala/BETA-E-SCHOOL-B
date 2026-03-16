@@ -232,9 +232,11 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 // Dashboard Parent
                 Text(
                   'Mes Enfants',
-                  style: Theme.of(context).textTheme.titleLarge,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 if (_childrenLoading)
                   const Center(
                       child: Padding(
@@ -268,28 +270,70 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                         studentId != null ? _childrenDetails[studentId] : null;
 
                     return Card(
-                      margin: const EdgeInsets.only(bottom: 16),
+                      margin: const EdgeInsets.only(bottom: 20),
+                      clipBehavior: Clip.antiAlias,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          ListTile(
-                            leading: const CircleAvatar(
-                              child: Icon(Icons.person),
-                            ),
-                            title: Text(userName.isEmpty ? 'Enfant' : userName),
-                            subtitle:
-                                Text(className.isEmpty ? 'Classe' : className),
-                            trailing: const Icon(Icons.chevron_right),
+                          InkWell(
                             onTap: () {
                               if (studentId != null) {
                                 context.push('/students/$studentId');
                               }
                             },
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+                              child: Row(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 28,
+                                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                                    child: Icon(
+                                      Icons.person,
+                                      size: 32,
+                                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          userName.isEmpty ? 'Enfant' : userName,
+                                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          className.isEmpty ? 'Classe' : className,
+                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Voir le détail',
+                                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                            color: Theme.of(context).colorScheme.primary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Icon(
+                                    Icons.chevron_right,
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                           // Graphiques de progression
                           if (details != null)
                             Padding(
-                              padding: const EdgeInsets.all(16),
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                               child: ProgressChartsWidget(
                                 attendanceData: List<Map<String, dynamic>>.from(
                                     details['attendance_by_week'] ?? []),

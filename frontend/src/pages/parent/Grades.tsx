@@ -5,29 +5,48 @@ import { Card } from '@/components/ui/Card'
 import { Download } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-async function downloadBulletin(
+async function downloadOfficialBulletin(
   studentId: number,
-  schoolClassId: number,
   academicYear: string,
   studentName: string
 ) {
   try {
-    const res = await api.get(`/auth/students/${studentId}/bulletin_pdf/`, {
-      params: { school_class: schoolClassId, academic_year: academicYear },
+    // 1) Récupérer le bulletin officiel (ReportCard AN publié) pour l'élève et l'année
+    const rcRes = await api.get('/academics/report-cards/', {
+      params: {
+        student: studentId,
+        academic_year: academicYear,
+        term: 'AN',
+        is_published: true,
+      },
+    })
+
+    const results = Array.isArray(rcRes.data) ? rcRes.data : rcRes.data?.results || []
+    if (!results.length) {
+      toast.error("Aucun bulletin officiel trouvé pour cette année.")
+      return
+    }
+
+    const reportCard = results[0]
+
+    // 2) Télécharger le PDF officiel du bulletin
+    const pdfRes = await api.get(`/academics/report-cards/${reportCard.id}/download_pdf/`, {
       responseType: 'blob',
     })
-    const url = window.URL.createObjectURL(new Blob([res.data]))
+
+    const url = window.URL.createObjectURL(new Blob([pdfRes.data]))
     const a = document.createElement('a')
     a.href = url
-    a.setAttribute('download', `bulletin_${studentName.replace(/\s+/g, '-')}_${academicYear.replace('/', '-')}.pdf`)
+    a.setAttribute('download', `bulletin_officiel_${studentName.replace(/\s+/g, '-')}_${academicYear.replace('/', '-')}.pdf`)
     document.body.appendChild(a)
     a.click()
     window.URL.revokeObjectURL(url)
     a.remove()
-    toast.success('Bulletin téléchargé.')
+    toast.success('Bulletin officiel téléchargé.')
   } catch (err: unknown) {
-    const msg = err && typeof err === 'object' && 'response' in err && (err as { response?: { data?: unknown } }).response?.data
-    toast.error(msg ? String(msg) : 'Impossible de télécharger le bulletin.')
+    const msg =
+      err && typeof err === 'object' && 'response' in err && (err as { response?: { data?: unknown } }).response?.data
+    toast.error(msg ? String(msg) : 'Impossible de télécharger le bulletin officiel.')
   }
 }
 
@@ -86,10 +105,12 @@ export default function ParentGrades() {
         </Card>
       )}
 
-      {/* Téléchargement des bulletins */}
+      {/* Téléchargement des bulletins (officiels) */}
       {children && children.length > 0 && (
         <Card className="mb-6 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Télécharger les bulletins</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+            Télécharger les bulletins officiels
+          </h2>
           <div className="space-y-4">
             {children.map((child: any) => {
               const name = [child.identity.user?.first_name, child.identity.user?.last_name].filter(Boolean).join(' ') || child.identity.student_id
@@ -108,11 +129,11 @@ export default function ParentGrades() {
                     <button
                       key={`${opt.school_class}-${opt.academic_year}`}
                       type="button"
-                      onClick={() => downloadBulletin(child.identity.id, opt.school_class, opt.academic_year, name)}
+                      onClick={() => downloadOfficialBulletin(child.identity.id, opt.academic_year, name)}
                       className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium transition-colors"
                     >
                       <Download className="w-4 h-4" />
-                      Bulletin {opt.academic_year}
+                      Bulletin officiel {opt.academic_year}
                     </button>
                   ))}
                 </div>
@@ -144,26 +165,30 @@ export default function ParentGrades() {
                     Erreur lors du chargement des notes. Veuillez réessayer plus tard.
                   </td>
                 </tr>
-              ) : !grades?.results || grades.results.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="px-6 py-4 text-center text-gray-600 dark:text-gray-400">
-                    <div className="flex flex-col items-center space-y-2">
-                      <p>Aucune note disponible pour le moment.</p>
-                      {selectedStudent && (
-                        <p className="text-xs text-gray-500 dark:text-gray-500">
-                          Aucune note trouvée pour cet enfant.
-                        </p>
-                      )}
-                      {!selectedStudent && children && children.length > 0 && (
-                        <p className="text-xs text-gray-500 dark:text-gray-500">
-                          Essayez de sélectionner un enfant spécifique dans le filtre ci-dessus.
-                        </p>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                grades.results.map((grade: any) => (
+              ) : (() => {
+                const items = Array.isArray(grades) ? grades : grades?.results || []
+                if (!items.length) {
+                  return (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-4 text-center text-gray-600 dark:text-gray-400">
+                        <div className="flex flex-col items-center space-y-2">
+                          <p>Aucune note disponible pour le moment.</p>
+                          {selectedStudent && (
+                            <p className="text-xs text-gray-500 dark:text-gray-500">
+                              Aucune note trouvée pour cet enfant.
+                            </p>
+                          )}
+                          {!selectedStudent && children && children.length > 0 && (
+                            <p className="text-xs text-gray-500 dark:text-gray-500">
+                              Essayez de sélectionner un enfant spécifique dans le filtre ci-dessus.
+                            </p>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                }
+                return items.map((grade: any) => (
                   <tr key={grade.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                       {grade.student_name || 'N/A'}
@@ -172,14 +197,20 @@ export default function ParentGrades() {
                       {grade.subject_name || 'N/A'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                      {grade.term === 'T1' ? 'Trimestre 1' : grade.term === 'T2' ? 'Trimestre 2' : grade.term === 'T3' ? 'Trimestre 3' : grade.term}
+                      {grade.term === 'T1'
+                        ? 'Trimestre 1'
+                        : grade.term === 'T2'
+                        ? 'Trimestre 2'
+                        : grade.term === 'T3'
+                        ? 'Trimestre 3'
+                        : grade.term}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
                       {grade.total_score ? `${grade.total_score}/20` : 'N/A'}
                     </td>
                   </tr>
                 ))
-              )}
+              })()}
             </tbody>
           </table>
         </div>

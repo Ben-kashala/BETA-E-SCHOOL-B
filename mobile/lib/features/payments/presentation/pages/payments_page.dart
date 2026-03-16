@@ -50,8 +50,8 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage> {
   Future<void> _loadChildrenAndFeeTypes() async {
     try {
       final [childrenRes, feeTypesRes] = await Future.wait([
-        ApiService().get('/api/auth/students/parent_dashboard/'),
-        ApiService().get('/api/payments/fee-types/'),
+        ApiService().get('/api/auth/students/parent_dashboard/', useCache: false),
+        ApiService().get('/api/payments/fee-types/', useCache: false),
       ]);
       setState(() {
         _children = childrenRes.data is List ? childrenRes.data : (childrenRes.data['results'] ?? []);

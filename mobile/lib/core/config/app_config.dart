@@ -1,11 +1,11 @@
 class AppConfig {
   // API Configuration
-  // En production : flutter build apk --dart-define=API_BASE_URL=https://backend-xxx.up.railway.app
+  // En production : flutter build apk --dart-define=API_BASE_URL=https://e-school.up.railway.app/
   // Sinon utilise la valeur par défaut (développement)
   // Note: baseUrl ne doit PAS contenir /api car tous les endpoints dans le code commencent par /api/
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://localhost:8000',
+    defaultValue: 'https://e-school.up.railway.app',
   );
   static const String apiVersion = 'v1';
   static const Duration apiTimeout = Duration(seconds: 30);

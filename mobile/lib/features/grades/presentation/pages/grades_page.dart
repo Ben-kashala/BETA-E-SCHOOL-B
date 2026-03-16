@@ -95,8 +95,17 @@ class _GradesPageState extends ConsumerState<GradesPage> {
 
   Future<void> _loadChildren() async {
     try {
+      final user = ref.read(authProvider).user;
+      final isParent = user?.isParent ?? false;
+
+      // Pour les parents, on utilise le même endpoint que le dashboard et les paiements
+      // afin de récupérer uniquement leurs enfants avec les bons champs.
+      final path = isParent
+          ? '/api/auth/students/parent_dashboard/'
+          : '/api/auth/students/';
+
       final response = await ApiService().get<dynamic>(
-        '/api/auth/students/',
+        path,
         useCache: false,
       );
       final data = response.data;
@@ -106,10 +115,19 @@ class _GradesPageState extends ConsumerState<GradesPage> {
               ? (data['results'] as List)
               : <dynamic>[];
       final children = list is List<dynamic> ? list : List<dynamic>.from(list);
+
       if (mounted) {
         setState(() {
           _children = children;
-          if (_children.isNotEmpty && _selectedChildId == null) {
+
+          // Initialiser l'enfant sélectionné pour les parents
+          if (isParent && _children.isNotEmpty) {
+            final first = _children.first;
+            final identity = first is Map
+                ? (first['identity'] as Map?) ?? first
+                : <String, dynamic>{};
+            _selectedChildId = identity['id'] as int?;
+          } else if (!isParent && _children.isNotEmpty) {
             final first = _children.first;
             _selectedChildId = first is Map ? first['id'] as int? : null;
           }
@@ -274,10 +292,15 @@ class _GradesPageState extends ConsumerState<GradesPage> {
                 ),
                 items: _children.map<DropdownMenuItem<int>>((child) {
                   final c = child is Map ? child : <String, dynamic>{};
-                  final name = c['user_name'] ?? c['user']?['first_name'] ?? '';
-                  final cls = c['class_name'] ?? c['school_class']?['name'] ?? '';
+                  final identity = (c['identity'] as Map?) ?? c;
+                  final id = identity['id'] as int?;
+                  final name = identity['user_name'] ??
+                      '${identity['user']?['first_name'] ?? ''} ${identity['user']?['last_name'] ?? ''}'.trim();
+                  final cls = identity['class_name'] ??
+                      identity['school_class']?['name'] ??
+                      '';
                   return DropdownMenuItem<int>(
-                    value: c['id'] as int?,
+                    value: id,
                     child: Text('$name${cls.isNotEmpty ? ' - $cls' : ''}'),
                   );
                 }).toList(),

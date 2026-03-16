@@ -44,9 +44,9 @@ class _ParentTutoringPageState extends ConsumerState<ParentTutoringPage> with Si
     setState(() => _isLoading = true);
     try {
       final [messagesRes, reportsRes, childrenRes] = await Future.wait([
-        ApiService().get('/api/tutoring/messages/'),
-        ApiService().get('/api/tutoring/reports/'),
-        ApiService().get('/api/auth/students/parent_dashboard/'),
+        ApiService().get('/api/tutoring/messages/', useCache: false),
+        ApiService().get('/api/tutoring/reports/', useCache: false),
+        ApiService().get('/api/auth/students/parent_dashboard/', useCache: false),
       ]);
 
       setState(() {

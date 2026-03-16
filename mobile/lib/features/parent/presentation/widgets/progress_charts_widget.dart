@@ -15,24 +15,29 @@ class ProgressChartsWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Graphique de présence
         if (attendanceData.isNotEmpty) ...[
-          const Text(
+          Text(
             'Présences par semaine',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           _buildAttendanceChart(context),
           const SizedBox(height: 24),
         ],
         // Graphique des notes
         if (gradesData.isNotEmpty) ...[
-          const Text(
+          Text(
             'Évolution des notes',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
           ),
           const SizedBox(height: 16),
           _buildGradesChart(context),
@@ -63,7 +68,7 @@ class ProgressChartsWidget extends StatelessWidget {
                       ),
                     ],
                   ),
-                  _buildScoreIndicator(averageScore!),
+                  _buildScoreIndicator(context, averageScore!),
                 ],
               ),
             ),
@@ -73,100 +78,111 @@ class ProgressChartsWidget extends StatelessWidget {
     );
   }
 
+  static const double _barMaxHeight = 160;
+
   Widget _buildAttendanceChart(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Légende
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+            Wrap(
+              spacing: 16,
+              runSpacing: 8,
               children: [
-                _buildLegendItem('Présents', Colors.green),
-                _buildLegendItem('Absents', Colors.red),
-                _buildLegendItem('En retard', Colors.orange),
-                _buildLegendItem('Excusés', Colors.blue),
+                _buildLegendItem(context, 'Présents', Colors.green),
+                _buildLegendItem(context, 'Absents', Colors.red),
+                _buildLegendItem(context, 'En retard', Colors.orange),
+                _buildLegendItem(context, 'Excusés', Colors.blue),
               ],
             ),
-            const SizedBox(height: 16),
-            // Barres
+            const SizedBox(height: 20),
+            // Barres empilées (une barre par semaine)
             SizedBox(
-              height: 200,
+              height: _barMaxHeight + 36,
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: attendanceData.map((week) {
-                  final present = week['present'] ?? 0;
-                  final absent = week['absent'] ?? 0;
-                  final late = week['late'] ?? 0;
-                  final excused = week['excused'] ?? 0;
-                  final total = week['total'] ?? 1;
-                  
+                  final present = (week['present'] as num?)?.toInt() ?? 0;
+                  final absent = (week['absent'] as num?)?.toInt() ?? 0;
+                  final late = (week['late'] as num?)?.toInt() ?? 0;
+                  final excused = (week['excused'] as num?)?.toInt() ?? 0;
+                  final total = (week['total'] as num?)?.toInt() ?? 1;
+                  final label = week['label'] as String? ?? '';
+                  final isPartialWeek = total > 0 && total < 5;
+
                   return Expanded(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          // Barres empilées
-                          Expanded(
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Expanded(
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: Colors.green,
-                                      borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                      child: GestureDetector(
+                        onTap: () => _showWeekDetail(context, label, present, absent, late, excused, total, isPartialWeek),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            // Barre empilée verticale
+                            SizedBox(
+                              height: _barMaxHeight,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  if (total > 0) ...[
+                                    _stackSegment(_barMaxHeight * (excused / total).clamp(0.0, 1.0), Colors.blue),
+                                    _stackSegment(_barMaxHeight * (late / total).clamp(0.0, 1.0), Colors.orange),
+                                    _stackSegment(_barMaxHeight * (absent / total).clamp(0.0, 1.0), Colors.red),
+                                    _stackSegment(_barMaxHeight * (present / total).clamp(0.0, 1.0), Colors.green),
+                                  ] else
+                                    Container(
+                                      height: _barMaxHeight,
+                                      decoration: BoxDecoration(
+                                        color: (isDark ? Colors.grey : Colors.grey[300])!,
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
                                     ),
-                                    height: (present / total) * 100,
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: Colors.red,
-                                      borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                                    ),
-                                    height: (absent / total) * 100,
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: Colors.orange,
-                                      borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                                    ),
-                                    height: (late / total) * 100,
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: Colors.blue,
-                                      borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                                    ),
-                                    height: (excused / total) * 100,
-                                  ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 4),
-                          // Label semaine
-                          Text(
-                            week['label'] ?? '',
-                            style: const TextStyle(fontSize: 10),
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
+                            const SizedBox(height: 6),
+                            Text(
+                              label,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                fontSize: 11,
+                              ),
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (isPartialWeek)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(
+                                  'Partielle',
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    fontSize: 9,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   );
                 }).toList(),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Appuyez sur une barre pour voir le détail',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
             ),
           ],
@@ -175,12 +191,127 @@ class ProgressChartsWidget extends StatelessWidget {
     );
   }
 
+  Widget _stackSegment(double heightPx, Color color) {
+    if (heightPx <= 0) return const SizedBox.shrink();
+    return SizedBox(
+      height: heightPx,
+      child: Container(
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(4),
+        ),
+      ),
+    );
+  }
+
+  void _showWeekDetail(
+    BuildContext context,
+    String label,
+    int present,
+    int absent,
+    int late,
+    int excused,
+    int total,
+    bool isPartialWeek,
+  ) {
+    final theme = Theme.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    label,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (isPartialWeek) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'Semaine partielle',
+                        style: theme.textTheme.labelSmall,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 16),
+              _detailRow(ctx, 'Présents', present, Colors.green),
+              _detailRow(ctx, 'Absents', absent, Colors.red),
+              _detailRow(ctx, 'En retard', late, Colors.orange),
+              _detailRow(ctx, 'Excusés', excused, Colors.blue),
+              const Divider(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Total', style: theme.textTheme.titleSmall),
+                  Text(
+                    '$total jour${total > 1 ? 's' : ''}',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _detailRow(BuildContext context, String label, int value, Color color) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 8),
+              Text(label, style: theme.textTheme.bodyMedium),
+            ],
+          ),
+          Text(
+            '$value',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildGradesChart(BuildContext context) {
     if (gradesData.isEmpty) {
-      return const Card(
+      return Card(
         child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Text('Aucune note disponible'),
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            'Aucune note disponible',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
         ),
       );
     }
@@ -199,6 +330,8 @@ class ProgressChartsWidget extends StatelessWidget {
       gradesBySubject[subject]!.add(percentage);
     }
 
+    final theme = Theme.of(context);
+    final surfaceVariant = theme.colorScheme.surfaceContainerHighest;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -207,7 +340,7 @@ class ProgressChartsWidget extends StatelessWidget {
             final subject = entry.key;
             final grades = entry.value;
             final average = grades.reduce((a, b) => a + b) / grades.length;
-            
+            final color = average >= 10 ? Colors.green : Colors.red;
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Row(
@@ -216,25 +349,25 @@ class ProgressChartsWidget extends StatelessWidget {
                     flex: 2,
                     child: Text(
                       subject,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                   Expanded(
                     flex: 3,
                     child: LinearProgressIndicator(
                       value: average / 20,
-                      backgroundColor: Colors.grey[300],
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        average >= 10 ? Colors.green : Colors.red,
-                      ),
+                      backgroundColor: surfaceVariant,
+                      valueColor: AlwaysStoppedAnimation<Color>(color),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Text(
                     average.toStringAsFixed(1),
-                    style: TextStyle(
+                    style: theme.textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: average >= 10 ? Colors.green : Colors.red,
+                      color: color,
                     ),
                   ),
                 ],
@@ -246,7 +379,7 @@ class ProgressChartsWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildLegendItem(String label, Color color) {
+  Widget _buildLegendItem(BuildContext context, String label, Color color) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -261,13 +394,14 @@ class ProgressChartsWidget extends StatelessWidget {
         const SizedBox(width: 4),
         Text(
           label,
-          style: const TextStyle(fontSize: 12),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 12),
         ),
       ],
     );
   }
 
-  Widget _buildScoreIndicator(double score) {
+  Widget _buildScoreIndicator(BuildContext context, double score) {
+    final theme = Theme.of(context);
     final percentage = (score / 20) * 100;
     Color color;
     if (percentage >= 75) {
@@ -290,14 +424,13 @@ class ProgressChartsWidget extends StatelessWidget {
             child: CircularProgressIndicator(
               value: percentage / 100,
               strokeWidth: 8,
-              backgroundColor: Colors.grey[300],
+              backgroundColor: theme.colorScheme.surfaceContainerHighest,
               valueColor: AlwaysStoppedAnimation<Color>(color),
             ),
           ),
           Text(
             '${percentage.toStringAsFixed(0)}%',
-            style: TextStyle(
-              fontSize: 16,
+            style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.bold,
               color: color,
             ),

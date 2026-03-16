@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dio/dio.dart';
 import '../../../../core/network/api_service.dart';
 
 class MessageComposeModal extends ConsumerStatefulWidget {
@@ -35,7 +36,10 @@ class _MessageComposeModalState extends ConsumerState<MessageComposeModal> {
     setState(() => _loadingRecipients = true);
     try {
       // Charger les utilisateurs disponibles (enseignants, admins, etc.)
-      final response = await ApiService().get('/api/auth/users/school-staff/');
+      final response = await ApiService().get(
+        '/api/auth/users/school-staff/',
+        useCache: false,
+      );
       setState(() {
         _recipients = response.data is List
             ? response.data
@@ -58,11 +62,14 @@ class _MessageComposeModalState extends ConsumerState<MessageComposeModal> {
 
     setState(() => _isLoading = true);
     try {
-      await ApiService().post('/api/communication/messages/', data: {
-        'recipients': _selectedRecipients,
-        'subject': _subjectController.text,
-        'message': _messageController.text,
-      });
+      await ApiService().post(
+        '/api/communication/messages/',
+        data: {
+          'recipients': _selectedRecipients,
+          'subject': _subjectController.text.trim(),
+          'message': _messageController.text.trim(),
+        },
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -71,11 +78,24 @@ class _MessageComposeModalState extends ConsumerState<MessageComposeModal> {
         Navigator.of(context).pop();
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e')),
-        );
+      if (!mounted) return;
+      // Afficher un message d'erreur plus lisible pour l'utilisateur
+      String message = 'Impossible d\'envoyer le message';
+      if (e is DioException) {
+        final data = e.response?.data;
+        if (data is Map && data['detail'] is String) {
+          message = data['detail'] as String;
+        } else if (data is Map && data['non_field_errors'] is List && data['non_field_errors'].isNotEmpty) {
+          message = data['non_field_errors'].join('\n');
+        } else if (e.message != null) {
+          message = e.message!;
+        }
+      } else {
+        message = e.toString().replaceFirst(RegExp(r'^Exception:?\s*'), '');
       }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
     } finally {
       setState(() => _isLoading = false);
     }

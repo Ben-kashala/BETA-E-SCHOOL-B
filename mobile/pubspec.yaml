@@ -83,6 +83,10 @@ dev_dependencies:
   hive_generator: ^2.0.1
   flutter_launcher_icons: ^0.14.1
 
+# Éviter sqflite_android 2.4.x (BAKLAVA/API 36) si le SDK Android n'a pas ces constantes
+dependency_overrides:
+  sqflite_android: 2.4.1
+
 flutter:
   uses-material-design: true
   

@@ -559,7 +559,7 @@ class _TeacherAssignmentsPageState
           ),
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator())
                 : _errorMessage != null
                     ? Center(
                         child: Padding(
@@ -578,19 +578,19 @@ class _TeacherAssignmentsPageState
                         ),
                       )
                     : _filteredAssignments.isEmpty
-                        ? const Center(child: Text('Aucun devoir'))
-                        : RefreshIndicator(
+              ? const Center(child: Text('Aucun devoir'))
+              : RefreshIndicator(
                             onRefresh: _loadData,
-                            child: ListView.builder(
+                  child: ListView.builder(
                               itemCount: _filteredAssignments.length,
-                              itemBuilder: (context, index) {
+                    itemBuilder: (context, index) {
                                 final assignment = Map<String, dynamic>.from(
                                     _filteredAssignments[index] as Map);
-                                return Card(
+                      return Card(
                                   margin: const EdgeInsets.symmetric(
                                       horizontal: 16, vertical: 8),
-                                  child: ListTile(
-                                    leading: const Icon(Icons.assignment),
+                        child: ListTile(
+                          leading: const Icon(Icons.assignment),
                                     title:
                                         Text(assignment['title'] ?? 'Devoir'),
                                     subtitle: Text(
@@ -599,7 +599,7 @@ class _TeacherAssignmentsPageState
                                       'Statut: ${assignment['is_published'] == true ? 'Publié' : 'Brouillon'}',
                                     ),
                                     isThreeLine: true,
-                                    onTap: () {
+                          onTap: () {
                                       final id = assignment['id'];
                                       if (id == null) {
                                         return;
@@ -630,14 +630,14 @@ class _TeacherAssignmentsPageState
                                         ),
                                       ],
                                     ),
-                                  ),
-                                );
-                              },
-                            ),
+                        ),
+                      );
+                    },
+                  ),
                           ),
           ),
         ],
-      ),
+                ),
     );
   }
 }

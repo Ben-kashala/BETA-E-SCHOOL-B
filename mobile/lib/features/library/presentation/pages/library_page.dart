@@ -96,7 +96,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                 key: 'category',
                 label: 'Catégorie',
                 values: [
-                  const FilterValue(value: 'all', label: 'Toutes'),
+                  FilterValue(value: 'all', label: 'Toutes'),
                   ..._categories.map((c) => FilterValue(
                         value: (c['id'] ?? c['name']).toString(),
                         label: c['name'] ?? 'Catégorie',
