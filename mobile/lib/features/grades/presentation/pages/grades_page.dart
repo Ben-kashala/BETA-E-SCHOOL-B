@@ -470,8 +470,8 @@ class _GradesPageState extends ConsumerState<GradesPage> {
                           itemCount: _filteredGrades.length,
                           itemBuilder: (context, index) {
                             final grade = _filteredGrades[index];
-                            final score = grade['score']?.toDouble();
-                            final maxScore = grade['max_score']?.toDouble();
+                            final score = _toDouble(grade['score']);
+                            final maxScore = _toDouble(grade['max_score'] ?? grade['total_points'] ?? 20);
 
                             return Card(
                               margin: const EdgeInsets.only(bottom: 16),
@@ -480,7 +480,7 @@ class _GradesPageState extends ConsumerState<GradesPage> {
                                 leading: CircleAvatar(
                                   backgroundColor: _getGradeColor(score, maxScore),
                                   child: Text(
-                                    score != null && maxScore != null
+                                    (score != null && maxScore != null && maxScore != 0)
                                         ? '${((score / maxScore) * 100).toInt()}'
                                         : '?',
                                     style: const TextStyle(
@@ -731,13 +731,13 @@ class _GradesPageState extends ConsumerState<GradesPage> {
                                 final type = item['type'];
                                 
                                 if (type == 'general') {
-                                  final score = data['score']?.toDouble();
-                                  final maxScore = data['max_score']?.toDouble();
+                                  final score = _toDouble(data['score']);
+                                  final maxScore = _toDouble(data['max_score'] ?? data['total_points'] ?? 20);
                                   return ListTile(
                                     leading: CircleAvatar(
                                       backgroundColor: _getGradeColor(score, maxScore),
                                       child: Text(
-                                        score != null && maxScore != null
+                                        (score != null && maxScore != 0 && maxScore != null)
                                             ? '${((score / maxScore) * 100).toInt()}'
                                             : '?',
                                         style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
@@ -745,14 +745,19 @@ class _GradesPageState extends ConsumerState<GradesPage> {
                                     ),
                                     title: Text(data['course']?['name'] ?? 'Note'),
                                     subtitle: Text(
-                                      score != null && maxScore != null
+                                      score != null && maxScore != null && maxScore != 0
                                           ? '${score.toStringAsFixed(2)} / ${maxScore.toStringAsFixed(2)}'
                                           : '-',
                                     ),
                                   );
                                 } else if (type == 'assignment') {
-                                  final score = data['score']?.toDouble();
-                                  final maxPoints = data['assignment']?['total_points']?.toDouble() ?? data['total_points']?.toDouble() ?? 20;
+                                  final score = _toDouble(data['score']);
+                                  final maxPoints = _toDouble(
+                                        data['assignment']?['total_points'] ??
+                                        data['total_points'] ??
+                                        20,
+                                      ) ??
+                                      20;
                                   return ListTile(
                                     leading: const Icon(Icons.assignment),
                                     title: Text(data['assignment_title'] ?? 'Devoir'),

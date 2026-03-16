@@ -105,8 +105,9 @@ const disciplineOfficerMenu = [
 const promoterMenu = [
   { path: '/promoter', label: 'Tableau de bord', icon: LayoutDashboard },
   { path: '/promoter/schools', label: 'Mes écoles', icon: Building2 },
-  { path: '/admin/communication', label: 'Communication', icon: MessageSquare },
-  { path: '/admin/meetings', label: 'Réunions', icon: Calendar },
+  { path: '/promoter/finances', label: 'Finances', icon: CreditCard },
+  { path: '/promoter/communication', label: 'Communication', icon: MessageSquare },
+  { path: '/promoter/meetings', label: 'Réunions', icon: Calendar },
 ]
 
 export default function Sidebar({ user, currentPath, isOpen = false, onClose }: SidebarProps) {

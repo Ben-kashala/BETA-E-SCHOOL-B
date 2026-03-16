@@ -69,6 +69,9 @@ import AccountantCaisse from './pages/accountant/Caisse'
 // Promoter pages
 import PromoterDashboard from './pages/promoter/Dashboard'
 import PromoterSchools from './pages/promoter/Schools'
+import PromoterFinances from './pages/promoter/Finances'
+import PromoterCommunication from './pages/promoter/Communication'
+import PromoterMeetings from './pages/promoter/Meetings'
 
 // Discipline officer pages
 import DisciplineOfficerDashboard from './pages/discipline-officer/Dashboard'
@@ -196,6 +199,9 @@ function App() {
         <Route path="/promoter" element={<RoleRoute allowedRoles={['PROMOTER']} />}>
           <Route index element={<PromoterDashboard />} />
           <Route path="schools" element={<PromoterSchools />} />
+        <Route path="finances" element={<PromoterFinances />} />
+        <Route path="communication" element={<PromoterCommunication />} />
+        <Route path="meetings" element={<PromoterMeetings />} />
         </Route>
 
         {/* Redirect based on role */}
