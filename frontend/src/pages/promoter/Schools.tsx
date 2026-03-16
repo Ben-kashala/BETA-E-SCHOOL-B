@@ -68,9 +68,8 @@ export default function PromoterSchools() {
               key={school.id}
               className="p-5 dark:bg-gray-900 hover:border-primary-500/60 cursor-pointer transition-colors"
               onClick={() => {
-                // Redirection simple vers le dashboard admin de l'école.
-                // Le back-office restant mono-école, on suppose une connexion sur l'école courante.
-                navigate('/admin')
+                // Ouvre les détails financiers de l'école dans l'onglet Finances promoteur
+                navigate(`/promoter/finances?school=${school.id}`)
               }}
             >
               <div className="flex items-start justify-between mb-3">

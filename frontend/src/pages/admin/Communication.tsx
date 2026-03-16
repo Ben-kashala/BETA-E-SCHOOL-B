@@ -132,7 +132,16 @@ export default function AdminCommunication() {
     enabled: showMessageForm,
   })
 
-  const users = Array.isArray(usersData) ? usersData : (usersData?.results || [])
+  const rawUsers = Array.isArray(usersData) ? usersData : (usersData?.results || [])
+
+  // Pour le promoteur, limiter les destinataires au personnel (pas d'élèves ni de parents)
+  const users = rawUsers.filter((u: any) => {
+    if (!user) return false
+    if (user.role === 'PROMOTER') {
+      return u.role !== 'STUDENT' && u.role !== 'PARENT'
+    }
+    return true
+  })
   
   const roleLabels: Record<string, string> = {
     TEACHER: 'Enseignant',
@@ -147,7 +156,7 @@ export default function AdminCommunication() {
   const { data: schoolsData, isLoading: schoolsLoading } = useQuery({
     queryKey: ['all-schools-for-transfer'],
     queryFn: async () => {
-      const response = await api.get('/schools/schools/all-for-transfer/')
+      const response = await api.get('/schools/all-for-transfer/')
       return response.data
     },
     enabled: activeTab === 'inter_school' && !!user,

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import api from '@/services/api'
 import { Card } from '@/components/ui/Card'
 import { Building2, CreditCard, ArrowDownCircle, ArrowUpCircle, Check, X, FileText } from 'lucide-react'
@@ -26,7 +27,12 @@ const formatAmount = (amount: number) =>
 
 export default function PromoterFinances() {
   const queryClient = useQueryClient()
-  const [selectedSchoolId, setSelectedSchoolId] = useState<number | 'ALL'>('ALL')
+  const [searchParams] = useSearchParams()
+  const initialSchoolParam = searchParams.get('school')
+  const initialSchoolId = initialSchoolParam ? Number(initialSchoolParam) : NaN
+  const [selectedSchoolId, setSelectedSchoolId] = useState<number | 'ALL'>(
+    Number.isFinite(initialSchoolId) && initialSchoolId > 0 ? initialSchoolId : 'ALL'
+  )
   const [activeTab, setActiveTab] = useState<'RECETTES' | 'DEPENSES' | 'CAISSE'>('RECETTES')
 
   const { data, isLoading, error } = useQuery<{ results: PromoterSchool[] }>({
