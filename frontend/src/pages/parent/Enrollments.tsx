@@ -68,6 +68,7 @@ export default function ParentEnrollments() {
       parent_phone: user?.phone ?? '',
       parent_email: user?.email ?? '',
       parent_address_city: user?.school?.city ?? '',
+      parent_address_province: undefined,
       parent_address_country: user?.school?.country ?? 'RDC',
     },
   })
@@ -102,9 +103,40 @@ export default function ParentEnrollments() {
           formData.append(key, String(value))
         }
       })
-      return api.post('/enrollment/applications/', formData, {
+      // Créer la demande d'inscription
+      const res = await api.post('/enrollment/applications/', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
+      // Mettre à jour le profil du parent avec les infos saisies (si connecté)
+      try {
+        if (user) {
+          const parentAddressParts = [
+            data.parent_address_number ? `N° ${data.parent_address_number}` : '',
+            data.parent_address_avenue ? `Av. ${data.parent_address_avenue}` : '',
+            data.parent_address_quarter ? `Q. ${data.parent_address_quarter}` : '',
+            data.parent_address_commune ? `C. ${data.parent_address_commune}` : '',
+            data.parent_address_city,
+            data.parent_address_province,
+            data.parent_address_country,
+          ].filter(Boolean)
+
+          const profilePayload: Record<string, string> = {}
+          if (data.parent_phone) profilePayload.phone = data.parent_phone
+          if (data.parent_email) profilePayload.email = data.parent_email
+          if (data.parent_address_city) profilePayload.address_city = data.parent_address_city
+          if (data.parent_address_province) profilePayload.address_province = data.parent_address_province
+          if (data.parent_address_country) profilePayload.address_country = data.parent_address_country
+          if (parentAddressParts.length > 0) {
+            profilePayload.address = parentAddressParts.join(', ')
+          }
+          if (Object.keys(profilePayload).length > 0) {
+            await api.patch('/auth/users/me/', profilePayload)
+          }
+        }
+      } catch {
+        // On ignore les erreurs de mise à jour du profil pour ne pas bloquer la création
+      }
+      return res
     },
     onSuccess: () => {
       showSuccess("Demande d'inscription envoyée à l'école.")

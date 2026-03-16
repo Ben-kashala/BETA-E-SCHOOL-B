@@ -34,7 +34,7 @@ export default function PromoterSchools() {
   const { data, isLoading, error } = useQuery<{ results: PromoterSchool[] }>({
     queryKey: ['promoter-schools'],
     queryFn: async () => {
-      const res = await api.get('/schools/schools/my-schools/')
+      const res = await api.get('/schools/my-schools/')
       return res.data
     },
   })

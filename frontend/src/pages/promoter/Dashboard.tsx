@@ -25,7 +25,7 @@ export default function PromoterDashboard() {
   const { data, isLoading } = useQuery<PromoterDashboardStats>({
     queryKey: ['promoter-dashboard'],
     queryFn: async () => {
-      const res = await api.get('/schools/schools/promoter-dashboard/')
+      const res = await api.get('/schools/promoter-dashboard/')
       return res.data
     },
   })

@@ -152,7 +152,10 @@ class _GradesPageState extends ConsumerState<GradesPage> {
         queryParams = {'student': _selectedChildId};
       }
 
-      final response = await ApiService().get<dynamic>(
+      final api = ApiService();
+
+      // 1) Essayer les notes classiques (comme le web)
+      final response = await api.get<dynamic>(
         '/api/academics/grades/',
         queryParameters: queryParams,
         useCache: false,
@@ -163,7 +166,44 @@ class _GradesPageState extends ConsumerState<GradesPage> {
           : (data is Map && data['results'] != null)
               ? (data['results'] as List)
               : <dynamic>[];
-      final grades = list is List<dynamic> ? list : List<dynamic>.from(list);
+      List<dynamic> grades = list is List<dynamic> ? list : List<dynamic>.from(list);
+
+      // 2) Fallback parent : si aucune note trouvée pour l'enfant sélectionné,
+      //    mapper les bulletins RDC en "notes", comme pour le web.
+      if (isParent && (_selectedChildId != null) && grades.isEmpty) {
+        try {
+          final bRes = await api.get<dynamic>(
+            '/api/academics/grade-bulletins/',
+            queryParameters: {'student': _selectedChildId.toString()},
+            useCache: false,
+          );
+          final bData = bRes.data;
+          final bulletins = bData is List
+              ? bData
+              : (bData is Map && bData['results'] != null)
+                  ? (bData['results'] as List)
+                  : <dynamic>[];
+
+          grades = bulletins.map((b) {
+            final m = b as Map? ?? {};
+            return {
+              'id': m['id'],
+              'student_name': m['student_name'],
+              'subject_name': m['subject_name'],
+              'term': 'AN',
+              'total_score': m['total_general'],
+              // Champs utilisés par l’UI mobile
+              'subject': {
+                'name': m['subject_name'],
+              },
+              'score': m['total_general'],
+              'total_points': 20,
+            };
+          }).toList();
+        } catch (_) {
+          // En cas d'erreur, on garde simplement la liste vide de grades.
+        }
+      }
       // Charger les matières pour les filtres
       try {
         final subjectsResponse = await ApiService().get('/api/schools/subjects/');
@@ -215,9 +255,18 @@ class _GradesPageState extends ConsumerState<GradesPage> {
     });
   }
 
-  Color _getGradeColor(double? score, double? maxScore) {
-    if (score == null || maxScore == null) return Colors.grey;
-    final percentage = (score / maxScore) * 100;
+  double? _toDouble(dynamic v) {
+    if (v == null) return null;
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v);
+    return double.tryParse(v.toString());
+  }
+
+  Color _getGradeColor(dynamic score, dynamic maxScore) {
+    final s = _toDouble(score);
+    final m = _toDouble(maxScore);
+    if (s == null || m == null || m == 0) return Colors.grey;
+    final percentage = (s / m) * 100;
     if (percentage >= 80) return Colors.green;
     if (percentage >= 60) return Colors.orange;
     return Colors.red;
@@ -326,6 +375,7 @@ class _GradesPageState extends ConsumerState<GradesPage> {
             Container(
               padding: const EdgeInsets.all(16),
               child: DropdownButtonFormField<int>(
+                isExpanded: true,
                 value: _selectedChildId,
                 decoration: const InputDecoration(
                   labelText: 'Sélectionner un enfant',

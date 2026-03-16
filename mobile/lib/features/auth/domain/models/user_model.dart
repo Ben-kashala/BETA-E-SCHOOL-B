@@ -9,6 +9,11 @@ class UserModel {
   final String? schoolCode;
   final String? studentId;
   final String? profilePicture;
+  // Adresse (élève/parent) – optionnelle
+  final String? address;
+  final String? addressCity;
+  final String? addressProvince;
+  final String? addressCountry;
 
   UserModel({
     required this.id,
@@ -21,6 +26,10 @@ class UserModel {
     this.schoolCode,
     this.studentId,
     this.profilePicture,
+    this.address,
+    this.addressCity,
+    this.addressProvince,
+    this.addressCountry,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -38,6 +47,10 @@ class UserModel {
       schoolCode: schoolCode,
       studentId: json['student_id'] as String?,
       profilePicture: json['profile_picture'] as String?,
+      address: json['address'] as String?,
+      addressCity: json['address_city'] as String? ?? json['city'] as String?,
+      addressProvince: json['address_province'] as String? ?? json['province'] as String?,
+      addressCountry: json['address_country'] as String? ?? json['country'] as String?,
     );
   }
 
