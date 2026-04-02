@@ -14,7 +14,7 @@ from drf_yasg import openapi
 # Swagger/OpenAPI Schema
 schema_view = get_schema_view(
     openapi.Info(
-        title="E-School Management API",
+        title="E-School API",
         default_version='v1',
         description="API REST complète pour la plateforme scolaire digitale",
         terms_of_service="https://www.eschool.rdc/terms/",
@@ -45,9 +45,9 @@ urlpatterns = [
     path(_admin_path, admin_redirect),
     
     # API Documentation
-    re_path(r'^swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),
-    path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
-    path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
+    re_path(r'^swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=3600), name='schema-json'),
+    path('swagger/', schema_view.with_ui('swagger', cache_timeout=3600), name='schema-swagger-ui'),
+    path('redoc/', schema_view.with_ui('redoc', cache_timeout=3600), name='schema-redoc'),
     
     # API Routes
     path('api/auth/', include('apps.accounts.urls')),

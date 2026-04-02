@@ -85,9 +85,9 @@ class GradeViewSet(viewsets.ModelViewSet):
             queryset = Grade.objects.select_related('student__user', 'student__parent', 'subject', 'teacher__user').all()
             if self.request.user.school:
                 queryset = queryset.filter(student__user__school=self.request.user.school)
-            # Parents can only see their children's grades
+            # Les parents ne peuvent voir que les notes de leurs enfants
             if self.request.user.is_parent:
-                # Filtrer par parent de l'élève
+                # Filtrer par parent de l'élève spécifique
                 queryset = queryset.filter(student__parent=self.request.user)
                 # Si un paramètre student est fourni, filtrer aussi par cet étudiant spécifique
                 student_id = self.request.query_params.get('student')
@@ -96,7 +96,7 @@ class GradeViewSet(viewsets.ModelViewSet):
                         queryset = queryset.filter(student_id=int(student_id))
                     except (ValueError, TypeError):
                         pass  # Ignorer si student_id n'est pas un entier valide
-            # Students can only see their own grades
+            # Les élèves ne peuvent voir que leurs propres notes
             elif self.request.user.is_student:
                 queryset = queryset.filter(student__user=self.request.user)
             return queryset.order_by('-academic_year', 'term', 'subject__name')
@@ -110,7 +110,7 @@ class GradeViewSet(viewsets.ModelViewSet):
             return Grade.objects.none()
     
     def list(self, request, *args, **kwargs):
-        """Override list to handle errors gracefully"""
+        """Remplacer list pour gérer les erreurs de manière appropriée"""
         try:
             return super().list(request, *args, **kwargs)
         except Exception as e:
@@ -124,7 +124,7 @@ class GradeViewSet(viewsets.ModelViewSet):
             return Response({'results': [], 'count': 0}, status=status.HTTP_200_OK)
     
     def create(self, request, *args, **kwargs):
-        """Override create to handle errors gracefully"""
+        """Remplacer create pour gérer les erreurs de manière appropriée"""
         try:
             return super().create(request, *args, **kwargs)
         except Exception as e:
@@ -141,14 +141,14 @@ class GradeViewSet(viewsets.ModelViewSet):
             )
     
     def perform_create(self, serializer):
-        """Automatically assign the teacher if user is a teacher"""
+        """Assigner automatiquement l'enseignant si l'utilisateur est un enseignant"""
         try:
             if self.request.user.is_teacher:
                 try:
                     teacher = self.request.user.teacher_profile
                     serializer.save(teacher=teacher)
                 except Exception:
-                    # If teacher profile doesn't exist, save without teacher
+                    # Si le profil enseignant n'existe pas, enregistrer sans enseignant
                     serializer.save()
             else:
                 serializer.save()
@@ -162,7 +162,7 @@ class GradeViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def statistics(self, request):
-        """Get grade statistics for a student"""
+        """Obtenir les statistiques des notes pour les élèves"""
         student_id = request.query_params.get('student')
         academic_year = request.query_params.get('academic_year')
         term = request.query_params.get('term')
@@ -450,10 +450,10 @@ class AttendanceViewSet(viewsets.ModelViewSet):
             queryset = Attendance.objects.select_related('student__user', 'school_class', 'subject', 'teacher__user').all()
             if self.request.user.school:
                 queryset = queryset.filter(student__user__school=self.request.user.school)
-            # Parents can only see their children's attendance
+            # Les parents ne peuvent voir que les présences de leurs enfants
             if self.request.user.is_parent:
                 queryset = queryset.filter(student__parent=self.request.user)
-            # Students can only see their own attendance
+            # Les élèves ne peuvent voir que leurs propres présences
             elif self.request.user.is_student:
                 queryset = queryset.filter(student__user=self.request.user)
             return queryset
@@ -463,24 +463,24 @@ class AttendanceViewSet(viewsets.ModelViewSet):
             logger.error(f"Erreur dans get_queryset de AttendanceViewSet: {str(e)}")
             import traceback
             traceback.print_exc()
-            # Retourner un queryset vide en cas d'erreur
+            # Retourner un queryset vide en cas d'erreur pour éviter les erreurs
             return Attendance.objects.none()
     
     def perform_create(self, serializer):
-        """Automatically assign the teacher if user is a teacher"""
+        """Assigner automatiquement l'enseignant si l'utilisateur est un enseignant"""
         if self.request.user.is_teacher:
             try:
                 teacher = self.request.user.teacher_profile
                 serializer.save(teacher=teacher)
             except Exception:
-                # If teacher profile doesn't exist, save without teacher
+                # Si le profil enseignant n'existe pas, enregistrer sans enseignant
                 serializer.save()
         else:
             serializer.save()
     
     @action(detail=False, methods=['get'])
     def statistics(self, request):
-        """Get attendance statistics"""
+        """Obtenir les statistiques de présence"""
         student_id = request.query_params.get('student')
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date')
@@ -621,10 +621,10 @@ class DisciplineRecordViewSet(viewsets.ModelViewSet):
         queryset = DisciplineRecord.objects.all()
         if self.request.user.school:
             queryset = queryset.filter(student__user__school=self.request.user.school)
-        # Parents can only see their children's records
+        # Les parents ne peuvent voir que les fiches de discipline de leurs enfants
         if self.request.user.is_parent:
             queryset = queryset.filter(student__parent=self.request.user)
-        # Students can only see their own records
+        # Les élèves ne peuvent voir que leurs propres fiches de discipline
         elif self.request.user.is_student:
             queryset = queryset.filter(student__user=self.request.user)
         return queryset
@@ -781,10 +781,10 @@ class ReportCardViewSet(viewsets.ModelViewSet):
         queryset = ReportCard.objects.all()
         if self.request.user.school:
             queryset = queryset.filter(student__user__school=self.request.user.school)
-        # Parents can only see their children's report cards
+        # Les parents ne peuvent voir que les bulletins de leurs enfants
         if self.request.user.is_parent:
             queryset = queryset.filter(student__parent=self.request.user)
-        # Students can only see their own report cards
+        # Les élèves ne peuvent voir que leurs propres bulletins
         elif self.request.user.is_student:
             queryset = queryset.filter(student__user=self.request.user)
         return queryset

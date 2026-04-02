@@ -125,9 +125,6 @@ export default function LoginPage() {
                 className="input bg-white border-eschool-header-text/30 text-eschool-header-text placeholder:text-eschool-header-text/50 focus:ring-eschool-body"
                 placeholder="Nom d'utilisateur, email ou téléphone (10 chiffres)"
               />
-              <p className="mt-1 text-xs text-eschool-header-text/60">
-                Vous pouvez utiliser votre nom d'utilisateur, votre email ou votre numéro de téléphone (10 chiffres).
-              </p>
               {errors.username && (
                 <p className="mt-1 text-sm text-red-600">{errors.username.message}</p>
               )}
@@ -159,7 +156,6 @@ export default function LoginPage() {
           </form>
 
           <div className="mt-6 text-center text-sm text-eschool-header-text/70 space-y-1">
-            <p>Une fois connecté, vous pouvez changer votre mot de passe dans votre profil (menu utilisateur).</p>
             <p>Plateforme scolaire digitale pour l'Afrique</p>
           </div>
         </div>

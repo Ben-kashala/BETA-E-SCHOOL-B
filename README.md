@@ -164,6 +164,7 @@ Pour plus de détails, voir les README des sous-projets (frontend, mobile) et **
 - Authentification JWT (refresh tokens)
 - Isolation des données par école (multi-tenant)
 - Permissions selon les rôles
+- AXES : 
 
 ### Optimisations pour faible connectivité
 - Compression des données

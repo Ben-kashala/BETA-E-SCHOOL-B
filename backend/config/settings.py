@@ -10,13 +10,16 @@ import dj_database_url
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# SECURITY WARNING: keep the secret key used in production secret!
+# SECURITY WARNING: Garder la clé sécret utiliser en production secrète!
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-me-in-production')
 
-# SECURITY WARNING: don't run with debug turned on in production!
+# SECURITY WARNING: ne pas exécuter avec debug activé en production!
+# Sur Railway, on s'appuie en général sur les variables d'environnement pour forcer `DEBUG=False`.
 DEBUG = config('DEBUG', default=True, cast=bool)
 
 _allowed_hosts_raw = config('ALLOWED_HOSTS', default='localhost,127.0.0.1')
+# Liste d'hôtes autorisés pour Django.
+# En prod, il faut idéalement mettre votre domaine/hostname, sinon Django peut refuser les requêtes.
 ALLOWED_HOSTS = [s.strip() for s in _allowed_hosts_raw.split(',') if s.strip()]
 # Sur Railway (PORT défini), si ALLOWED_HOSTS n'a pas été personnalisé, accepter tout pour éviter DisallowedHost
 if os.environ.get('PORT') and _allowed_hosts_raw == 'localhost,127.0.0.1':
@@ -24,9 +27,12 @@ if os.environ.get('PORT') and _allowed_hosts_raw == 'localhost,127.0.0.1':
 
 # URL de l'admin Django (en production sur Railway : définir DJANGO_ADMIN_URL à une valeur secrète)
 # Ex. DJANGO_ADMIN_URL=secret-admin-xyz123 → https://votredomaine.com/secret-admin-xyz123/
+# Objectif : réduire le risque d'attaques automatiques sur `/admin/`.
 DJANGO_ADMIN_URL = config('DJANGO_ADMIN_URL', default='admin').strip().strip('/') or 'admin'
 
 # Application definition
+# Note : les applis locales sont chargées après les dépendances tierces.
+# Vérifie que tes applis/middlewares restent dans le bon ordre si tu modifies la structure.
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -58,6 +64,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    # Middlewares "standards" Django / sécurité / performance
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
@@ -69,14 +76,17 @@ MIDDLEWARE = [
     'apps.accounts.middleware.PlatformLockMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    # Custom middleware for multi-tenant
+    # Custom middleware multi-tenant (important : il doit être exécuté avant les dépendances qui
+    # utilisent `request`/`school` pour le filtrage des données)
     'apps.schools.middleware.TenantMiddleware',
-    # Protection force brute admin (doit être en dernier)
+    # Protection force brute admin (doit être en dernier pour capturer correctement les échecs)
     'axes.middleware.AxesMiddleware',
 ]
 
+# Routage principal (mapping URL Django)
 ROOT_URLCONF = 'config.urls'
 
+# Templates : on charge les templates au niveau projet + templates dans chaque app (`APP_DIRS=True`)
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -93,6 +103,7 @@ TEMPLATES = [
     },
 ]
 
+# WSGI = mode sync (utilisé par Gunicorn).
 WSGI_APPLICATION = 'config.wsgi.application'
 
 # Database - Railway fournit DATABASE_URL, sinon on utilise les variables individuelles
@@ -111,11 +122,10 @@ def convert_railway_internal_to_public(database_url):
     3. Si POSTGRES_URL (variable Railway alternative) existe et est publique, l'utiliser
     4. Sinon, retourner l'URL originale (erreur de connexion attendue en local)
     """
+    # Si aucune URL n'est fournie, on renvoie tel quel (le code retournera ensuite l'autre branche DATABASES).
     if not database_url:
         return database_url
     
-    # IMPORTANT : En production sur Railway, ne PAS convertir l'URL interne
-    # L'URL interne fonctionne parfaitement dans l'environnement Railway
     # Détecter si on est sur Railway (production) via les variables d'environnement Railway
     railway_env = os.environ.get('RAILWAY_ENVIRONMENT')
     railway_deployment_id = os.environ.get('RAILWAY_DEPLOYMENT_ID')
@@ -186,6 +196,8 @@ else:
     }
 
 # For development, use SQLite
+# En dev, si `USE_SQLITE=True`, on remplace la config DB par SQLite.
+# En prod (Railway), n'active pas cette option.
 if DEBUG and config('USE_SQLITE', default=False, cast=bool):
     DATABASES = {
         'default': {
@@ -210,13 +222,17 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-# Internationalization
+# Internationalisation
+# Paramètres i18n (langue + timezone).
+# `TIME_ZONE` est fixée à 'Africa/Kinshasa' pour coller au contexte de votre plateforme.
 LANGUAGE_CODE = 'fr-fr'
 TIME_ZONE = 'Africa/Kinshasa'
 USE_I18N = True
 USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
+# `STATIC_ROOT` est le dossier de sortie pour `collectstatic`.
+# WhiteNoise sert ensuite à servir les fichiers statiques directement via Gunicorn.
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STORAGES = {
@@ -233,9 +249,11 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
+# Type de clé primaire par défaut pour les modèles Django.
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Custom User Model
+# Modèle utilisateur personnalisé (obligatoire si tu as `accounts.User`).
 AUTH_USER_MODEL = 'accounts.User'
 
 # Backends d'authentification (axes en premier pour bloquer les IP/utilisateurs après trop d'échecs)
@@ -254,6 +272,10 @@ AXES_ENABLE_ACCESS_FAILURE_LOG = True  # log des échecs
 # Note: AXES_USE_USER_AGENT est déprécié, supprimé (ne pas inclure 'user_agent' dans AXES_LOCKOUT_PARAMETERS)
 
 # REST Framework
+# Configuration DRF :
+# - authentification : JWT
+# - permission : vérifie d'abord le verrouillage "platform lock", puis exige l'utilisateur authentifié
+# - pagination et filtres standards
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -272,6 +294,10 @@ REST_FRAMEWORK = {
 }
 
 # JWT Settings
+# Durées de vie des tokens JWT.
+# - Access : 24h
+# - Refresh : 7 jours
+# Attention : la rotation du refresh token change le comportement côté client.
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(hours=24),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
@@ -284,12 +310,14 @@ SIMPLE_JWT = {
 
 # CORS Settings — frontend (React) peut appeler l'API depuis ces origines
 # En production : définir CORS_ALLOWED_ORIGINS ou laisser la valeur par défaut (e-school.africaits.com + localhost)
+# Si tu changes l'URL front (React/Vite), pense à mettre à jour les origines.
 CORS_ALLOWED_ORIGINS = config(
     'CORS_ALLOWED_ORIGINS',
     default='http://localhost:3000,http://localhost:8081,https://e-school.africaits.com,http://e-school.africaits.com',
     cast=lambda v: [s.strip() for s in v.split(',') if s.strip()]
 )
 CORS_ALLOW_CREDENTIALS = True
+# Headers explicitement autorisés (utile avec certains navigateurs / environnements).
 CORS_ALLOW_HEADERS = [
     'accept',
     'accept-encoding',
@@ -305,6 +333,7 @@ CORS_ALLOW_HEADERS = [
 
 # CSRF Settings - Required for Django Admin in production (Django 4+ : inclure le schéma https://)
 # Sur Railway, définir dans Variables : CSRF_TRUSTED_ORIGINS=https://votre-app.up.railway.app,https://e-school.africaits.com
+# Utilisé pour les requêtes CSRF vers l'admin (et potentiellement d'autres vues dépendant de CSRF).
 CSRF_TRUSTED_ORIGINS = config(
     'CSRF_TRUSTED_ORIGINS',
     default='http://localhost:3000,http://localhost:8081,https://e-school.africaits.com,http://e-school.africaits.com',
@@ -312,9 +341,11 @@ CSRF_TRUSTED_ORIGINS = config(
 )
 
 # Derrière un proxy (Railway, etc.) : Django doit faire confiance au header X-Forwarded-Proto pour HTTPS
+# Si ce header n'est pas correctement géré, tu peux avoir des soucis de cookies sécurisés et de redirections.
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # Session Settings - Important pour Django Admin
+# Ces paramètres visent surtout l'admin : cookies sécurisés, durée, etc.
 SESSION_COOKIE_SECURE = not DEBUG  # True en production (HTTPS uniquement)
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
@@ -322,15 +353,18 @@ SESSION_SAVE_EVERY_REQUEST = True
 AUTO_LOGOUT_DELAY = 30 * 60  # 30 minutes d'inactivité pour l'admin
 
 # CSRF Cookie Settings
+# Dans ton projet, vous choisissez d'exposer le token CSRF à JS (cookie accessible).
+# Vérifie la compatibilité côté front (React).
 CSRF_COOKIE_SECURE = not DEBUG  # True en production (HTTPS uniquement)
 CSRF_COOKIE_HTTPONLY = False  # False pour permettre JavaScript d'accéder au token
 CSRF_USE_SESSIONS = False  # Utiliser les cookies CSRF (pas les sessions)
 
 # File Upload Settings
+# Limites de taille (en mémoire) pour les uploads.
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
 
-# Celery Configuration (for async tasks)
+# Configuration Celery (pour les tâches async)
 CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='redis://localhost:6379/0')
 
@@ -355,11 +389,14 @@ MPESA_API_BASE_URL = config('MPESA_API_BASE_URL', default='')
 FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:5173')
 
 # SMS/WhatsApp (Twilio)
+# Paramètres Twilio : à injecter via variables d'environnement (pas en dur).
 TWILIO_ACCOUNT_SID = config('TWILIO_ACCOUNT_SID', default='')
 TWILIO_AUTH_TOKEN = config('TWILIO_AUTH_TOKEN', default='')
 TWILIO_PHONE_NUMBER = config('TWILIO_PHONE_NUMBER', default='')
 
 # Email Configuration
+# Ici vous privilégiez par défaut l'email en "console" (pratique en dev).
+# En prod, configure EMAIL_HOST/EMAIL_HOST_PASSWORD + `EMAIL_BACKEND` adapté.
 EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
 EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
 EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
@@ -373,6 +410,7 @@ DEFAULT_PARENT_PASSWORD = config('DEFAULT_PARENT_PASSWORD', default='Parent@@')
 DEFAULT_STUDENT_PASSWORD = config('DEFAULT_STUDENT_PASSWORD', default='Eleve@@')
 
 # Logging
+# Configuration de logging : vous surchargerez probablement depuis `config/logging_config.py`.
 LOGGING_CONFIG = None
 import logging.config
 from .logging_config import LOGGING

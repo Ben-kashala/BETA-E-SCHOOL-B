@@ -29,7 +29,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         username = os.environ.get('ADMIN_USERNAME', SUPERADMIN_USERNAME)
         email = os.environ.get('ADMIN_EMAIL', 'alidorsabue@africait.com')
-        password = os.environ.get('ADMIN_PASSWORD', "Virgi@1996Ali@")
+        password = os.environ.get('ADMIN_PASSWORD', "")
         school_name = os.environ.get('SCHOOL_NAME', 'COLLEGE VITAL MAURICE')
         school_code = os.environ.get('SCHOOL_CODE', 'CVMA')
         create_school = os.environ.get('CREATE_SCHOOL', 'true').lower() == 'true'

@@ -12,11 +12,53 @@ from reportlab.lib.pagesizes import letter, A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import inch
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, Flowable
 from reportlab.lib.styles import getSampleStyleSheet
 from .models import ReportCard, Grade, GradeBulletin
 from apps.accounts.models import Student
 from apps.schools.models import SchoolClass, ClassSubject, StudentClassEnrollment
+
+
+class BulletinHatchCell(Flowable):
+    """
+    Fond hachuré (traits verticaux serrés) comme sur le bulletin imprimé officiel.
+    Le texte est centré au-dessus du hachurage.
+    """
+
+    def __init__(self, width, height, text="", font_size=5.8):
+        Flowable.__init__(self)
+        self._w = width
+        self._h = height
+        self.text = text if text is not None else ""
+        self.font_size = font_size
+
+    def wrap(self, availWidth, availHeight):
+        return (self._w, self._h)
+
+    def split(self, availWidth, availHeight):
+        return []
+
+    def draw(self):
+        c = self.canv
+        c.saveState()
+        c.setFillColor(colors.white)
+        c.rect(0, 0, self._w, self._h, fill=1, stroke=0)
+        c.setStrokeColor(colors.black)
+        c.setLineWidth(0.28)
+        step = 0.75
+        x = 0
+        while x <= self._w + 0.5:
+            c.line(x, 0, x, self._h)
+            x += step
+        if self.text:
+            c.setFillColor(colors.black)
+            c.setFont("Helvetica-Bold", self.font_size)
+            txt = str(self.text)
+            tw = c.stringWidth(txt, "Helvetica-Bold", self.font_size)
+            tx = max(0, (self._w - tw) / 2)
+            ty = self._h / 2 - self.font_size * 0.28
+            c.drawString(tx, ty, txt)
+        c.restoreState()
 
 
 def get_class_ranking_map(school_class, academic_year):
@@ -316,6 +358,172 @@ def _bulletin_logo_path(filename):
             return p
         this_dir = parent
     return None
+
+
+def _d0(v):
+    if v is None or v == "":
+        return Decimal("0")
+    try:
+        return Decimal(str(v))
+    except Exception:
+        return Decimal("0")
+
+
+def _fmt_footer_num(d):
+    if d is None:
+        return ""
+    try:
+        return str(Decimal(str(d)).quantize(Decimal("0.01")))
+    except Exception:
+        return ""
+
+
+def _build_rdc_footer_column_series(
+    student,
+    resolved_class,
+    academic_year,
+    subject_ids,
+    max_p_by_subject,
+):
+    """
+    Séries MAXIMA / TOTAUX / POURCENTAGE / PLACE pour les 18 colonnes du tableau (S1, S2, T.G., repêchage),
+    alignées sur le bulletin officiel RDC. Retourne (maxima, totaux, pct, place) — listes de 18 chaînes.
+    """
+    empty18 = [""] * 18
+    if not resolved_class or not subject_ids:
+        return empty18, empty18, empty18, empty18
+
+    ac_year = (academic_year or "").strip()
+    enrollment_ids = set(
+        StudentClassEnrollment.objects.filter(school_class=resolved_class).values_list("student_id", flat=True).distinct()
+    )
+    bulletin_ids = set(
+        GradeBulletin.objects.filter(school_class=resolved_class, academic_year=ac_year).values_list("student_id", flat=True).distinct()
+    )
+    student_ids = list(enrollment_ids | bulletin_ids)
+    if not student_ids:
+        return empty18, empty18, empty18, empty18
+
+    bulletins = GradeBulletin.objects.filter(
+        student_id__in=student_ids,
+        academic_year=ac_year,
+        subject_id__in=subject_ids,
+    ).filter(Q(school_class=resolved_class) | Q(school_class__isnull=True))
+
+    by_student = {}
+    for b in bulletins:
+        by_student.setdefault(b.student_id, {})[b.subject_id] = b
+
+    students = Student.objects.filter(id__in=student_ids).select_related("user")
+    name_map = {
+        s.id: ((s.user.get_full_name() or "").strip() or s.user.username or f"#{s.id}")
+        for s in students
+        if s.user
+    }
+    for s in students:
+        if s.id not in name_map:
+            name_map[s.id] = f"#{s.id}"
+
+    def sums_for(sid):
+        """Totaux élève sur les 18 colonnes (indices 0..17), alignés sur le corps du bulletin."""
+        row = [Decimal("0")] * 18
+        for subj_id in subject_ids:
+            mp = int(max_p_by_subject.get(subj_id) or 20)
+            row[0] += mp
+            row[7] += mp
+            g = by_student.get(sid, {}).get(subj_id)
+            if g:
+                row[1] += _d0(g.s1_p1)
+                row[2] += _d0(g.s1_p2)
+                row[3] += _d0(g.s1_exam)
+                row[5] += _d0(g.total_s1)
+                row[8] += _d0(g.s2_p3)
+                row[9] += _d0(g.s2_p4)
+                row[10] += _d0(g.s2_exam)
+                row[12] += _d0(g.total_s2)
+                row[14] += _d0(g.total_general)
+                row[16] += _d0(g.reclamation_score)
+        return row
+
+    def maxima_row():
+        m = [Decimal("0")] * 18
+        for subj_id in subject_ids:
+            mp = int(max_p_by_subject.get(subj_id) or 20)
+            max_exam = mp * 2
+            max_s1 = mp * 4
+            max_s2 = mp * 4
+            max_tg = mp * 8
+            m[0] += mp
+            m[1] += mp
+            m[2] += mp
+            m[3] += max_exam
+            m[5] += max_s1
+            m[7] += mp
+            m[8] += mp
+            m[9] += mp
+            m[10] += max_exam
+            m[12] += max_s2
+            m[14] += max_tg
+        return m
+
+    maxima = maxima_row()
+    all_sums = {sid: sums_for(sid) for sid in student_ids}
+    if student.id not in all_sums:
+        all_sums[student.id] = sums_for(student.id)
+        if student.id not in student_ids:
+            student_ids.append(student.id)
+            u = getattr(student, "user", None)
+            name_map.setdefault(
+                student.id,
+                ((u.get_full_name() or "").strip() or getattr(u, "username", None) or f"#{student.id}") if u else f"#{student.id}",
+            )
+    tot = all_sums[student.id]
+
+    # Colonnes sans valeur propre (fusion dans le corps du tableau ; repêchage = % non cumulable comme les autres)
+    skip_pct_place = {4, 6, 11, 13, 15, 16, 17}
+
+    def pct_cell(i):
+        if i in skip_pct_place:
+            return ""
+        if maxima[i] <= 0:
+            return ""
+        p = (tot[i] / maxima[i]) * Decimal("100")
+        return f"{float(p):.2f} %"
+
+    def rank_for_column(col_idx):
+        """Classement sur la colonne `col_idx` (ex-aequo = même rang)."""
+        if col_idx in skip_pct_place or maxima[col_idx] <= 0:
+            return "", ""
+        totals = [(sid, all_sums[sid][col_idx]) for sid in student_ids]
+        totals.sort(key=lambda x: (-x[1], name_map.get(x[0], "")))
+        n = len(student_ids)
+        current_rank = 1
+        rank_lookup = {}
+        for i, (sid, val) in enumerate(totals):
+            if i > 0 and val != totals[i - 1][1]:
+                current_rank = i + 1
+            rank_lookup[sid] = current_rank
+        rank = rank_lookup.get(student.id)
+        if rank is None:
+            return "", ""
+        return str(rank), str(n)
+
+    maxima_str = [_fmt_footer_num(maxima[i]) if i not in (4, 6, 11, 13, 15, 16, 17) else "" for i in range(18)]
+    tot_str = []
+    for i in range(18):
+        if i in (4, 6, 11, 13, 15, 17):
+            tot_str.append("")
+        elif i == 16:
+            tot_str.append(_fmt_footer_num(tot[i]) if tot[i] and tot[i] != Decimal("0") else "")
+        else:
+            tot_str.append(_fmt_footer_num(tot[i]))
+    pct_str = [pct_cell(i) for i in range(18)]
+    place_str = []
+    for i in range(18):
+        r, n = rank_for_column(i)
+        place_str.append(f"{r} / {n}" if r and n else "")
+
+    return maxima_str, tot_str, pct_str, place_str
 
 
 def generate_bulletin_rdc_pdf(report_card):
@@ -844,36 +1052,77 @@ def generate_bulletin_rdc_pdf(report_card):
     story.append(table)
     story.append(Spacer(1, 0))
 
-    # ----- SECTION RÉSUMÉ : gauche = MAXIMA, TOTAUX, POURCENTAGE, PLACE, APPLICATION, CONDUITE, SIGNATURE | droite = encadré - PASSE (1), - DOUBLE (1), LE..../....../20...., Chef d'Etablissement, Sceau de l'Ecole -----
-    pct = ""
-    if report_card.average_score is not None:
-        pct = f"{float(report_card.average_score) * 5:.2f} %"
-    place = f"{report_card.rank or ''} / {report_card.total_students or ''}"
+    # ----- SECTION RÉSUMÉ : mêmes colonnes que le tableau des notes (19 col.) pour MAXIMA, TOTAUX, %, PLACE | droite = encadré décision -----
+    max_p_by_subject = {e["subject_id"]: e["max_p"] for e in entries}
+    if not max_p_by_subject:
+        for g in grades:
+            if g.subject_id and g.subject_id not in max_p_by_subject:
+                max_p_by_subject[g.subject_id] = int(getattr(g.subject, "period_max", 20) or 20)
+    subject_ids_footer = list(max_p_by_subject.keys())
+    mmax, ttot, ppct, pplace = _build_rdc_footer_column_series(
+        student, resolved_class, report_card.academic_year, subject_ids_footer, max_p_by_subject
+    )
     appli = str(report_card.application) if report_card.application is not None else ""
     conduite = str(report_card.conduite) if report_card.conduite is not None else ""
 
-    footer_left_data = [
-        ["MAXIMA GENERAUX", ""],
-        ["TOTAUX", ""],
-        ["POURCENTAGE", pct],
-        ["PLACE / NBRE D'ELEVES", place],
-        ["APPLICATION", appli],
-        ["CONDUITE", conduite],
-        ["SIGNATURE", ""],
-    ]
     footer_right_w = 1.95 * inch
     footer_left_w = full_w - footer_right_w
-    footer_left_table = Table(footer_left_data, colWidths=[1.72 * inch, footer_left_w - 1.72 * inch])
-    footer_left_table.setStyle(TableStyle([
+    _footer_scale = footer_left_w / full_w if full_w else 1
+    footer_col_widths = [w * _footer_scale for w in col_widths[:num_cols]]
+
+    # Lignes TOTAUX → CONDUITE : cellules hachurées sur les colonnes « bords » des blocs (comme le modèle imprimé)
+    _fh_rows = {1, 2, 3, 4, 5}
+    _fh_cols = {1, 7, 8, 14, 15, 16, 17, 18}
+    _footer_row_h_pt = 12
+    _footer_row_heights = [_footer_row_h_pt] * 6 + [14]
+
+    def _fh_cell(col_idx, row_idx, text):
+        w = footer_col_widths[col_idx]
+        if col_idx >= 1 and row_idx in _fh_rows and col_idx in _fh_cols:
+            return BulletinHatchCell(w, _footer_row_h_pt, text=text or "")
+        return text or ""
+
+    def _fh_data_row(strings_18, row_idx):
+        return [_fh_cell(i + 1, row_idx, strings_18[i] if i < len(strings_18) else "") for i in range(18)]
+
+    _app_row = [""] * 18
+    _app_row[14] = appli
+    _con_row = [""] * 18
+    _con_row[14] = conduite
+
+    footer_left_data = [
+        ["MAXIMA GENERAUX"] + mmax,
+        ["TOTAUX"] + _fh_data_row(ttot, 1),
+        ["POURCENTAGE"] + _fh_data_row(ppct, 2),
+        ["PLACE / NBRE D'ELEVES"] + _fh_data_row(pplace, 3),
+        ["APPLICATION"] + [_fh_cell(i + 1, 4, _app_row[i]) for i in range(18)],
+        ["CONDUITE"] + [_fh_cell(i + 1, 5, _con_row[i]) for i in range(18)],
+        ["SIGNATURE"] + [""] * 18,
+    ]
+    footer_left_table = Table(
+        footer_left_data,
+        colWidths=footer_col_widths,
+        rowHeights=_footer_row_heights,
+    )
+    footer_tbl_style = [
         ("GRID", (0, 0), (-1, -1), 0.25, colors.black),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("FONTSIZE", (0, 0), (-1, -1), 6.2),
+        ("FONTSIZE", (0, 0), (-1, -1), 5.8),
         ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 2),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 2),
-        ("TOPPADDING", (0, 0), (-1, -1), 1),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
-    ]))
+        ("LEFTPADDING", (0, 0), (0, -1), 2),
+        ("RIGHTPADDING", (0, 0), (0, -1), 2),
+        ("TOPPADDING", (0, 0), (0, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (0, -1), 2),
+        ("LEFTPADDING", (1, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (1, 0), (-1, -1), 0),
+        ("TOPPADDING", (1, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (1, 0), (-1, -1), 0),
+        ("ALIGN", (1, 0), (-1, 3), "CENTER"),
+        ("LINEBEFORE", (8, 0), (8, -1), 1.6, colors.black),
+        ("LINEBEFORE", (15, 0), (15, -1), 1.6, colors.black),
+        ("LINEBEFORE", (17, 0), (17, -1), 1.6, colors.black),
+    ]
+    footer_left_table.setStyle(TableStyle(footer_tbl_style))
     footer_right_style = ParagraphStyle("footer_right_style", parent=style_small, fontSize=7, leading=8)
     footer_right_text = (
         "- PASSE (1)<br/>"
