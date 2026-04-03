@@ -383,23 +383,32 @@ def _build_rdc_footer_column_series(
             name_map[s.id] = f"#{s.id}"
 
     def sums_for(sid):
-        """Totaux élève sur les 18 colonnes (indices 0..17), alignés sur le corps du bulletin."""
+        """Totaux élève sur les 18 colonnes (indices 0..17), alignés sur make_data_row (S1/S2/T.G.)."""
         row = [Decimal("0")] * 18
         for subj_id in subject_ids:
             mp = int(max_p_by_subject.get(subj_id) or 20)
+            max_exam = mp * 2
+            tot_s1_max = 4 * mp
+            tot_s2_max = 4 * mp
+            tot_gen_max = 8 * mp
             row[0] += mp
             row[7] += mp
             g = by_student.get(sid, {}).get(subj_id)
             if g:
                 row[1] += _d0(g.s1_p1)
                 row[2] += _d0(g.s1_p2)
-                row[3] += _d0(g.s1_exam)
-                row[5] += _d0(g.total_s1)
+                row[3] += max_exam
+                row[4] += _d0(g.s1_exam)
+                row[5] += tot_s1_max
+                row[6] += _d0(g.total_s1)
                 row[8] += _d0(g.s2_p3)
                 row[9] += _d0(g.s2_p4)
-                row[10] += _d0(g.s2_exam)
-                row[12] += _d0(g.total_s2)
-                row[14] += _d0(g.total_general)
+                row[10] += max_exam
+                row[11] += _d0(g.s2_exam)
+                row[12] += tot_s2_max
+                row[13] += _d0(g.total_s2)
+                row[14] += tot_gen_max
+                row[15] += _d0(g.total_general)
                 row[16] += _d0(g.reclamation_score)
         return row
 
@@ -408,20 +417,25 @@ def _build_rdc_footer_column_series(
         for subj_id in subject_ids:
             mp = int(max_p_by_subject.get(subj_id) or 20)
             max_exam = mp * 2
-            max_s1 = mp * 4
-            max_s2 = mp * 4
-            max_tg = mp * 8
+            tot_s1_max = 4 * mp
+            tot_s2_max = 4 * mp
+            tot_gen_max = 8 * mp
             m[0] += mp
             m[1] += mp
             m[2] += mp
             m[3] += max_exam
-            m[5] += max_s1
+            m[4] += max_exam
+            m[5] += tot_s1_max
+            m[6] += tot_s1_max
             m[7] += mp
             m[8] += mp
             m[9] += mp
             m[10] += max_exam
-            m[12] += max_s2
-            m[14] += max_tg
+            m[11] += max_exam
+            m[12] += tot_s2_max
+            m[13] += tot_s2_max
+            m[14] += tot_gen_max
+            m[15] += tot_gen_max
         return m
 
     maxima = maxima_row()
@@ -437,20 +451,29 @@ def _build_rdc_footer_column_series(
             )
     tot = all_sums[student.id]
 
-    # Colonnes sans valeur propre (fusion dans le corps du tableau ; repêchage = % non cumulable comme les autres)
-    skip_pct_place = {4, 6, 11, 13, 15, 16, 17}
+    # Colonnes « total max » seules (pas de % sur la cellule) ; col. MAX (0) = 100 % ; repêchage
+    skip_pct_place = {0, 5, 12, 14, 16, 17}
 
     def pct_cell(i):
         if i in skip_pct_place:
             return ""
-        if maxima[i] <= 0:
+        if i == 6:
+            denom, num = maxima[5], tot[6]
+        elif i == 13:
+            denom, num = maxima[12], tot[13]
+        elif i == 15:
+            denom, num = maxima[14], tot[15]
+        else:
+            denom, num = maxima[i], tot[i]
+        if denom <= 0:
             return ""
-        p = (tot[i] / maxima[i]) * Decimal("100")
+        p = (num / denom) * Decimal("100")
         return f"{float(p):.2f} %"
 
     def rank_for_column(col_idx):
         """Classement sur la colonne `col_idx` (ex-aequo = même rang)."""
-        if col_idx in skip_pct_place or maxima[col_idx] <= 0:
+        skip_rank = {0, 3, 5, 7, 10, 12, 14, 16, 17}
+        if col_idx in skip_rank:
             return "", ""
         totals = [(sid, all_sums[sid][col_idx]) for sid in student_ids]
         totals.sort(key=lambda x: (-x[1], name_map.get(x[0], "")))
@@ -466,13 +489,12 @@ def _build_rdc_footer_column_series(
             return "", ""
         return str(rank), str(n)
 
-    maxima_str = [_fmt_footer_num(maxima[i]) if i not in (4, 6, 11, 13, 15, 16, 17) else "" for i in range(18)]
+    _footer_hatch_idx = {0, 3, 5, 7, 10, 12, 14, 16, 17}
+    maxima_str = [_fmt_footer_num(maxima[i]) if i not in _footer_hatch_idx else "" for i in range(18)]
     tot_str = []
     for i in range(18):
-        if i in (4, 6, 11, 13, 15, 17):
+        if i in _footer_hatch_idx:
             tot_str.append("")
-        elif i == 16:
-            tot_str.append(_fmt_footer_num(tot[i]) if tot[i] and tot[i] != Decimal("0") else "")
         else:
             tot_str.append(_fmt_footer_num(tot[i]))
     pct_str = [pct_cell(i) for i in range(18)]
@@ -873,27 +895,49 @@ def generate_bulletin_rdc_pdf(report_card):
         )
 
     def make_data_row(label, max_p, g_ctx):
-        """Une ligne de données : label, S1 (max, 1ère P, 2è P, exam, total), S2 (idem), total général, %, Sign. Prof."""
+        """
+        Colonnes S1 (1–7) : MAX | 1ère P | 2e P | MAX EXAM | note exam | TOTAL max S1 | TOTAL obtenu S1
+        Colonnes S2 (8–14) : idem semestre 2.
+        Col. 6 TOTAL max = 4×MAX (col1) ; col. 7 = s1_p1+s1_p2+s1_exam (total_s1).
+        Col. 15–16 : TOTAL G max (8×MAX) | total général obtenu.
+        """
         if g_ctx:
             g, cs = g_ctx
             max_p = max_p or (getattr(cs, "period_max", None) or 20)
             max_exam = max_p * 2
+            tot_s1_max = 4 * max_p
+            tot_s2_max = 4 * max_p
+            tot_gen_max = 8 * max_p
             return [
                 label,
-                str(int(max_p)), val(g.s1_p1), val(g.s1_p2), str(int(max_exam)), "", val(g.total_s1), "",
-                str(int(max_p)), val(g.s2_p3), val(g.s2_p4), str(int(max_exam)), "", val(g.total_s2), "",
-                val(g.total_general), "",
+                str(int(max_p)),
+                val(g.s1_p1),
+                val(g.s1_p2),
+                str(int(max_exam)),
+                val(g.s1_exam),
+                str(int(tot_s1_max)),
+                val(g.total_s1),
+                str(int(max_p)),
+                val(g.s2_p3),
+                val(g.s2_p4),
+                str(int(max_exam)),
+                val(g.s2_exam),
+                str(int(tot_s2_max)),
+                val(g.total_s2),
+                str(int(tot_gen_max)),
+                val(g.total_general),
                 val(g.reclamation_score) or "", "",
             ]
         if max_p is not None:
             max_exam = max_p * 2
-            total_s = max_p * 4
-            tot_gen = max_p * 8
+            tot_s1_max = 4 * max_p
+            tot_s2_max = 4 * max_p
+            tot_gen_max = 8 * max_p
             return [
                 label,
-                str(int(max_p)), "", "", str(int(max_exam)), "", str(int(total_s)), "",
-                str(int(max_p)), "", "", str(int(max_exam)), "", str(int(total_s)), "",
-                str(int(tot_gen)), "", "", "",
+                str(int(max_p)), "", "", str(int(max_exam)), "", str(int(tot_s1_max)), "",
+                str(int(max_p)), "", "", str(int(max_exam)), "", str(int(tot_s2_max)), "",
+                str(int(tot_gen_max)), "", "", "",
             ]
         return [label] + [""] * (num_cols - 1)
 
@@ -929,6 +973,8 @@ def generate_bulletin_rdc_pdf(report_card):
                 data_rows.append([sub] + [""] * (num_cols - 1))
 
             subtotal_max = 0
+            sum_s1_p1 = sum_s1_p2 = sum_s1_exam = sum_s2_p3 = sum_s2_p4 = sum_s2_exam = Decimal(0)
+            sum_total_s1 = sum_total_s2 = sum_tg = Decimal(0)
             for e in items:
                 subtotal_max += int(e["max_p"] or 0)
                 g_ctx = (e["grade"], cs_by_subject_id.get(e["subject_id"])) if e["grade"] else None
@@ -937,16 +983,40 @@ def generate_bulletin_rdc_pdf(report_card):
                 while len(row) < num_cols:
                     row.append("")
                 data_rows.append(row[:num_cols])
+                g = e.get("grade")
+                if g:
+                    sum_s1_p1 += _d0(g.s1_p1)
+                    sum_s1_p2 += _d0(g.s1_p2)
+                    sum_s1_exam += _d0(g.s1_exam)
+                    sum_s2_p3 += _d0(g.s2_p3)
+                    sum_s2_p4 += _d0(g.s2_p4)
+                    sum_s2_exam += _d0(g.s2_exam)
+                    sum_total_s1 += _d0(g.total_s1)
+                    sum_total_s2 += _d0(g.total_s2)
+                    sum_tg += _d0(g.total_general)
 
-            # Sous-total par sous-domaine (ou domaine sans sous-domaine)
             emax = subtotal_max * 2
             tsem = subtotal_max * 4
             tgen = subtotal_max * 8
             subtotal_row = [
                 "Sous - Total",
-                str(subtotal_max), "", "", str(emax), "", str(tsem), "",
-                str(subtotal_max), "", "", str(emax), "", str(tsem), "",
-                str(tgen), "", "", "",
+                str(subtotal_max),
+                val(sum_s1_p1),
+                val(sum_s1_p2),
+                str(emax),
+                val(sum_s1_exam),
+                str(tsem),
+                val(sum_total_s1),
+                str(subtotal_max),
+                val(sum_s2_p3),
+                val(sum_s2_p4),
+                str(emax),
+                val(sum_s2_exam),
+                str(tsem),
+                val(sum_total_s2),
+                str(tgen),
+                val(sum_tg),
+                "", "",
             ]
             data_rows.append(subtotal_row[:num_cols])
 
