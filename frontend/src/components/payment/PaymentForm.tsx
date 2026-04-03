@@ -12,14 +12,28 @@ type StudentOption = { id: number; user?: { first_name?: string; last_name?: str
 type ParentOption = { id: number; first_name?: string; last_name?: string; middle_name?: string | null; email?: string }
 type FeeTypeOption = { id: number; name: string; amount: string | number; currency: string }
 
-const PAYMENT_METHODS = [
-  { value: 'CASH', label: 'Espèces' },
-  { value: 'MOBILE_MONEY', label: 'Mobile Money' },
-  { value: 'MOBILE_MONEY_MPESA', label: 'M-Pesa' },
-  { value: 'MOBILE_MONEY_ORANGE', label: 'Orange Money' },
-  { value: 'MOBILE_MONEY_AIRTEL', label: 'Airtel Money' },
-  { value: 'BANK_TRANSFER', label: 'Virement bancaire' },
-  { value: 'ONLINE', label: 'Paiement en ligne' },
+/** Ordre : opérateurs Mobile Money (Airtel, Orange, M-Pesa), puis autres moyens. */
+const PAYMENT_METHOD_GROUPS: { label: string; methods: { value: string; label: string }[] }[] = [
+  {
+    label: 'Espèces et virement',
+    methods: [
+      { value: 'CASH', label: 'Espèces' },
+      { value: 'BANK_TRANSFER', label: 'Virement bancaire' },
+    ],
+  },
+  {
+    label: 'Mobile Money — Airtel Money, Orange Money, M-Pesa',
+    methods: [
+      { value: 'MOBILE_MONEY_AIRTEL', label: 'Airtel Money' },
+      { value: 'MOBILE_MONEY_ORANGE', label: 'Orange Money' },
+      { value: 'MOBILE_MONEY_MPESA', label: 'M-Pesa' },
+      { value: 'MOBILE_MONEY', label: 'Mobile Money (manuel / autre)' },
+    ],
+  },
+  {
+    label: 'En ligne',
+    methods: [{ value: 'ONLINE', label: 'Paiement en ligne' }],
+  },
 ]
 
 const MOBILE_MONEY_METHODS = ['MOBILE_MONEY_ORANGE', 'MOBILE_MONEY_MPESA', 'MOBILE_MONEY_AIRTEL']
@@ -332,10 +346,14 @@ export default function PaymentForm({
             onChange={(e) => setSelectedMethod(e.target.value)}
           >
             <option value="">Sélectionner une méthode</option>
-            {PAYMENT_METHODS.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
-              </option>
+            {PAYMENT_METHOD_GROUPS.map((group) => (
+              <optgroup key={group.label} label={group.label}>
+                {group.methods.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>

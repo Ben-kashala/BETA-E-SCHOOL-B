@@ -2,6 +2,8 @@
 Utility functions for academics (PDF generation, class ranking, etc.)
 """
 import os
+import re
+from datetime import date
 from decimal import Decimal
 from io import BytesIO
 from django.conf import settings
@@ -506,6 +508,34 @@ def _build_rdc_footer_column_series(
     return maxima_str, tot_str, pct_str, place_str
 
 
+def _parse_academic_year_span(academic_year_str):
+    """Retourne (année_début, année_fin) depuis une chaîne du type « 2025-2026 » ou « 2025 - 2026 »."""
+    if not academic_year_str or not str(academic_year_str).strip():
+        return None
+    m = re.search(r"(\d{4})\s*[-/]\s*(\d{4})", str(academic_year_str).strip())
+    if not m:
+        return None
+    return int(m.group(1)), int(m.group(2))
+
+
+def _bulletin_fait_date_str(academic_year_str):
+    """
+    Date après « le » sur le bulletin RDC : date du jour si l'année scolaire du bulletin
+    est « en cours » (entre septembre de l'année de début et fin juillet de l'année de fin),
+    sinon 02/07/<année de fin> (ex. 2025-2026 → 02/07/2026).
+    """
+    today = date.today()
+    parsed = _parse_academic_year_span(academic_year_str)
+    if not parsed:
+        return today.strftime("%d/%m/%Y")
+    start_year, end_year = parsed
+    period_start = date(start_year, 9, 1)
+    period_end = date(end_year, 7, 31)
+    if period_start <= today <= period_end:
+        return today.strftime("%d/%m/%Y")
+    return f"02/07/{end_year}"
+
+
 def generate_bulletin_rdc_pdf(report_card):
     """
     Génère le bulletin au format officiel RDC (une page), identique au modèle
@@ -664,9 +694,9 @@ def generate_bulletin_rdc_pdf(report_card):
     full_name = user.get_full_name() or ""
     classe = student.school_class.name if student.school_class else "1ère ANNEE DES HUMANITES SCIENTIFIQUES"
     dob = getattr(user, "date_of_birth", None) or getattr(student, "date_of_birth", None)
-    sex_label = "M" if getattr(student, "gender", None) == "M" else "F" if getattr(student, "gender", None) == "F" else "........"
+    gender_raw = getattr(student, "gender", None) or None
     place_of_birth = getattr(student, "place_of_birth", None) or getattr(user, "place_of_birth", None) or ""
-    if not dob or not place_of_birth:
+    if not dob or not place_of_birth or not gender_raw:
         try:
             from apps.enrollment.models import EnrollmentApplication
 
@@ -680,17 +710,26 @@ def generate_bulletin_rdc_pdf(report_card):
                     dob = getattr(app, "date_of_birth", None)
                 if not place_of_birth:
                     place_of_birth = getattr(app, "place_of_birth", "") or ""
+                if not gender_raw:
+                    gender_raw = getattr(app, "gender", None) or None
         except Exception:
             # Le bulletin continue même si le module enrollment n'est pas disponible.
             pass
+    g = (gender_raw or "").strip().upper() if gender_raw else ""
+    if g == "M":
+        sex_label = "M"
+    elif g == "F":
+        sex_label = "F"
+    else:
+        sex_label = ""
     dob_str = dob.strftime("%d/%m/%Y") if dob else "....../....../.........."
     n_perm = student.student_id or ""
 
     def _dots(value, total=42):
+        """Texte seul si renseigné ; sinon ligne de points (placeholder) sur `total` caractères."""
         txt = (value or "").strip()
         if txt:
-            n = max(8, total - len(txt))
-            return f"{txt}{'.' * n}"
+            return txt
         return "." * total
 
     id_cells = ["N° ID."] + [""] * 22
@@ -1183,21 +1222,21 @@ def generate_bulletin_rdc_pdf(report_card):
     footer_tbl_style.append(("TEXTCOLOR", (17, 0), (18, 0), colors.white))
     footer_summary_table.setStyle(TableStyle(footer_tbl_style))
     story.append(footer_summary_table)
-    story.append(Spacer(1, 0))
 
-    # ----- DÉCISIONS ET MENTIONS LÉGALES (ordre comme capture 2) -----
-    story.append(Paragraph(
-        "- L'élève ne pourra passer dans la classe supérieure s'il n'a subi avec succès un examen de repêchage en.......................................................................................(1)",
-        style_small,
-    ))
-    story.append(Paragraph("- L'élève passe dans la classe supérieure (1)", style_small))
-    story.append(Paragraph("- L'élève double la classe (1)", style_small))
-    story.append(Spacer(1, 1))
+    # ----- DÉCISIONS ET MENTIONS LÉGALES : bordure gauche/droite/bas (sans trait haut = suite du tableau ci-dessus)
+    fait_date_str = _bulletin_fait_date_str(report_card.academic_year)
+    school_city_fait = (city or "").strip()
+    if not school_city_fait:
+        school_city_fait = "……………………………………………………"
+    fait_para = Paragraph(
+        f"Fait à {school_city_fait}, le {fait_date_str}",
+        ParagraphStyle("fait_center", parent=style_small, alignment=1),
+    )
     sig_line = Table(
         [[
             Paragraph("Signature de l'élève", style_small),
             Paragraph("Sceau de l'Ecole", ParagraphStyle("seal_center", parent=style_small, alignment=1)),
-            Paragraph(f"Fait à {city or '……………………………………………………'}, le……..…/…………/20……..", ParagraphStyle("fait_center", parent=style_small, alignment=1)),
+            fait_para,
         ]],
         colWidths=_fit_widths([2.1 * inch, 1.9 * inch, 3.0 * inch]),
     )
@@ -1208,10 +1247,6 @@ def generate_bulletin_rdc_pdf(report_card):
         ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
         ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
     ]))
-    story.append(sig_line)
-    story.append(Spacer(1, 0))
-    story.append(Paragraph("(1) Biffer la mention inutile.", style_small))
-    story.append(Paragraph("Note importante : Le bulletin est sans valeur s'il est raturé ou surchargé.", style_small))
     chef_line = Table(
         [[
             Paragraph("", style_small),
@@ -1225,7 +1260,6 @@ def generate_bulletin_rdc_pdf(report_card):
         ("TOPPADDING", (0, 0), (-1, -1), 0),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
-    story.append(chef_line)
     interdiction_line = Table(
         [[
             Paragraph("<b><i>Interdiction formelle de reproduire ce bulletin sous peine des sanctions prévues par la loi.</i></b>", style_small),
@@ -1239,7 +1273,33 @@ def generate_bulletin_rdc_pdf(report_card):
         ("TOPPADDING", (0, 0), (-1, -1), 0),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
-    story.append(interdiction_line)
+    legal_block_rows = [
+        [Paragraph(
+            "- L'élève ne pourra passer dans la classe supérieure s'il n'a subi avec succès un examen de repêchage en.......................................................................................(1)",
+            style_small,
+        )],
+        [Paragraph("- L'élève passe dans la classe supérieure (1)", style_small)],
+        [Paragraph("- L'élève double la classe (1)", style_small)],
+        [Spacer(1, 1)],
+        [sig_line],
+        [Spacer(1, 0)],
+        [Paragraph("(1) Biffer la mention inutile.", style_small)],
+        [Paragraph("Note importante : Le bulletin est sans valeur s'il est raturé ou surchargé.", style_small)],
+        [chef_line],
+        [interdiction_line],
+    ]
+    legal_block_table = Table(legal_block_rows, colWidths=[full_w])
+    legal_block_table.setStyle(TableStyle([
+        ("LINEBEFORE", (0, 0), (0, -1), 0.25, colors.black),
+        ("LINEAFTER", (0, 0), (0, -1), 0.25, colors.black),
+        ("LINEBELOW", (0, -1), (0, -1), 0.25, colors.black),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    story.append(legal_block_table)
 
     doc.build(story)
     buffer.seek(0)

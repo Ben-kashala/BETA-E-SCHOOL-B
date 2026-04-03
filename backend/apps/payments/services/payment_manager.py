@@ -50,9 +50,11 @@ class PaymentManager:
     def get_available_providers_for_school(school_id: int) -> list[dict]:
         """
         Liste des moyens de paiement activés pour l'école (provider + numéro marchand masqué).
+        Si aucune ligne SchoolPaymentConfig n'existe, les numéros SchoolPaymentMethod suffisent
+        (les écoles créées après la migration peuvent n'avoir que les moyens Mobile Money).
         """
-        config = SchoolPaymentConfig.objects.filter(school_id=school_id, is_active=True).first()
-        if not config:
+        config = SchoolPaymentConfig.objects.filter(school_id=school_id).first()
+        if config and not config.is_active:
             return []
         methods = (
             SchoolPaymentMethod.objects
@@ -98,8 +100,8 @@ class PaymentManager:
                         "Configurez un numéro dans Paramètres > Moyens de paiement.",
             )
 
-        config = SchoolPaymentConfig.objects.filter(school_id=school_id, is_active=True).first()
-        if not config:
+        config = SchoolPaymentConfig.objects.filter(school_id=school_id).first()
+        if config and not config.is_active:
             return GatewayResult(success=False, message="Paiement en ligne désactivé pour cette école.")
 
         reference = build_payment_reference(school_id, student_id, payment.id)
