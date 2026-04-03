@@ -12,53 +12,11 @@ from reportlab.lib.pagesizes import letter, A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import inch
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, Flowable
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet
 from .models import ReportCard, Grade, GradeBulletin
 from apps.accounts.models import Student
 from apps.schools.models import SchoolClass, ClassSubject, StudentClassEnrollment
-
-
-class BulletinHatchCell(Flowable):
-    """
-    Fond hachuré (traits verticaux serrés) comme sur le bulletin imprimé officiel.
-    Le texte est centré au-dessus du hachurage.
-    """
-
-    def __init__(self, width, height, text="", font_size=5.8):
-        Flowable.__init__(self)
-        self._w = width
-        self._h = height
-        self.text = text if text is not None else ""
-        self.font_size = font_size
-
-    def wrap(self, availWidth, availHeight):
-        return (self._w, self._h)
-
-    def split(self, availWidth, availHeight):
-        return []
-
-    def draw(self):
-        c = self.canv
-        c.saveState()
-        c.setFillColor(colors.white)
-        c.rect(0, 0, self._w, self._h, fill=1, stroke=0)
-        c.setStrokeColor(colors.black)
-        c.setLineWidth(0.28)
-        step = 0.75
-        x = 0
-        while x <= self._w + 0.5:
-            c.line(x, 0, x, self._h)
-            x += step
-        if self.text:
-            c.setFillColor(colors.black)
-            c.setFont("Helvetica-Bold", self.font_size)
-            txt = str(self.text)
-            tw = c.stringWidth(txt, "Helvetica-Bold", self.font_size)
-            tx = max(0, (self._w - tw) / 2)
-            ty = self._h / 2 - self.font_size * 0.28
-            c.drawString(tx, ty, txt)
-        c.restoreState()
 
 
 def get_class_ranking_map(school_class, academic_year):
@@ -1060,7 +1018,7 @@ def generate_bulletin_rdc_pdf(report_card):
             if g.subject_id and g.subject_id not in max_p_by_subject:
                 max_p_by_subject[g.subject_id] = int(getattr(g.subject, "period_max", 20) or 20)
     subject_ids_footer = list(max_p_by_subject.keys())
-    mmax, ttot, ppct, pplace = _build_rdc_footer_column_series(
+    _, ttot, ppct, pplace = _build_rdc_footer_column_series(
         student, resolved_class, report_card.academic_year, subject_ids_footer, max_p_by_subject
     )
     appli = str(report_card.application) if report_card.application is not None else ""
@@ -1068,29 +1026,29 @@ def generate_bulletin_rdc_pdf(report_card):
 
     footer_col_widths = list(col_widths[:num_cols])
 
-    # Hachurage : uniquement colonnes MAX (1 et 8), lignes TOTAUX → CONDUITE (pas SIGNATURE)
+    # Fond gris noir-gris (sans traits) : colonnes réservées vides ; pas sur SIGNATURE ni zone PASSE/DOUBLE
     _fh_rows = {1, 2, 3, 4, 5}
-    _fh_cols = {1, 8}
-    _footer_row_h_pt = 12
-    _footer_row_heights = [_footer_row_h_pt] * 6 + [14]
+    _fh_cols = {1, 4, 6, 8, 11, 13, 15}
+    FOOTER_GRAY = colors.HexColor("#b0b0b0")
+    _footer_row_heights = [12] * 6 + [14]
 
-    def _fh_cell(col_idx, row_idx, text):
-        w = footer_col_widths[col_idx]
-        if col_idx >= 1 and row_idx in _fh_rows and col_idx in _fh_cols:
-            return BulletinHatchCell(w, _footer_row_h_pt, text=text or "")
+    def _footer_cell(col_idx, row_idx, text):
+        if col_idx in _fh_cols and row_idx in _fh_rows:
+            return ""
         return text or ""
 
     def _footer_16_cells(strings_18, row_idx):
         """Colonnes 1–16 du résumé (indices 0–15 des séries 18) ; repêchage = fusion séparée."""
         return [
-            _fh_cell(i + 1, row_idx, strings_18[i] if i < len(strings_18) else "")
+            _footer_cell(i + 1, row_idx, strings_18[i] if i < len(strings_18) else "")
             for i in range(16)
         ]
 
-    _app_row = [""] * 18
-    _app_row[14] = appli
-    _con_row = [""] * 18
-    _con_row[14] = conduite
+    # Col. 15 hachurée vide : APPLICATION / CONDUITE sur la col. 16 (2e colonne T.G.)
+    _app_16 = [""] * 16
+    _app_16[15] = appli
+    _con_16 = [""] * 16
+    _con_16[15] = conduite
 
     decision_style = ParagraphStyle(
         "footer_decision_block",
@@ -1110,14 +1068,14 @@ def generate_bulletin_rdc_pdf(report_card):
     )
     decision_para = Paragraph(decision_text, decision_style)
 
-    # Ligne 0 : MAXIMA sur 18 col. ; lignes 1–6 : 16 col. + fusion (17–18) sur 6 lignes (SPAN)
+    # Ligne 0 : MAXIMA vide (pas de calculs) ; lignes 1–6 : 16 col. + fusion (17–18) sur 6 lignes (SPAN)
     footer_summary_data = [
-        ["MAXIMA GENERAUX"] + mmax,
+        ["MAXIMA GENERAUX"] + [""] * 18,
         ["TOTAUX"] + _footer_16_cells(ttot, 1) + [decision_para, ""],
         ["POURCENTAGE"] + _footer_16_cells(ppct, 2) + ["", ""],
         ["PLACE / NBRE D'ELEVES"] + _footer_16_cells(pplace, 3) + ["", ""],
-        ["APPLICATION"] + [_fh_cell(i + 1, 4, _app_row[i]) for i in range(16)] + ["", ""],
-        ["CONDUITE"] + [_fh_cell(i + 1, 5, _con_row[i]) for i in range(16)] + ["", ""],
+        ["APPLICATION"] + [_footer_cell(i + 1, 4, _app_16[i]) for i in range(16)] + ["", ""],
+        ["CONDUITE"] + [_footer_cell(i + 1, 5, _con_16[i]) for i in range(16)] + ["", ""],
         ["SIGNATURE"] + [""] * 16 + ["", ""],
     ]
     footer_summary_table = Table(
@@ -1148,6 +1106,9 @@ def generate_bulletin_rdc_pdf(report_card):
         ("LINEBEFORE", (15, 0), (15, -1), 1.6, colors.black),
         ("LINEBEFORE", (17, 0), (17, -1), 1.6, colors.black),
     ]
+    for _r in _fh_rows:
+        for _c in _fh_cols:
+            footer_tbl_style.append(("BACKGROUND", (_c, _r), (_c, _r), FOOTER_GRAY))
     footer_summary_table.setStyle(TableStyle(footer_tbl_style))
     story.append(footer_summary_table)
     story.append(Spacer(1, 0))
