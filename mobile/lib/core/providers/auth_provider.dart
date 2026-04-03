@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../features/auth/domain/models/user_model.dart';
 import '../../features/auth/domain/repositories/auth_repository.dart';
+import '../database/hive_service.dart';
 
 class AuthState {
   final bool isAuthenticated;
@@ -67,6 +68,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (result.user.schoolCode != null) {
         await _storage.write(key: 'school_code', value: result.user.schoolCode!);
       }
+      await HiveService.clearCache();
       
       print('✅ [AuthProvider] Tokens sauvegardés, mise à jour de l\'état...');
       state = state.copyWith(
@@ -91,6 +93,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> logout() async {
     await _storage.deleteAll();
+    await HiveService.clearCache();
     state = AuthState();
   }
 

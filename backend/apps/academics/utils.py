@@ -1052,7 +1052,8 @@ def generate_bulletin_rdc_pdf(report_card):
     story.append(table)
     story.append(Spacer(1, 0))
 
-    # ----- SECTION RÉSUMÉ : mêmes colonnes que le tableau des notes (19 col.) pour MAXIMA, TOTAUX, %, PLACE | droite = encadré décision -----
+    # ----- SECTION RÉSUMÉ : même grille 19 col. que le tableau des notes ; encadré PASSE/DOUBLE fusionné
+    # sur les 2 dernières colonnes (examen repêchage), lignes TOTAUX → SIGNATURE (6 lignes).
     max_p_by_subject = {e["subject_id"]: e["max_p"] for e in entries}
     if not max_p_by_subject:
         for g in grades:
@@ -1065,14 +1066,11 @@ def generate_bulletin_rdc_pdf(report_card):
     appli = str(report_card.application) if report_card.application is not None else ""
     conduite = str(report_card.conduite) if report_card.conduite is not None else ""
 
-    footer_right_w = 1.95 * inch
-    footer_left_w = full_w - footer_right_w
-    _footer_scale = footer_left_w / full_w if full_w else 1
-    footer_col_widths = [w * _footer_scale for w in col_widths[:num_cols]]
+    footer_col_widths = list(col_widths[:num_cols])
 
-    # Lignes TOTAUX → CONDUITE : cellules hachurées sur les colonnes « bords » des blocs (comme le modèle imprimé)
+    # Hachurage : uniquement colonnes MAX (1 et 8), lignes TOTAUX → CONDUITE (pas SIGNATURE)
     _fh_rows = {1, 2, 3, 4, 5}
-    _fh_cols = {1, 7, 8, 14, 15, 16, 17, 18}
+    _fh_cols = {1, 8}
     _footer_row_h_pt = 12
     _footer_row_heights = [_footer_row_h_pt] * 6 + [14]
 
@@ -1082,31 +1080,56 @@ def generate_bulletin_rdc_pdf(report_card):
             return BulletinHatchCell(w, _footer_row_h_pt, text=text or "")
         return text or ""
 
-    def _fh_data_row(strings_18, row_idx):
-        return [_fh_cell(i + 1, row_idx, strings_18[i] if i < len(strings_18) else "") for i in range(18)]
+    def _footer_16_cells(strings_18, row_idx):
+        """Colonnes 1–16 du résumé (indices 0–15 des séries 18) ; repêchage = fusion séparée."""
+        return [
+            _fh_cell(i + 1, row_idx, strings_18[i] if i < len(strings_18) else "")
+            for i in range(16)
+        ]
 
     _app_row = [""] * 18
     _app_row[14] = appli
     _con_row = [""] * 18
     _con_row[14] = conduite
 
-    footer_left_data = [
+    decision_style = ParagraphStyle(
+        "footer_decision_block",
+        parent=style_small,
+        fontSize=7,
+        leading=8.5,
+        leftIndent=0,
+        spaceBefore=0,
+        spaceAfter=0,
+    )
+    decision_text = (
+        "- PASSE (1)<br/>"
+        "- DOUBLE (1)<br/>"
+        "LE..../....../20....<br/>"
+        "Chef d'Etablissement<br/>"
+        "Sceau de l'Ecole"
+    )
+    decision_para = Paragraph(decision_text, decision_style)
+
+    # Ligne 0 : MAXIMA sur 18 col. ; lignes 1–6 : 16 col. + fusion (17–18) sur 6 lignes (SPAN)
+    footer_summary_data = [
         ["MAXIMA GENERAUX"] + mmax,
-        ["TOTAUX"] + _fh_data_row(ttot, 1),
-        ["POURCENTAGE"] + _fh_data_row(ppct, 2),
-        ["PLACE / NBRE D'ELEVES"] + _fh_data_row(pplace, 3),
-        ["APPLICATION"] + [_fh_cell(i + 1, 4, _app_row[i]) for i in range(18)],
-        ["CONDUITE"] + [_fh_cell(i + 1, 5, _con_row[i]) for i in range(18)],
-        ["SIGNATURE"] + [""] * 18,
+        ["TOTAUX"] + _footer_16_cells(ttot, 1) + [decision_para, ""],
+        ["POURCENTAGE"] + _footer_16_cells(ppct, 2) + ["", ""],
+        ["PLACE / NBRE D'ELEVES"] + _footer_16_cells(pplace, 3) + ["", ""],
+        ["APPLICATION"] + [_fh_cell(i + 1, 4, _app_row[i]) for i in range(16)] + ["", ""],
+        ["CONDUITE"] + [_fh_cell(i + 1, 5, _con_row[i]) for i in range(16)] + ["", ""],
+        ["SIGNATURE"] + [""] * 16 + ["", ""],
     ]
-    footer_left_table = Table(
-        footer_left_data,
+    footer_summary_table = Table(
+        footer_summary_data,
         colWidths=footer_col_widths,
         rowHeights=_footer_row_heights,
     )
     footer_tbl_style = [
         ("GRID", (0, 0), (-1, -1), 0.25, colors.black),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("VALIGN", (17, 1), (18, 6), "TOP"),
+        ("SPAN", (17, 1), (18, 6)),
         ("FONTSIZE", (0, 0), (-1, -1), 5.8),
         ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
         ("LEFTPADDING", (0, 0), (0, -1), 2),
@@ -1117,32 +1140,16 @@ def generate_bulletin_rdc_pdf(report_card):
         ("RIGHTPADDING", (1, 0), (-1, -1), 0),
         ("TOPPADDING", (1, 0), (-1, -1), 0),
         ("BOTTOMPADDING", (1, 0), (-1, -1), 0),
+        ("LEFTPADDING", (17, 1), (18, 6), 3),
+        ("RIGHTPADDING", (17, 1), (18, 6), 3),
+        ("TOPPADDING", (17, 1), (18, 6), 3),
         ("ALIGN", (1, 0), (-1, 3), "CENTER"),
         ("LINEBEFORE", (8, 0), (8, -1), 1.6, colors.black),
         ("LINEBEFORE", (15, 0), (15, -1), 1.6, colors.black),
         ("LINEBEFORE", (17, 0), (17, -1), 1.6, colors.black),
     ]
-    footer_left_table.setStyle(TableStyle(footer_tbl_style))
-    footer_right_style = ParagraphStyle("footer_right_style", parent=style_small, fontSize=7, leading=8)
-    footer_right_text = (
-        "- PASSE (1)<br/>"
-        "- DOUBLE (1)<br/>"
-        "LE..../....../20....<br/>"
-        "Chef d'Etablissement<br/>"
-        "Sceau de l'Ecole"
-    )
-    footer_right_para = Paragraph(footer_right_text, footer_right_style)
-    footer_table = Table([[footer_left_table, footer_right_para]], colWidths=[footer_left_w, footer_right_w])
-    footer_table.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (0, 0), 0),
-        ("LEFTPADDING", (1, 0), (1, 0), 4),
-        ("RIGHTPADDING", (1, 0), (1, 0), 2),
-        ("TOPPADDING", (1, 0), (1, 0), 2),
-        ("BOX", (1, 0), (1, 0), 0.5, colors.black),
-        ("BACKGROUND", (1, 0), (1, 0), colors.white),
-    ]))
-    story.append(footer_table)
+    footer_summary_table.setStyle(TableStyle(footer_tbl_style))
+    story.append(footer_summary_table)
     story.append(Spacer(1, 0))
 
     # ----- DÉCISIONS ET MENTIONS LÉGALES (ordre comme capture 2) -----
@@ -1157,7 +1164,7 @@ def generate_bulletin_rdc_pdf(report_card):
         [[
             Paragraph("Signature de l'élève", style_small),
             Paragraph("Sceau de l'Ecole", ParagraphStyle("seal_center", parent=style_small, alignment=1)),
-            Paragraph(f"Fait à {city or '………………………………………'}, le……..…/…………/20……..", ParagraphStyle("fait_center", parent=style_small, alignment=1)),
+            Paragraph(f"Fait à {city or '……………………………………………………'}, le……..…/…………/20……..", ParagraphStyle("fait_center", parent=style_small, alignment=1)),
         ]],
         colWidths=_fit_widths([2.1 * inch, 1.9 * inch, 3.0 * inch]),
     )

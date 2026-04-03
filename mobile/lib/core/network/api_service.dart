@@ -16,6 +16,12 @@ class ApiService {
 
   Future<String?> getToken() async => _storage.read(key: 'access_token');
 
+  /// Clé de cache isolée par établissement pour éviter de mélanger les données entre écoles.
+  Future<String> _cacheKey(String path, Map<String, dynamic>? queryParameters) async {
+    final school = await _storage.read(key: 'school_code') ?? '';
+    return 'api_${school}_${path}_${queryParameters?.toString()}';
+  }
+
   void init() {
     _dio = Dio(BaseOptions(
       baseUrl: AppConfig.baseUrl,
@@ -85,31 +91,21 @@ class ApiService {
     bool useCache = true,
     Duration? cacheExpiration,
   }) async {
-    final cacheKey = 'api_${path}_${queryParameters?.toString()}';
-    
-    // Vérifier le cache si activé
-    if (useCache) {
-      final cached = HiveService.getCachedData<Map<String, dynamic>>(cacheKey);
-      if (cached != null) {
-        return Response(
-          data: cached as T,
-          statusCode: 200,
-          requestOptions: RequestOptions(path: path),
-        );
-      }
-    }
-    
-    // Vérifier la connectivité
+    final cacheKey = await _cacheKey(path, queryParameters);
+
     final isConnected = await ConnectivityService.isConnected();
+
+    // Hors ligne : uniquement le cache (pas de requête réseau).
     if (!isConnected) {
-      // Retourner les données du cache même si expirées
-      final cached = HiveService.getCachedData<Map<String, dynamic>>(cacheKey);
-      if (cached != null) {
-        return Response(
-          data: cached as T,
-          statusCode: 200,
-          requestOptions: RequestOptions(path: path),
-        );
+      if (useCache) {
+        final cached = HiveService.getCachedData<dynamic>(cacheKey);
+        if (cached != null) {
+          return Response<T>(
+            data: cached as T,
+            statusCode: 200,
+            requestOptions: RequestOptions(path: path),
+          );
+        }
       }
       throw DioException(
         requestOptions: RequestOptions(path: path),
@@ -117,29 +113,28 @@ class ApiService {
         type: DioExceptionType.connectionError,
       );
     }
-    
+
+    // En ligne : toujours interroger l'API en premier (le cache ne doit pas masquer des données à jour).
     try {
       final response = await _dio.get<T>(
         path,
         queryParameters: queryParameters,
       );
-      
-      // Mettre en cache si succès
-      if (useCache && response.statusCode == 200) {
+
+      if (useCache && response.statusCode == 200 && response.data != null) {
         await HiveService.cacheData(
           cacheKey,
           response.data,
           expiration: cacheExpiration ?? AppConfig.cacheExpiration,
         );
       }
-      
+
       return response;
     } catch (e) {
-      // En cas d'erreur, retourner le cache si disponible
       if (useCache) {
-        final cached = HiveService.getCachedData<Map<String, dynamic>>(cacheKey);
+        final cached = HiveService.getCachedData<dynamic>(cacheKey);
         if (cached != null) {
-          return Response(
+          return Response<T>(
             data: cached as T,
             statusCode: 200,
             requestOptions: RequestOptions(path: path),
