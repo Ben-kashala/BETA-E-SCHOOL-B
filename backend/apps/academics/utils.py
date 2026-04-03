@@ -810,15 +810,15 @@ def generate_bulletin_rdc_pdf(report_card):
     ]
     header_row2 = [
         "",
-        "MAX.", "TRAVAUX\nJOURNAL.", "", "MAX. EXAM.", "", "TOTAL", "",
-        "MAX.", "TRAVAUX\nJOURNAL.", "", "MAX. EXAM.", "", "TOTAL", "",
+        "MAX.", "TRAV. JOURNAL.", "", "MAX. EXAM.", "", "TOTAL", "",
+        "MAX.", "TRAV. JOURNAL.", "", "MAX. EXAM.", "", "TOTAL", "",
         "", "",
         "%", "Sign. Prof.",
     ]
     header_row3 = [
         "",
-        "", "1ère P.", "2e P.", "", "", "", "",
-        "", "3e P.", "4e P.", "", "", "", "",
+        "", "1ère P.", "2e P.", "MAX", "EXAM", "MAX", "TOT",
+        "", "3e P.", "4e P.", "MAX", "EXAM", "MAX", "TOT",
         "", "", "", "",
     ]
     header_row1 = header_row1[:num_cols]
@@ -1056,26 +1056,25 @@ def generate_bulletin_rdc_pdf(report_card):
         ("BACKGROUND", (0, 0), (-1, 2), colors.white),
         ("TEXTCOLOR", (0, 0), (-1, 2), colors.black),
     ]
-    # Lignes "Sous - Total" en gras
+    # Lignes "Sous - Total" en gras (sans fond noir sur l'examen de repêchage)
     for r in range(3, len(data_rows)):
         if len(data_rows[r]) and data_rows[r][0] == "Sous - Total":
             tbl_style.append(("FONTNAME", (0, r), (-1, r), "Helvetica-Bold"))
-            # Sur le modèle officiel, les colonnes d'examen de repêchage sont barrées en noir
-            tbl_style.append(("BACKGROUND", (17, r), (18, r), colors.black))
-            tbl_style.append(("TEXTCOLOR", (17, r), (18, r), colors.white))
-    # Lignes domaine / sous-domaine en bandeau bleu clair
+    # Lignes domaine / sous-domaine en bandeau bleu ; colonnes repêchage (17–18) en noir comme le modèle
     for r in range(3, len(data_rows)):
         cell0 = (data_rows[r][0] if data_rows[r] else "").strip()
         if cell0 and cell0 != "Sous - Total" and (
             cell0.startswith("DOMAINE") or cell0.startswith("Sous-domaine")
         ):
-            # Domaine / Sous-domaine en ligne unique centrée sur toute la largeur
-            tbl_style.append(("SPAN", (0, r), (18, r)))
-            tbl_style.append(("ALIGN", (0, r), (18, r), "CENTER"))
-            tbl_style.append(("BACKGROUND", (0, r), (-1, r), HEADER_DARK))
-            tbl_style.append(("TEXTCOLOR", (0, r), (-1, r), colors.black))
+            # Domaine / Sous-domaine : fusion 0–16 pour le libellé ; 17–18 restent des cellules (fond noir repêchage)
+            tbl_style.append(("SPAN", (0, r), (16, r)))
+            tbl_style.append(("ALIGN", (0, r), (16, r), "CENTER"))
+            tbl_style.append(("BACKGROUND", (0, r), (16, r), HEADER_DARK))
+            tbl_style.append(("TEXTCOLOR", (0, r), (16, r), colors.black))
             tbl_style.append(("FONTNAME", (0, r), (-1, r), "Helvetica-Bold"))
-            tbl_style.append(("LINEABOVE", (0, r), (-1, r), 0.8, colors.black))
+            tbl_style.append(("LINEABOVE", (0, r), (-1, r), 0.8, colors.lightgrey))
+            tbl_style.append(("BACKGROUND", (17, r), (18, r), colors.black))
+            tbl_style.append(("TEXTCOLOR", (17, r), (18, r), colors.white))
     table.setStyle(TableStyle(tbl_style))
     story.append(table)
     story.append(Spacer(1, 0))
@@ -1099,7 +1098,7 @@ def generate_bulletin_rdc_pdf(report_card):
     # Fond gris noir-gris (sans traits) : colonnes réservées vides ; pas sur SIGNATURE ni zone PASSE/DOUBLE
     _fh_rows = {1, 2, 3, 4, 5}
     _fh_cols = {1, 4, 6, 8, 11, 13, 15}
-    FOOTER_GRAY = colors.HexColor("#b0b0b0")
+    FOOTER_BLACK = colors.HexColor("#000000")
     _footer_row_heights = [12] * 6 + [14]
 
     def _footer_cell(col_idx, row_idx, text):
@@ -1178,7 +1177,10 @@ def generate_bulletin_rdc_pdf(report_card):
     ]
     for _r in _fh_rows:
         for _c in _fh_cols:
-            footer_tbl_style.append(("BACKGROUND", (_c, _r), (_c, _r), FOOTER_GRAY))
+            footer_tbl_style.append(("BACKGROUND", (_c, _r), (_c, _r), FOOTER_BLACK))
+    # Ligne MAXIMA GENERAUX : même zone repêchage noire que les lignes domaine du tableau des notes
+    footer_tbl_style.append(("BACKGROUND", (17, 0), (18, 0), FOOTER_BLACK))
+    footer_tbl_style.append(("TEXTCOLOR", (17, 0), (18, 0), colors.white))
     footer_summary_table.setStyle(TableStyle(footer_tbl_style))
     story.append(footer_summary_table)
     story.append(Spacer(1, 0))
