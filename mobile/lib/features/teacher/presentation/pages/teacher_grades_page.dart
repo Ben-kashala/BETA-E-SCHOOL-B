@@ -26,6 +26,7 @@ class _TeacherGradesPageState extends ConsumerState<TeacherGradesPage> {
   String _selectedTerm = 'T1';
   bool _isLoading = false;
   final Map<int, TextEditingController> _scoreCtrls = {};
+  final Map<int, FocusNode> _scoreFocusNodes = {};
   final Set<int> _savingStudentIds = {};
   final Map<int, Timer> _saveDebounceTimers = {};
   final Map<int, ({double obtained, double base})> _subjectTotalsByStudent = {};
@@ -50,6 +51,9 @@ class _TeacherGradesPageState extends ConsumerState<TeacherGradesPage> {
     }
     for (final c in _scoreCtrls.values) {
       c.dispose();
+    }
+    for (final f in _scoreFocusNodes.values) {
+      f.dispose();
     }
     super.dispose();
   }
@@ -191,17 +195,45 @@ class _TeacherGradesPageState extends ConsumerState<TeacherGradesPage> {
       return;
     }
     try {
-      final res = await ApiService().get(
-        '/api/academics/grades/',
-        queryParameters: {
-          'school_class': _selectedClassId.toString(),
-          'subject': _selectedSubjectId.toString(),
-          'academic_year': _selectedAcademicYear!,
-          // Pas de filtre term: on additionne toute la matière concernée.
-        },
-        useCache: false,
-      );
-      final rows = _extractList(res.data);
+      // Certaines implémentations backend exigent `term`.
+      // On agrège donc T1/T2/T3 pour la matière courante.
+      final responses = await Future.wait([
+        ApiService().get(
+          '/api/academics/grades/',
+          queryParameters: {
+            'school_class': _selectedClassId.toString(),
+            'subject': _selectedSubjectId.toString(),
+            'academic_year': _selectedAcademicYear!,
+            'term': 'T1',
+          },
+          useCache: false,
+        ),
+        ApiService().get(
+          '/api/academics/grades/',
+          queryParameters: {
+            'school_class': _selectedClassId.toString(),
+            'subject': _selectedSubjectId.toString(),
+            'academic_year': _selectedAcademicYear!,
+            'term': 'T2',
+          },
+          useCache: false,
+        ),
+        ApiService().get(
+          '/api/academics/grades/',
+          queryParameters: {
+            'school_class': _selectedClassId.toString(),
+            'subject': _selectedSubjectId.toString(),
+            'academic_year': _selectedAcademicYear!,
+            'term': 'T3',
+          },
+          useCache: false,
+        ),
+      ]);
+      final rows = <dynamic>[
+        ..._extractList(responses[0].data),
+        ..._extractList(responses[1].data),
+        ..._extractList(responses[2].data),
+      ];
       final map = <int, ({double obtained, double base})>{};
       for (final r in rows) {
         final sid = _asInt(r['student']);
@@ -391,6 +423,20 @@ class _TeacherGradesPageState extends ConsumerState<TeacherGradesPage> {
     _saveStudentGrade(studentId, silent: true);
   }
 
+  void _focusNextStudent(List<dynamic> filteredStudents, int currentStudentId) {
+    final idx = filteredStudents.indexWhere((s) => _asInt(s['id']) == currentStudentId);
+    if (idx < 0 || idx + 1 >= filteredStudents.length) return;
+    final nextId = _asInt(filteredStudents[idx + 1]['id']);
+    if (nextId == null) return;
+    final nextFocus = _scoreFocusNodes[nextId];
+    if (nextFocus == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        nextFocus.requestFocus();
+      }
+    });
+  }
+
   String _totalLabelForStudent(int studentId) {
     final row = _subjectTotalsByStudent[studentId];
     if (row == null) return '-';
@@ -420,15 +466,114 @@ class _TeacherGradesPageState extends ConsumerState<TeacherGradesPage> {
       appBar: AppBar(
         title: const Text('Gestion des Notes'),
       ),
-      body: Column(
-        children: [
-          Card(
-            margin: const EdgeInsets.all(16),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : (_selectedClassId == null || _selectedSubjectId == null)
+              ? Column(
+                  children: [
+                    Card(
+                      margin: const EdgeInsets.all(16),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            DropdownButtonFormField<int>(
+                              value: _selectedClassId,
+                              decoration: const InputDecoration(labelText: 'Classe *'),
+                              items: _classes.map((c) => DropdownMenuItem<int>(
+                                value: c['id'] as int,
+                                child: Text(c['name'] ?? 'Classe'),
+                              )).toList(),
+                              onChanged: (value) {
+                                setState(() {
+                                  _selectedClassId = value;
+                                });
+                                _loadStudentsAndGrades();
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            TextField(
+                              decoration: const InputDecoration(
+                                labelText: 'Recherche élève',
+                                hintText: 'Nom, prénom, matricule',
+                                prefixIcon: Icon(Icons.search),
+                              ),
+                              onChanged: (v) => setState(() => _searchQuery = v),
+                            ),
+                            const SizedBox(height: 12),
+                            DropdownButtonFormField<String>(
+                              value: _selectedSemester,
+                              decoration: const InputDecoration(labelText: 'Semestre'),
+                              items: _semesters
+                                  .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                                  .toList(),
+                              onChanged: (v) {
+                                if (v == null) return;
+                                setState(() {
+                                  _selectedSemester = v;
+                                  _selectedTerm = v == 'Premier semestre' ? 'T1' : 'T2';
+                                });
+                                _loadGrades();
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            DropdownButtonFormField<String>(
+                              value: _selectedPeriod,
+                              decoration: const InputDecoration(labelText: 'Période'),
+                              items: _periods
+                                  .map((p) => DropdownMenuItem(value: p, child: Text(p)))
+                                  .toList(),
+                              onChanged: (v) => setState(() => _selectedPeriod = v ?? _selectedPeriod),
+                            ),
+                            const SizedBox(height: 12),
+                            DropdownButtonFormField<String>(
+                              value: _selectedAcademicYear,
+                              decoration: const InputDecoration(labelText: 'Année scolaire'),
+                              items: _academicYears
+                                  .map((y) => DropdownMenuItem(value: y, child: Text(y)))
+                                  .toList(),
+                              onChanged: (v) {
+                                setState(() => _selectedAcademicYear = v);
+                                _loadGrades();
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            DropdownButtonFormField<int>(
+                              value: _selectedSubjectId,
+                              decoration: const InputDecoration(labelText: 'Matière *'),
+                              items: _subjects.map((s) => DropdownMenuItem<int>(
+                                value: s['id'] as int,
+                                child: Text(s['name'] ?? 'Matière'),
+                              )).toList(),
+                              onChanged: (value) {
+                                setState(() {
+                                  _selectedSubjectId = value;
+                                });
+                                _loadGrades();
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const Expanded(
+                      child: Center(
+                        child: Text('Sélectionnez la classe et la matière pour saisir les notes.'),
+                      ),
+                    ),
+                  ],
+                )
+              : CustomScrollView(
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Card(
+                        margin: const EdgeInsets.all(16),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
                   DropdownButtonFormField<int>(
                     value: _selectedClassId,
                     decoration: const InputDecoration(labelText: 'Classe *'),
@@ -504,26 +649,24 @@ class _TeacherGradesPageState extends ConsumerState<TeacherGradesPage> {
                       _loadGrades();
                     },
                   ),
-                ],
-              ),
-            ),
-          ),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : (_selectedClassId == null || _selectedSubjectId == null)
-                    ? const Center(
-                        child: Text('Sélectionnez la classe et la matière pour saisir les notes.'),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (filteredStudents.isEmpty)
+                      const SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(child: Text('Aucun élève')),
                       )
-                    : filteredStudents.isEmpty
-                        ? const Center(child: Text('Aucun élève'))
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    else
+                      SliverList.builder(
                         itemCount: filteredStudents.length + 1,
                         itemBuilder: (context, index) {
                           if (index == 0) {
                             return Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 4, 16, 8),
                               child: Row(
                                 children: [
                                   const Expanded(
@@ -556,9 +699,11 @@ class _TeacherGradesPageState extends ConsumerState<TeacherGradesPage> {
                           if (studentId == null) return const SizedBox.shrink();
                           final ctrl = _scoreCtrls[studentId] ?? TextEditingController();
                           _scoreCtrls[studentId] = ctrl;
+                          final focusNode =
+                              _scoreFocusNodes.putIfAbsent(studentId, FocusNode.new);
                           final isSaving = _savingStudentIds.contains(studentId);
                           return Card(
-                            margin: const EdgeInsets.only(bottom: 8),
+                            margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                             child: Padding(
                               padding: const EdgeInsets.all(12),
                               child: Row(
@@ -588,13 +733,20 @@ class _TeacherGradesPageState extends ConsumerState<TeacherGradesPage> {
                                         Expanded(
                                           child: TextField(
                                             controller: ctrl,
+                                            focusNode: focusNode,
                                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                             decoration: const InputDecoration(
                                               isDense: true,
                                               hintText: '/20',
                                             ),
                                             onChanged: (_) => _scheduleAutoSave(studentId),
-                                            onSubmitted: (_) => _saveOnSubmit(studentId),
+                                            onSubmitted: (_) {
+                                              _saveOnSubmit(studentId);
+                                              _focusNextStudent(
+                                                filteredStudents,
+                                                studentId,
+                                              );
+                                            },
                                           ),
                                         ),
                                         const SizedBox(width: 6),
@@ -623,9 +775,8 @@ class _TeacherGradesPageState extends ConsumerState<TeacherGradesPage> {
                           );
                         },
                       ),
-          ),
-        ],
-      ),
+                  ],
+                ),
     );
   }
 }

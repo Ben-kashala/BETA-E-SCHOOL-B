@@ -13,8 +13,26 @@ String dioErrorMessage(Object e) {
   if (e is DioException) {
     final d = e.response?.data;
     if (d is Map) {
-      final err = d['error'] ?? d['detail'];
-      if (err != null) return err.toString();
+      // Clés courantes API DRF / backend custom
+      final preferredKeys = [
+        'non_field_errors',
+        'error',
+        'detail',
+        'message',
+        'username',
+        'password',
+      ];
+      for (final k in preferredKeys) {
+        final v = d[k];
+        if (v is List && v.isNotEmpty) return v.first.toString();
+        if (v != null && v.toString().trim().isNotEmpty) return v.toString();
+      }
+      // Fallback: première erreur trouvée dans la map
+      for (final entry in d.entries) {
+        final v = entry.value;
+        if (v is List && v.isNotEmpty) return v.first.toString();
+        if (v != null && v.toString().trim().isNotEmpty) return v.toString();
+      }
     }
     if (d is List<int>) {
       try {

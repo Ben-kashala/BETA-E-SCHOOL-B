@@ -28,15 +28,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     final username = _usernameController.text.trim();
     final password = _passwordController.text;
     final notifier = ref.read(authProvider.notifier);
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-    final navContext = context;
 
     final (success, errorMessage) = await notifier.login(username, password);
 
     if (!mounted) return;
     if (!success) {
       final message = errorMessage ?? 'Erreur de connexion';
-      scaffoldMessenger.showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(message),
           backgroundColor: Colors.red,
@@ -47,7 +45,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     await Future.delayed(const Duration(milliseconds: 200));
     if (!mounted) return;
     if (ref.read(authProvider).isAuthenticated) {
-      navContext.go('/dashboard');
+      context.go('/dashboard');
     }
   }
 
@@ -82,20 +80,35 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: 48),
-                // Logo de l'application (à remplacer par assets/images/logo.png quand disponible)
-                Image.asset(
-                  'assets/images/logo.png',
-                  height: 150,
-                  width: 150,
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) {
-                    // Fallback vers l'icône si le logo n'existe pas encore
-                    return Icon(
-                      Icons.school,
-                      size: 120,
-                      color: Theme.of(context).colorScheme.primary,
-                    );
-                  },
+                // Le logo est posé sur fond clair pour rester lisible sur fond institutionnel foncé.
+                Center(
+                  child: Container(
+                    width: 190,
+                    height: 110,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.18),
+                          blurRadius: 14,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Image.asset(
+                      'assets/images/logo.png',
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Icon(
+                          Icons.school,
+                          size: 60,
+                          color: Theme.of(context).colorScheme.primary,
+                        );
+                      },
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 24),
                 Text(
@@ -112,10 +125,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 const SizedBox(height: 48),
                 TextFormField(
                   controller: _usernameController,
+                  cursorColor: Colors.amber,
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
                   decoration: const InputDecoration(
                     labelText: 'Identifiant',
                     hintText: 'Nom d\'utilisateur, email ou téléphone (10 chiffres)',
                     prefixIcon: Icon(Icons.person),
+                    filled: true,
+                    fillColor: Color(0x1AFFFFFF),
                   ),
                   keyboardType: TextInputType.text,
                   textInputAction: TextInputAction.next,
@@ -129,9 +146,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _passwordController,
+                  cursorColor: Colors.amber,
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
                   decoration: InputDecoration(
                     labelText: 'Mot de passe',
                     prefixIcon: const Icon(Icons.lock),
+                    filled: true,
+                    fillColor: const Color(0x1AFFFFFF),
                     suffixIcon: IconButton(
                       icon: Icon(
                         _obscurePassword ? Icons.visibility : Icons.visibility_off,

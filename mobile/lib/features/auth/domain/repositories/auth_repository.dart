@@ -19,15 +19,27 @@ class AuthRepository {
   final _apiService = ApiService();
   final _tempStorage = const FlutterSecureStorage();
 
+  String _normalizeLoginIdentifier(String raw) {
+    final id = raw.trim();
+    if (id.contains('@')) return id;
+    // Téléphone: garder les 10 derniers chiffres (format backend attendu).
+    final digits = id.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.length >= 10) {
+      return digits.substring(digits.length - 10);
+    }
+    return id;
+  }
+
   Future<LoginResult> login(String username, String password) async {
     try {
-      print('🔐 [AuthRepository] Tentative de connexion pour: $username');
+      final loginIdentifier = _normalizeLoginIdentifier(username);
+      print('🔐 [AuthRepository] Tentative de connexion pour: $loginIdentifier');
       print('🔐 [AuthRepository] URL API: ${AppConfig.baseUrl}/api/auth/login/');
       
       final response = await _apiService.post(
         '/api/auth/login/',
         data: {
-          'username': username,
+          'username': loginIdentifier,
           'password': password,
         },
       );
@@ -58,7 +70,7 @@ class AuthRepository {
         
         // Récupérer l'utilisateur
         user = await getCurrentUser();
-        print('✅ [AuthRepository] Données utilisateur récupérées: ${user.email ?? user.username}');
+        print('✅ [AuthRepository] Données utilisateur récupérées: ${user.email}');
       } catch (e) {
         print('❌ [AuthRepository] Erreur lors de la récupération de l\'utilisateur: $e');
         // Nettoyer le token temporaire en cas d'erreur
@@ -72,7 +84,7 @@ class AuthRepository {
         user: user,
       );
 
-      print('✅ [AuthRepository] Connexion réussie pour: ${result.user.email ?? result.user.username}');
+      print('✅ [AuthRepository] Connexion réussie pour: ${result.user.email}');
       return result;
     } catch (e, stackTrace) {
       print('❌ [AuthRepository] Erreur lors de la connexion: $e');

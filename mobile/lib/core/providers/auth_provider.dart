@@ -3,6 +3,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../features/auth/domain/models/user_model.dart';
 import '../../features/auth/domain/repositories/auth_repository.dart';
 import '../database/hive_service.dart';
+import '../network/api_service.dart';
 
 class AuthState {
   final bool isAuthenticated;
@@ -82,7 +83,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (e, stackTrace) {
       print('❌ [AuthProvider] Erreur lors du login: $e');
       print('📚 [AuthProvider] Stack trace: $stackTrace');
-      final message = e.toString().replaceFirst(RegExp(r'^Exception:?\s*'), '');
+      final raw = ApiService.parseDioError(e).replaceFirst(RegExp(r'^Exception:?\s*'), '');
+      final message = raw.contains('validateStatus') || raw.contains('Client error')
+          ? 'Connexion impossible. Vérifiez votre identifiant (email/téléphone/username) et votre mot de passe.'
+          : raw;
       state = state.copyWith(
         isLoading: false,
         error: message,

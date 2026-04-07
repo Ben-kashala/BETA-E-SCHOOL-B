@@ -152,7 +152,7 @@ class _TeacherAttendancePageState extends ConsumerState<TeacherAttendancePage> {
                               itemBuilder: (context, index) {
                                 final student = _students[index];
                                 final studentId = student['id'];
-                                final status = _attendanceStatus[studentId] ?? 'PRESENT';
+                                final status = _attendanceStatus[studentId];
                                 final name = student['user'] != null
                                     ? '${student['user']['first_name']} ${student['user']['last_name']}'
                                     : student['user_name'] ?? 'Élève';
@@ -194,7 +194,7 @@ class _TeacherAttendancePageState extends ConsumerState<TeacherAttendancePage> {
     );
   }
 
-  Widget _buildStatusButton(String status, String currentStatus, int studentId, Color color) {
+  Widget _buildStatusButton(String status, String? currentStatus, int studentId, Color color) {
     final isSelected = currentStatus == status;
     return InkWell(
       onTap: () {
