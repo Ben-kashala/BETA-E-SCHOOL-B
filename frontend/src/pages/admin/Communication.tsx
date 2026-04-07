@@ -126,15 +126,33 @@ export default function AdminCommunication() {
   const { data: usersData, isLoading: usersLoading } = useQuery({
     queryKey: ['users-for-messages'],
     queryFn: async () => {
-      const response = await api.get('/auth/users/', {
-        params: { is_active: true, page_size: 500 },
-      })
-      return response.data
+      const allUsers: any[] = []
+      let nextUrl: string | null = '/auth/users/?is_active=true&page_size=200'
+      let guard = 0
+
+      // Récupère toutes les pages pour éviter de perdre des destinataires
+      // (ex: enseignants au-delà de la première page).
+      while (nextUrl && guard < 50) {
+        const response: any = await api.get(nextUrl)
+        const data: any = response.data
+
+        if (Array.isArray(data)) {
+          allUsers.push(...data)
+          nextUrl = null
+        } else {
+          const pageItems = Array.isArray(data?.results) ? data.results : []
+          allUsers.push(...pageItems)
+          nextUrl = typeof data?.next === 'string' ? data.next : null
+        }
+        guard += 1
+      }
+
+      return allUsers
     },
     enabled: showMessageForm,
   })
 
-  const rawUsers = Array.isArray(usersData) ? usersData : (usersData?.results || [])
+  const rawUsers = Array.isArray(usersData) ? usersData : []
 
   // Pour le promoteur, limiter les destinataires au personnel (pas d'élèves ni de parents)
   const users = rawUsers.filter((u: any) => {
