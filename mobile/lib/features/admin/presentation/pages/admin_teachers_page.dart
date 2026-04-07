@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_service.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/search_filter_bar.dart';
 
 class AdminTeachersPage extends ConsumerStatefulWidget {
@@ -281,6 +282,8 @@ class _AdminTeachersPageState extends ConsumerState<AdminTeachersPage> {
                               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                               child: ListTile(
                                 leading: const CircleAvatar(
+                                  backgroundColor: AppTheme.avatarBackgroundColor,
+                                  foregroundColor: AppTheme.onAvatarBackgroundColor,
                                   child: Icon(Icons.person),
                                 ),
                                 title: Text(name.isEmpty ? 'Enseignant' : name),

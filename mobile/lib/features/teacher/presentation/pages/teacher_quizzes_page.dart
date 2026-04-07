@@ -61,6 +61,49 @@ class _TeacherQuizzesPageState extends ConsumerState<TeacherQuizzesPage> {
     }
   }
 
+  static int? _relationId(dynamic field) {
+    if (field == null) return null;
+    if (field is int) return field;
+    if (field is num) return field.toInt();
+    if (field is Map) {
+      final id = field['id'];
+      if (id is int) return id;
+      if (id is num) return id.toInt();
+      return int.tryParse('$id');
+    }
+    return int.tryParse('$field');
+  }
+
+  String _quizSubjectLabel(dynamic quiz) {
+    final sub = quiz['subject'];
+    if (sub is Map) return '${sub['name'] ?? 'N/A'}';
+    final id = _relationId(sub);
+    if (id != null) {
+      for (final s in _subjects) {
+        if (s is Map && _relationId(s['id']) == id) {
+          return '${s['name'] ?? 'N/A'}';
+        }
+      }
+      return 'Matière #$id';
+    }
+    return 'N/A';
+  }
+
+  String _quizClassLabel(dynamic quiz) {
+    final sc = quiz['school_class'];
+    if (sc is Map) return '${sc['name'] ?? 'N/A'}';
+    final id = _relationId(sc);
+    if (id != null) {
+      for (final c in _classes) {
+        if (c is Map && _relationId(c['id']) == id) {
+          return '${c['name'] ?? 'N/A'}';
+        }
+      }
+      return 'Classe #$id';
+    }
+    return 'N/A';
+  }
+
   void _applyFilters() {
     final filtered = _quizzes.where((quiz) {
       if (_searchQuery.isNotEmpty) {
@@ -70,12 +113,12 @@ class _TeacherQuizzesPageState extends ConsumerState<TeacherQuizzesPage> {
         }
       }
       if (_selectedSubject != null) {
-        if (quiz['subject']?['id'] != int.parse(_selectedSubject!)) {
+        if (_relationId(quiz['subject']) != int.parse(_selectedSubject!)) {
           return false;
         }
       }
       if (_selectedClass != null) {
-        if (quiz['school_class']?['id'] != int.parse(_selectedClass!)) {
+        if (_relationId(quiz['school_class']) != int.parse(_selectedClass!)) {
           return false;
         }
       }
@@ -278,10 +321,8 @@ class _TeacherQuizzesPageState extends ConsumerState<TeacherQuizzesPage> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        Text(
-                                            'Classe: ${quiz['school_class']?['name'] ?? 'N/A'}'),
-                                        Text(
-                                            'Matière: ${quiz['subject']?['name'] ?? 'N/A'}'),
+                                        Text('Classe: ${_quizClassLabel(quiz)}'),
+                                        Text('Matière: ${_quizSubjectLabel(quiz)}'),
                                         Text(
                                           'Statut: ${quiz['is_published'] == true ? 'Publié' : 'Brouillon'}',
                                         ),

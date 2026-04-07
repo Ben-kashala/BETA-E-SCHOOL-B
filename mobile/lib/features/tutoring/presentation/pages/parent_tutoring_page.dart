@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';
 import '../../../../core/network/api_service.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/search_filter_bar.dart';
 import '../widgets/tutoring_message_form_modal.dart';
 
@@ -212,8 +213,9 @@ class _ParentTutoringPageState extends ConsumerState<ParentTutoringPage> with Si
                               child: ListTile(
                                 contentPadding: const EdgeInsets.all(16),
                                 leading: const CircleAvatar(
-                                  backgroundColor: Colors.teal,
-                                  child: Icon(Icons.message, color: Colors.white),
+                                  backgroundColor: AppTheme.avatarBackgroundColor,
+                                  foregroundColor: AppTheme.onAvatarBackgroundColor,
+                                  child: Icon(Icons.message),
                                 ),
                                 title: Text(
                                   _getChildName(message['student'] ?? {}),
@@ -266,8 +268,9 @@ class _ParentTutoringPageState extends ConsumerState<ParentTutoringPage> with Si
                               margin: const EdgeInsets.only(bottom: 16),
                               child: ExpansionTile(
                                 leading: const CircleAvatar(
-                                  backgroundColor: Colors.blue,
-                                  child: Icon(Icons.description, color: Colors.white),
+                                  backgroundColor: AppTheme.avatarBackgroundColor,
+                                  foregroundColor: AppTheme.onAvatarBackgroundColor,
+                                  child: Icon(Icons.description),
                                 ),
                                 title: Text(
                                   _getChildName(report['student'] ?? {}),

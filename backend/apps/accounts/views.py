@@ -402,6 +402,120 @@ class StudentViewSet(viewsets.ModelViewSet):
             })
         return Response(result)
 
+    @action(detail=False, methods=['get'], url_path='parent-presence-weeks')
+    def parent_presence_weeks(self, request):
+        """
+        Présences agrégées par semaine pour un enfant, sur le mois demandé (parent).
+        Exposé ici (et non sous /academics/attendance/...) pour éviter que la route
+        détail attendance/<pk>/ ne capture « parent_weekly » comme identifiant.
+        GET ?student=<id>&year=<YYYY>&month=<1-12>
+        Optionnel : &date=YYYY-MM-DD pour le détail du jour.
+        """
+        if not getattr(request.user, 'is_parent', False):
+            return Response({'detail': 'Réservé aux parents.'}, status=status.HTTP_403_FORBIDDEN)
+        student_id = request.query_params.get('student')
+        year_s = request.query_params.get('year')
+        month_s = request.query_params.get('month')
+        if not student_id or not year_s or not month_s:
+            return Response(
+                {'detail': 'Paramètres student, year et month requis.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            year = int(year_s)
+            month = int(month_s)
+            if month < 1 or month > 12:
+                raise ValueError
+        except ValueError:
+            return Response(
+                {'detail': 'year et month invalides.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            sid = int(str(student_id).strip())
+        except (TypeError, ValueError):
+            return Response(
+                {'detail': 'Paramètre student invalide.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # Même périmètre que parent_dashboard (parent + école), pas un lookup Student global.
+        student = get_object_or_404(self.get_queryset(), pk=sid)
+
+        from calendar import monthrange
+        from django.utils.dateparse import parse_date
+
+        first_month = date(year, month, 1)
+        last_month = date(year, month, monthrange(year, month)[1])
+
+        weeks_bounds = []
+        cur = first_month - timedelta(days=first_month.weekday())
+        while cur <= last_month:
+            week_start = cur
+            week_end = cur + timedelta(days=6)
+            if week_end >= first_month and week_start <= last_month:
+                weeks_bounds.append((week_start, week_end))
+            cur += timedelta(days=7)
+
+        attendance_by_week = []
+        for start, end in weeks_bounds:
+            qs = Attendance.objects.filter(student=student, date__gte=start, date__lte=end)
+            agg = qs.aggregate(
+                present=Count('id', filter=Q(status='PRESENT')),
+                absent=Count('id', filter=Q(status='ABSENT')),
+                late=Count('id', filter=Q(status='LATE')),
+                excused=Count('id', filter=Q(status='EXCUSED')),
+            )
+            total = (agg['present'] or 0) + (agg['absent'] or 0) + (agg['late'] or 0) + (agg['excused'] or 0)
+            attendance_by_week.append({
+                'week_start': start.isoformat(),
+                'week_end': end.isoformat(),
+                'label': f'Sem. {start.strftime("%d/%m")}',
+                'present': agg['present'] or 0,
+                'absent': agg['absent'] or 0,
+                'late': agg['late'] or 0,
+                'excused': agg['excused'] or 0,
+                'total': total,
+            })
+
+        day_detail = None
+        day_param = request.query_params.get('date')
+        if day_param:
+            d = parse_date(day_param)
+            if d:
+                qs_day = Attendance.objects.filter(student=student, date=d).select_related(
+                    'subject', 'school_class'
+                )
+                agg_d = qs_day.aggregate(
+                    present=Count('id', filter=Q(status='PRESENT')),
+                    absent=Count('id', filter=Q(status='ABSENT')),
+                    late=Count('id', filter=Q(status='LATE')),
+                    excused=Count('id', filter=Q(status='EXCUSED')),
+                )
+                records = []
+                for a in qs_day:
+                    records.append({
+                        'status': a.status,
+                        'subject_name': a.subject.name if a.subject_id else None,
+                        'class_name': a.school_class.name if a.school_class_id else '',
+                    })
+                day_detail = {
+                    'date': d.isoformat(),
+                    'present': agg_d['present'] or 0,
+                    'absent': agg_d['absent'] or 0,
+                    'late': agg_d['late'] or 0,
+                    'excused': agg_d['excused'] or 0,
+                    'total': (
+                        (agg_d['present'] or 0)
+                        + (agg_d['absent'] or 0)
+                        + (agg_d['late'] or 0)
+                        + (agg_d['excused'] or 0)
+                    ),
+                    'records': records,
+                }
+
+        return Response({'weeks': attendance_by_week, 'day_detail': day_detail})
+
     @action(detail=False, methods=['get'], url_path='student_dashboard')
     def student_dashboard(self, request):
         """

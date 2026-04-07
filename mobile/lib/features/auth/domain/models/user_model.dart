@@ -7,6 +7,8 @@ class UserModel {
   final String role;
   final String? phone;
   final String? schoolCode;
+  /// Nom de l'établissement (depuis `school.name` si l'API renvoie l'objet nested).
+  final String? schoolName;
   final String? studentId;
   final String? profilePicture;
   // Adresse (élève/parent) – optionnelle
@@ -24,6 +26,7 @@ class UserModel {
     required this.role,
     this.phone,
     this.schoolCode,
+    this.schoolName,
     this.studentId,
     this.profilePicture,
     this.address,
@@ -36,6 +39,9 @@ class UserModel {
     final school = json['school'];
     final String? schoolCode = (json['school_code'] as String?) ??
         (school is Map ? (school['code'] as String?) : null);
+    final String? schoolName = school is Map
+        ? (school['name'] as String?)?.trim()
+        : null;
     return UserModel(
       id: json['id'] as int,
       username: json['username'] as String,
@@ -45,12 +51,15 @@ class UserModel {
       role: json['role'] as String,
       phone: json['phone'] as String?,
       schoolCode: schoolCode,
+      schoolName: schoolName,
       studentId: json['student_id'] as String?,
       profilePicture: json['profile_picture'] as String?,
       address: json['address'] as String?,
       addressCity: json['address_city'] as String? ?? json['city'] as String?,
-      addressProvince: json['address_province'] as String? ?? json['province'] as String?,
-      addressCountry: json['address_country'] as String? ?? json['country'] as String?,
+      addressProvince:
+          json['address_province'] as String? ?? json['province'] as String?,
+      addressCountry:
+          json['address_country'] as String? ?? json['country'] as String?,
     );
   }
 

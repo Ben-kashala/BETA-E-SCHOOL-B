@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/network/api_service.dart';
+import '../../../../core/theme/app_theme.dart';
 
 class AdminStudentsPage extends ConsumerStatefulWidget {
   const AdminStudentsPage({super.key});
@@ -95,6 +96,8 @@ class _AdminStudentsPageState extends ConsumerState<AdminStudentsPage> {
                             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                             child: ListTile(
                               leading: const CircleAvatar(
+                                backgroundColor: AppTheme.avatarBackgroundColor,
+                                foregroundColor: AppTheme.onAvatarBackgroundColor,
                                 child: Icon(Icons.person),
                               ),
                               title: Text(name.isEmpty ? 'Élève' : name),

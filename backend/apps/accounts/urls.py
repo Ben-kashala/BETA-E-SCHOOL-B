@@ -19,5 +19,11 @@ urlpatterns = [
     path('platform-settings/', platform_settings, name='platform-settings'),
     # Route explicite pour bulletin_pdf (prioritaire sur le routeur pour éviter 404)
     path('students/<int:pk>/bulletin_pdf/', bulletin_pdf_download, name='student-bulletin-pdf'),
+    # Présences parent : prioritaire sur students/<pk>/ (évite toute ambiguïté de routage)
+    path(
+        'students/parent-presence-weeks/',
+        StudentViewSet.as_view({'get': 'parent_presence_weeks'}),
+        name='student-parent-presence-weeks',
+    ),
     path('', include(router.urls)),
 ]

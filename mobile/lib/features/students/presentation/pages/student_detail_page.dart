@@ -22,7 +22,11 @@ class _StudentDetailPageState extends ConsumerState<StudentDetailPage> with Sing
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    _loadStudentDetail();
+    // Ne pas appeler setState pendant initState : démarrer le chargement après le premier frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _loadStudentDetail();
+    });
   }
 
   @override
@@ -32,15 +36,32 @@ class _StudentDetailPageState extends ConsumerState<StudentDetailPage> with Sing
   }
 
   Future<void> _loadStudentDetail() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     try {
-      final response = await ApiService().get('/api/accounts/students/${widget.studentId}/full_detail/');
+      final response = await ApiService().get<dynamic>(
+        '/api/accounts/students/${widget.studentId}/full_detail/',
+        useCache: false,
+      );
+      if (!mounted) return;
+      final data = response.data;
+      if (data is Map) {
+        setState(() {
+          _studentData = Map<String, dynamic>.from(data);
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _studentData = null;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _studentData = response.data as Map<String, dynamic>;
+        _studentData = null;
         _isLoading = false;
       });
-    } catch (e) {
-      setState(() => _isLoading = false);
     }
   }
 
@@ -54,6 +75,7 @@ class _StudentDetailPageState extends ConsumerState<StudentDetailPage> with Sing
         await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Erreur: $e')),
       );
@@ -76,12 +98,20 @@ class _StudentDetailPageState extends ConsumerState<StudentDetailPage> with Sing
       );
     }
 
-    final identity = _studentData!['identity'] ?? {};
-    final user = identity['user'] ?? {};
-    final classEnrollments = _studentData!['class_enrollments'] ?? [];
-    final gradeBulletins = _studentData!['grade_bulletins'] ?? [];
-    final reportCards = _studentData!['report_cards'] ?? [];
-    final payments = _studentData!['payments'] ?? [];
+    final identity = _studentData!['identity'] is Map
+        ? Map<String, dynamic>.from(_studentData!['identity'] as Map)
+        : <String, dynamic>{};
+    final user = identity['user'] is Map
+        ? Map<String, dynamic>.from(identity['user'] as Map)
+        : <String, dynamic>{};
+    final classEnrollments =
+        (_studentData!['class_enrollments'] as List<dynamic>?) ?? <dynamic>[];
+    final gradeBulletins =
+        (_studentData!['grade_bulletins'] as List<dynamic>?) ?? <dynamic>[];
+    final reportCards =
+        (_studentData!['report_cards'] as List<dynamic>?) ?? <dynamic>[];
+    final payments =
+        (_studentData!['payments'] as List<dynamic>?) ?? <dynamic>[];
 
     return Scaffold(
       appBar: AppBar(
@@ -113,9 +143,18 @@ class _StudentDetailPageState extends ConsumerState<StudentDetailPage> with Sing
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildInfoRow('Matricule', identity['student_id']?.toString() ?? '-'),
-                    _buildInfoRow('Nom complet', identity['user_name'] ?? '${user['first_name'] ?? ''} ${user['last_name'] ?? ''}'.trim()),
+                    _buildInfoRow(
+                      'Nom complet',
+                      _stringOr(
+                        identity['user_name'],
+                        '${user['first_name'] ?? ''} ${user['last_name'] ?? ''}'.trim(),
+                      ),
+                    ),
                     if (user['date_of_birth'] != null)
-                      _buildInfoRow('Date de naissance', DateFormat('dd/MM/yyyy').format(DateTime.parse(user['date_of_birth']))),
+                      _buildInfoRow(
+                        'Date de naissance',
+                        _formatDateSafe(user['date_of_birth']) ?? '—',
+                      ),
                     _buildInfoRow('Email', user['email'] ?? '-'),
                     _buildInfoRow('Téléphone', user['phone'] ?? '-'),
                     _buildInfoRow('Adresse', user['address'] ?? '-'),
@@ -123,7 +162,10 @@ class _StudentDetailPageState extends ConsumerState<StudentDetailPage> with Sing
                     _buildInfoRow('Année scolaire', identity['academic_year'] ?? '-'),
                     _buildInfoRow('Parent / Tuteur', identity['parent_name'] ?? '-'),
                     if (identity['enrollment_date'] != null)
-                      _buildInfoRow('Date d\'inscription', DateFormat('dd/MM/yyyy').format(DateTime.parse(identity['enrollment_date']))),
+                      _buildInfoRow(
+                        'Date d\'inscription',
+                        _formatDateSafe(identity['enrollment_date']) ?? '—',
+                      ),
                     _buildInfoRow('Ancien élève', identity['is_former_student'] == true ? 'Oui' : 'Non'),
                     if (identity['is_former_student'] == true && identity['graduation_year'] != null)
                       _buildInfoRow('Année de sortie', identity['graduation_year'].toString()),
@@ -154,18 +196,30 @@ class _StudentDetailPageState extends ConsumerState<StudentDetailPage> with Sing
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: classEnrollments.length,
                       itemBuilder: (context, index) {
-                        final enrollment = classEnrollments[index];
+                        final raw = classEnrollments[index];
+                        final enrollment = raw is Map<String, dynamic>
+                            ? raw
+                            : Map<String, dynamic>.from(raw as Map);
+                        final classLabel = enrollment['school_class_name'] ??
+                            enrollment['class_name'] ??
+                            'Classe';
+                        final scId = enrollment['school_class'];
+                        final year = enrollment['academic_year']?.toString();
                         return ListTile(
-                          title: Text(enrollment['class_name'] ?? 'Classe'),
-                          subtitle: Text('Année: ${enrollment['academic_year'] ?? '-'}'),
-                          trailing: enrollment['school_class'] != null && enrollment['academic_year'] != null
+                          title: Text(classLabel.toString()),
+                          subtitle: Text('Année: ${year ?? '-'}'),
+                          trailing: scId != null && year != null && year.isNotEmpty
                               ? IconButton(
                                   icon: const Icon(Icons.download),
                                   onPressed: () {
-                                    _downloadBulletin(
-                                      enrollment['school_class'],
-                                      enrollment['academic_year'],
-                                    );
+                                    final id = scId is int
+                                        ? scId
+                                        : (scId is num
+                                            ? scId.toInt()
+                                            : int.tryParse(scId.toString()));
+                                    if (id != null) {
+                                      _downloadBulletin(id, year);
+                                    }
                                   },
                                 )
                               : null,
@@ -193,11 +247,14 @@ class _StudentDetailPageState extends ConsumerState<StudentDetailPage> with Sing
                           DataColumn(label: Text('S2'), numeric: true),
                           DataColumn(label: Text('T.G.'), numeric: true),
                         ],
-                        rows: gradeBulletins.map((b) {
+                        rows: gradeBulletins.map<DataRow>((dynamic raw) {
+                          final b = raw is Map<String, dynamic>
+                              ? raw
+                              : Map<String, dynamic>.from(raw as Map);
                           return DataRow(
                             cells: [
-                              DataCell(Text(b['subject_name'] ?? '-')),
-                              DataCell(Text(b['academic_year'] ?? '-')),
+                              DataCell(Text(b['subject_name']?.toString() ?? '-')),
+                              DataCell(Text(b['academic_year']?.toString() ?? '-')),
                               DataCell(Text(_formatScore(b['total_s1']))),
                               DataCell(Text(_formatScore(b['total_s2']))),
                               DataCell(Text(_formatScore(b['total_general']))),
@@ -216,19 +273,25 @@ class _StudentDetailPageState extends ConsumerState<StudentDetailPage> with Sing
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 8),
-                  ...reportCards.map((card) {
+                  ...reportCards.map<Widget>((dynamic raw) {
+                    final card = raw is Map<String, dynamic>
+                        ? raw
+                        : Map<String, dynamic>.from(raw as Map);
                     return Card(
                       margin: const EdgeInsets.only(bottom: 8),
                       child: ListTile(
-                        title: Text('${card['academic_year'] ?? ''} - ${card['class_name'] ?? ''}'),
+                        title: Text(
+                          '${card['academic_year'] ?? ''} — ${card['class_name'] ?? card['school_class_name'] ?? ''}',
+                        ),
                         subtitle: Text('Décision: ${card['decision'] ?? '-'}'),
-                        trailing: card['school_class'] != null && card['academic_year'] != null
+                        trailing: card['school_class'] != null &&
+                                card['academic_year'] != null
                             ? IconButton(
                                 icon: const Icon(Icons.download),
                                 onPressed: () {
                                   _downloadBulletin(
                                     card['school_class'],
-                                    card['academic_year'],
+                                    card['academic_year'].toString(),
                                   );
                                 },
                               )
@@ -247,17 +310,21 @@ class _StudentDetailPageState extends ConsumerState<StudentDetailPage> with Sing
                   padding: const EdgeInsets.all(16),
                   itemCount: payments.length,
                   itemBuilder: (context, index) {
-                    final payment = payments[index];
+                    final raw = payments[index];
+                    final payment = raw is Map<String, dynamic>
+                        ? raw
+                        : Map<String, dynamic>.from(raw as Map);
+                    final payDate = payment['payment_date'];
                     return Card(
                       margin: const EdgeInsets.only(bottom: 16),
                       child: ListTile(
                         title: Text('${payment['amount']} ${payment['currency'] ?? 'CDF'}'),
                         subtitle: Text(
-                          payment['payment_date'] != null
-                              ? DateFormat('dd/MM/yyyy').format(DateTime.parse(payment['payment_date']))
+                          payDate != null
+                              ? (_formatDateSafe(payDate) ?? payDate.toString())
                               : '-',
                         ),
-                        trailing: Text(payment['status'] ?? '-'),
+                        trailing: Text(payment['status']?.toString() ?? '-'),
                       ),
                     );
                   },
@@ -265,6 +332,23 @@ class _StudentDetailPageState extends ConsumerState<StudentDetailPage> with Sing
         ],
       ),
     );
+  }
+
+  String _stringOr(dynamic primary, String fallback) {
+    final p = primary?.toString().trim();
+    if (p != null && p.isNotEmpty) return p;
+    final f = fallback.trim();
+    return f.isEmpty ? '—' : f;
+  }
+
+  /// Dates ISO ou formats courants ; évite une exception pendant le build.
+  String? _formatDateSafe(dynamic v) {
+    if (v == null) return null;
+    try {
+      return DateFormat('dd/MM/yyyy').format(DateTime.parse(v.toString()));
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Formate une note (l'API peut renvoyer num, String ou autre).

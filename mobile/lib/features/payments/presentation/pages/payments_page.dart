@@ -1,12 +1,13 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:dio/dio.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'dart:io';
+import 'package:url_launcher/url_launcher.dart';
+import '../../../../core/layout/scroll_content_padding.dart';
 import '../../../../core/network/api_service.dart';
 import '../../../../core/providers/auth_provider.dart';
 import '../../../../core/widgets/search_filter_bar.dart';
@@ -18,6 +19,13 @@ class PaymentsPage extends ConsumerStatefulWidget {
   @override
   ConsumerState<PaymentsPage> createState() => _PaymentsPageState();
 }
+
+/// Méthodes prises en charge par l’API `initiate-mobile` (Airtel, Orange, M-Pesa).
+const _kMobileMoneyApiMethods = {
+  'MOBILE_MONEY_ORANGE',
+  'MOBILE_MONEY_MPESA',
+  'MOBILE_MONEY_AIRTEL',
+};
 
 class _PaymentsPageState extends ConsumerState<PaymentsPage> {
   List<dynamic> _payments = [];
@@ -79,7 +87,10 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage> {
       final rawList = allPayments is List<dynamic> ? allPayments : List<dynamic>.from(allPayments);
       setState(() {
         _payments = rawList.where((p) => _statusEqual(p['status'], 'COMPLETED')).toList();
-        _pendingPayments = rawList.where((p) => _statusEqual(p['status'], 'PENDING')).toList();
+        _pendingPayments = rawList.where((p) {
+          final s = p['status']?.toString().toUpperCase() ?? '';
+          return s == 'PENDING' || s == 'PROCESSING';
+        }).toList();
         _applyFilters();
         _isLoading = false;
       });
@@ -113,31 +124,246 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage> {
   }
 
   Future<void> _processPayment(Map<String, dynamic> payment) async {
-    // Ouvrir l'URL de paiement
-    final paymentUrl = payment['payment_url'];
-    if (paymentUrl != null && await canLaunchUrl(Uri.parse(paymentUrl))) {
-      await launchUrl(Uri.parse(paymentUrl), mode: LaunchMode.externalApplication);
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Impossible d\'ouvrir le lien de paiement')),
-        );
+    final id = _parsePaymentId(payment['id']);
+    if (id == null) return;
+
+    final method = payment['payment_method']?.toString() ?? '';
+    final status = payment['status']?.toString().toUpperCase() ?? '';
+
+    if (_kMobileMoneyApiMethods.contains(method) &&
+        (status == 'PENDING' || status == 'PROCESSING')) {
+      await _mobileMoneyOperatorFlow(payment, id, method, status);
+      return;
+    }
+
+    final paymentUrl = payment['payment_url']?.toString();
+    if (paymentUrl != null && paymentUrl.isNotEmpty) {
+      final uri = Uri.tryParse(paymentUrl);
+      if (uri != null && await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        return;
       }
     }
+
+    if (!mounted) return;
+    final msg = method == 'ONLINE'
+        ? 'Lien de paiement indisponible. Réessayez plus tard ou contactez l’école.'
+        : 'Ce paiement ne dispose pas de lien en ligne. Pour ${method.isEmpty ? "ce mode" : method}, rapprochez-vous de l’école ou choisissez Orange Money, M-Pesa ou Airtel Money si proposé.';
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  Future<void> _mobileMoneyOperatorFlow(
+    Map<String, dynamic> payment,
+    int paymentId,
+    String paymentMethod,
+    String status,
+  ) async {
+    if (status == 'PROCESSING') {
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Confirmer le paiement'),
+          content: const Text(
+            'Si vous avez validé le paiement sur votre téléphone (USSD / application opérateur), '
+            'vous pouvez enregistrer le reçu côté école.',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+            FilledButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                try {
+                  await ApiService().post<dynamic>(
+                    '/api/payments/payments/$paymentId/confirm-mobile/',
+                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Paiement enregistré')),
+                    );
+                    _loadPayments();
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(ApiService.parseDioError(e))),
+                    );
+                  }
+                }
+              },
+              child: const Text('J’ai payé sur le téléphone'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final phoneController = TextEditingController(
+      text: payment['payer_phone']?.toString() ?? '',
+    );
+
+    if (!mounted) return;
+    var initiateBusy = false;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setLocal) {
+          return AlertDialog(
+            title: const Text('Paiement Mobile Money'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Numéro utilisé pour payer (${_methodLabel(paymentMethod)}).',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Téléphone du payeur',
+                      hintText: '+243…',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: initiateBusy ? null : () => Navigator.pop(ctx),
+                child: const Text('Annuler'),
+              ),
+              FilledButton(
+                onPressed: initiateBusy
+                    ? null
+                    : () async {
+                        final phone = phoneController.text.trim();
+                        if (phone.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Indiquez le numéro de téléphone'),
+                            ),
+                          );
+                          return;
+                        }
+                        setLocal(() => initiateBusy = true);
+                        try {
+                          final res = await ApiService().post<Map<String, dynamic>>(
+                            '/api/payments/payments/initiate-mobile/',
+                            data: {
+                              'payment_id': paymentId,
+                              'phone_number': phone,
+                              'payment_method': paymentMethod,
+                            },
+                          );
+                          if (!ctx.mounted) return;
+                          Navigator.pop(ctx);
+                          final apiMsg = res.data?['message']?.toString() ??
+                              'Demande envoyée. Validez sur votre téléphone.';
+                          if (mounted) {
+                            await showDialog<void>(
+                              context: this.context,
+                              builder: (dctx) => AlertDialog(
+                                title: const Text('Étape suivante'),
+                                content: Text(apiMsg),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(dctx),
+                                    child: const Text('Fermer'),
+                                  ),
+                                  FilledButton(
+                                    onPressed: () async {
+                                      Navigator.pop(dctx);
+                                      try {
+                                        await ApiService().post<dynamic>(
+                                          '/api/payments/payments/$paymentId/confirm-mobile/',
+                                        );
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(this.context).showSnackBar(
+                                            const SnackBar(
+                                              content: Text('Paiement enregistré'),
+                                            ),
+                                          );
+                                          _loadPayments();
+                                        }
+                                      } catch (e) {
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(this.context).showSnackBar(
+                                            SnackBar(content: Text(ApiService.parseDioError(e))),
+                                          );
+                                        }
+                                      }
+                                    },
+                                    child: const Text('J’ai payé sur le téléphone'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            _loadPayments();
+                          }
+                        } catch (e) {
+                          setLocal(() => initiateBusy = false);
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              SnackBar(content: Text(ApiService.parseDioError(e))),
+                            );
+                          }
+                        }
+                      },
+                child: initiateBusy
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Envoyer la demande'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    phoneController.dispose();
+  }
+
+  String _methodLabel(String code) {
+    const labels = {
+      'MOBILE_MONEY_ORANGE': 'Orange Money',
+      'MOBILE_MONEY_MPESA': 'M-Pesa',
+      'MOBILE_MONEY_AIRTEL': 'Airtel Money',
+    };
+    return labels[code] ?? code;
+  }
+
+  int? _parsePaymentId(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse(v.toString());
   }
 
   Future<void> _downloadReceipt(int paymentId, String paymentIdStr) async {
     try {
-      final dio = Dio();
       final api = ApiService();
-      final token = await api.getToken();
-      
-      final response = await dio.get(
-        '${api.baseUrl}/api/payments/payments/$paymentId/download_receipt/',
-        options: Options(
-          headers: {'Authorization': 'Bearer $token'},
-          responseType: ResponseType.bytes,
-        ),
+      final headers = await api.getAuthHeaders();
+      if (headers['Authorization'] == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Session expirée. Reconnectez-vous.')),
+          );
+        }
+        return;
+      }
+
+      final bytes = await api.downloadAuthenticatedBinary(
+        '/api/payments/payments/$paymentId/download_receipt/',
       );
 
       final appDir = await getApplicationDocumentsDirectory();
@@ -146,18 +372,23 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage> {
         await downloadDir.create(recursive: true);
       }
 
-      final file = File('${downloadDir.path}/receipt_$paymentIdStr.pdf');
-      await file.writeAsBytes(response.data);
+      final safe = paymentIdStr.replaceAll(RegExp(r'[^\w\-\.]'), '_');
+      final file = File('${downloadDir.path}/receipt_$safe.pdf');
+      await file.writeAsBytes(bytes);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Reçu téléchargé: ${file.path}')),
+          const SnackBar(content: Text('Reçu téléchargé')),
         );
       }
+      await OpenFilex.open(file.path);
     } catch (e) {
       if (mounted) {
+        final msg = e is Exception
+            ? e.toString().replaceFirst(RegExp(r'^Exception:\s*'), '')
+            : ApiService.parseDioError(e);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur lors du téléchargement: $e')),
+          SnackBar(content: Text('Téléchargement impossible : $msg')),
         );
       }
     }
@@ -219,10 +450,9 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage> {
           title: const Text('Paiements'),
           actions: [
             if (_isParent)
-              IconButton(
-                icon: const Icon(Icons.add),
+              TextButton(
                 onPressed: _openNewPaymentModal,
-                tooltip: 'Nouveau paiement',
+                child: const Text('Payer'),
               ),
           ],
           bottom: TabBar(
@@ -271,7 +501,7 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage> {
                             : RefreshIndicator(
                                 onRefresh: _loadPayments,
                                 child: ListView.builder(
-                                  padding: const EdgeInsets.all(16),
+                                  padding: ScrollContentPadding.page(context),
                                   itemCount: _filteredPendingPayments.length,
                                   itemBuilder: (context, index) {
                                     final payment = _filteredPendingPayments[index];
@@ -296,7 +526,11 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage> {
                                   ),
                                   trailing: ElevatedButton(
                                     onPressed: () => _processPayment(payment),
-                                    child: const Text('Payer'),
+                                    child: Text(
+                                      _statusEqual(payment['status'], 'PROCESSING')
+                                          ? 'Confirmer'
+                                          : 'Payer',
+                                    ),
                                   ),
                                 ),
                               );
@@ -309,7 +543,7 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage> {
                             : RefreshIndicator(
                                 onRefresh: _loadPayments,
                                 child: ListView.builder(
-                                  padding: const EdgeInsets.all(16),
+                                  padding: ScrollContentPadding.page(context),
                                   itemCount: _filteredPayments.length,
                                   itemBuilder: (context, index) {
                                     final payment = _filteredPayments[index];
@@ -332,24 +566,30 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage> {
                                         ),
                                     ],
                                   ),
-                                  trailing: payment['status'] == 'COMPLETED'
+                                  trailing: _statusEqual(payment['status'], 'COMPLETED')
                                       ? Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
                                             IconButton(
                                               icon: const Icon(Icons.download),
                                               onPressed: () {
+                                                final pid = _parsePaymentId(payment['id']);
+                                                if (pid == null) return;
                                                 _downloadReceipt(
-                                                  payment['id'],
-                                                  payment['payment_id']?.toString() ?? payment['id'].toString(),
+                                                  pid,
+                                                  payment['payment_id']?.toString() ??
+                                                      payment['id'].toString(),
                                                 );
                                               },
                                               tooltip: 'Télécharger le reçu',
                                             ),
                                             IconButton(
                                               icon: const Icon(Icons.receipt),
+                                              tooltip: 'Détail du reçu',
                                               onPressed: () {
-                                                context.push('/payments/${payment['id']}/receipt');
+                                                final pid = _parsePaymentId(payment['id']);
+                                                if (pid == null) return;
+                                                context.push('/payments/$pid/receipt');
                                               },
                                             ),
                                           ],

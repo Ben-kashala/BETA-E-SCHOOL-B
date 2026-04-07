@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_service.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/providers/auth_provider.dart';
 import '../../../../core/widgets/search_filter_bar.dart';
 import 'parent_tutoring_page.dart';
@@ -291,8 +292,9 @@ class _TutoringPageState extends ConsumerState<TutoringPage> {
                               child: ListTile(
                                 contentPadding: const EdgeInsets.all(16),
                                 leading: const CircleAvatar(
-                                  backgroundColor: Colors.teal,
-                                  child: Icon(Icons.school, color: Colors.white),
+                                  backgroundColor: AppTheme.avatarBackgroundColor,
+                                  foregroundColor: AppTheme.onAvatarBackgroundColor,
+                                  child: Icon(Icons.school),
                                 ),
                                 title: Text(session['title'] ?? 'Rapport'),
                                 subtitle: Column(

@@ -12,6 +12,8 @@ echo "API URL: $API_URL"
 echo ""
 
 flutter pub get
+# Après modification d'assets (ex. logo.png), si l'ancienne image reste dans l'APK : décommenter la ligne suivante
+# flutter clean
 flutter build apk --release --dart-define=API_BASE_URL="$API_URL"
 
 echo ""

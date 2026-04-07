@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_service.dart';
-import '../../../../core/widgets/search_filter_bar.dart';
 
 class TeacherClassSubjectsPage extends ConsumerStatefulWidget {
   const TeacherClassSubjectsPage({super.key, this.initialClassId});
@@ -26,6 +25,49 @@ class _TeacherClassSubjectsPageState extends ConsumerState<TeacherClassSubjectsP
     _loadData();
   }
 
+  List<dynamic> _extractList(dynamic data) {
+    if (data is List) return data;
+    if (data is Map && data['results'] is List) {
+      return data['results'] as List;
+    }
+    return [];
+  }
+
+  Future<void> _reloadSubjectsOnly() async {
+    try {
+      final subjectsRes = await ApiService().get('/api/schools/subjects/');
+      if (!mounted) return;
+      setState(() {
+        _allSubjects = _extractList(subjectsRes.data);
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Impossible de recharger la liste des matières.')),
+        );
+      }
+    }
+  }
+
+  /// Code court pour l'API (unique par école), dérivé du nom si besoin.
+  static String suggestSubjectCode(String name) {
+    var s = name.trim().toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]+'), '_');
+    s = s.replaceAll(RegExp(r'_+'), '_').replaceAll(RegExp(r'^_|_$'), '');
+    if (s.isEmpty) {
+      return 'MAT_${DateTime.now().millisecondsSinceEpoch % 100000}';
+    }
+    return s.length > 20 ? s.substring(0, 20) : s;
+  }
+
+  Future<int?> _showCreateSubjectDialog() {
+    return showDialog<int>(
+      context: context,
+      builder: (dialogContext) => _CreateSubjectDialog(
+        suggestCode: suggestSubjectCode,
+      ),
+    );
+  }
+
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
@@ -35,9 +77,7 @@ class _TeacherClassSubjectsPageState extends ConsumerState<TeacherClassSubjectsP
         ApiService().get('/api/accounts/teachers/', queryParameters: {'page_size': '200'}),
       ]);
 
-      final classes = classesRes.data is List 
-          ? classesRes.data 
-          : (classesRes.data['results'] ?? []);
+      final classes = _extractList(classesRes.data);
       
       int? classToSelect = widget.initialClassId;
       final classIds = classes.map((c) => c['id'] as int?).toSet();
@@ -46,12 +86,8 @@ class _TeacherClassSubjectsPageState extends ConsumerState<TeacherClassSubjectsP
       }
       setState(() {
         _classes = classes;
-        _allSubjects = subjectsRes.data is List 
-            ? subjectsRes.data 
-            : (subjectsRes.data['results'] ?? []);
-        _teachers = teachersRes.data is List 
-            ? teachersRes.data 
-            : (teachersRes.data['results'] ?? []);
+        _allSubjects = _extractList(subjectsRes.data);
+        _teachers = _extractList(teachersRes.data);
         _selectedClassId = classToSelect;
         _isLoading = false;
       });
@@ -120,6 +156,38 @@ class _TeacherClassSubjectsPageState extends ConsumerState<TeacherClassSubjectsP
     }
   }
 
+  /// L'API peut renvoyer `subject` / `teacher` comme ID (int) ou comme objet.
+  static int? _asIntId(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    if (v is Map) {
+      final id = v['id'];
+      if (id is int) return id;
+      if (id is num) return id.toInt();
+      return int.tryParse('$id');
+    }
+    return int.tryParse('$v');
+  }
+
+  String _subjectLabel(dynamic subjectField) {
+    if (subjectField is Map) {
+      return '${subjectField['name'] ?? 'Matière'}';
+    }
+    final id = _asIntId(subjectField);
+    if (id != null) {
+      for (final s in _allSubjects) {
+        if (s is Map && _asIntId(s['id']) == id) {
+          return '${s['name'] ?? 'Matière'}';
+        }
+      }
+      return 'Matière #$id';
+    }
+    return 'Matière';
+  }
+
+  int? _teacherIdField(dynamic teacherField) => _asIntId(teacherField);
+
   Future<void> _deleteSubject(int id) async {
     try {
       await ApiService().delete('/api/schools/class-subjects/$id/');
@@ -148,12 +216,18 @@ class _TeacherClassSubjectsPageState extends ConsumerState<TeacherClassSubjectsP
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 DropdownButtonFormField<int>(
+                  key: ValueKey(_allSubjects.length),
                   decoration: const InputDecoration(labelText: 'Matière *'),
                   items: _allSubjects.where((s) {
-                    final assignedIds = _classSubjects.map((cs) => cs['subject']).toSet();
-                    return !assignedIds.contains(s['id']);
+                    final sid = _asIntId(s['id']);
+                    final assignedIds = _classSubjects
+                        .map((cs) => _asIntId(cs['subject']))
+                        .whereType<int>()
+                        .toSet();
+                    return sid != null && !assignedIds.contains(sid);
                   }).map((s) {
                     return DropdownMenuItem<int>(
                       value: s['id'] as int,
@@ -161,6 +235,28 @@ class _TeacherClassSubjectsPageState extends ConsumerState<TeacherClassSubjectsP
                     );
                   }).toList(),
                   onChanged: (value) => setDialogState(() => selectedSubjectId = value),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.add, size: 20),
+                  label: const Text('Créer une matière'),
+                  onPressed: () async {
+                    final newId = await _showCreateSubjectDialog();
+                    if (!context.mounted) return;
+                    if (newId != null) {
+                      await _reloadSubjectsOnly();
+                      setDialogState(() => selectedSubjectId = newId);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Matière créée. Sélectionnez « Ajouter » pour l\'associer à la classe.',
+                            ),
+                          ),
+                        );
+                      }
+                    }
+                  },
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<int>(
@@ -272,13 +368,10 @@ class _TeacherClassSubjectsPageState extends ConsumerState<TeacherClassSubjectsP
                       itemCount: _classSubjects.length,
                       itemBuilder: (context, index) {
                         final cs = _classSubjects[index];
-                        final subject = cs['subject'] ?? {};
-                        final teacher = cs['teacher'] ?? {};
-                        
                         return Card(
                           margin: const EdgeInsets.only(bottom: 8),
                           child: ExpansionTile(
-                            title: Text(subject['name'] ?? 'Matière'),
+                            title: Text(_subjectLabel(cs['subject'])),
                             subtitle: Text('Note max: ${cs['period_max'] ?? 20}'),
                             children: [
                               Padding(
@@ -308,7 +401,7 @@ class _TeacherClassSubjectsPageState extends ConsumerState<TeacherClassSubjectsP
                                       children: [
                                         const Text('Enseignant:'),
                                         DropdownButton<int?>(
-                                          value: cs['teacher'] != null ? cs['teacher'] : null,
+                                          value: _teacherIdField(cs['teacher']),
                                           items: [
                                             const DropdownMenuItem(value: null, child: Text('Aucun')),
                                             ..._teachers.map((t) {
@@ -348,6 +441,163 @@ class _TeacherClassSubjectsPageState extends ConsumerState<TeacherClassSubjectsP
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CreateSubjectDialog extends StatefulWidget {
+  const _CreateSubjectDialog({required this.suggestCode});
+
+  final String Function(String name) suggestCode;
+
+  @override
+  State<_CreateSubjectDialog> createState() => _CreateSubjectDialogState();
+}
+
+class _CreateSubjectDialogState extends State<_CreateSubjectDialog> {
+  final _nameCtrl = TextEditingController();
+  final _codeCtrl = TextEditingController();
+  final _descCtrl = TextEditingController();
+  int _periodMax = 20;
+  bool _submitting = false;
+  String? _errorText;
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _codeCtrl.dispose();
+    _descCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    setState(() => _errorText = null);
+    final name = _nameCtrl.text.trim();
+    var code = _codeCtrl.text.trim();
+    if (name.isEmpty) {
+      setState(() => _errorText = 'Le nom de la matière est obligatoire.');
+      return;
+    }
+    if (code.isEmpty) {
+      code = widget.suggestCode(name);
+      _codeCtrl.text = code;
+    }
+
+    setState(() => _submitting = true);
+    try {
+      final res = await ApiService().post(
+        '/api/schools/subjects/',
+        data: {
+          'name': name,
+          'code': code,
+          'description': _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
+          'period_max': _periodMax,
+          'is_active': true,
+        },
+      );
+      if (!mounted) return;
+      final rawId = res.data is Map ? res.data['id'] : null;
+      final id = rawId is int ? rawId : int.tryParse('$rawId');
+      Navigator.pop(context, id);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      setState(() => _errorText = 'Création impossible : ${e.toString()}');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Créer une matière'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _nameCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Nom de la matière *',
+                hintText: 'ex. Physique',
+              ),
+              textCapitalization: TextCapitalization.sentences,
+              onChanged: (_) {
+                if (_codeCtrl.text.isEmpty) {
+                  setState(() {});
+                }
+              },
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _codeCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Code *',
+                hintText: 'ex. PHYS (unique dans l\'école)',
+              ),
+              textCapitalization: TextCapitalization.characters,
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: () {
+                  _codeCtrl.text = widget.suggestCode(_nameCtrl.text);
+                  setState(() {});
+                },
+                child: const Text('Générer le code à partir du nom'),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _descCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Description (optionnel)',
+              ),
+              maxLines: 2,
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int>(
+              decoration: const InputDecoration(
+                labelText: 'Note max par période',
+              ),
+              initialValue: _periodMax,
+              items: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+                  .map((v) => DropdownMenuItem(value: v, child: Text('$v')))
+                  .toList(),
+              onChanged: _submitting
+                  ? null
+                  : (v) => setState(() => _periodMax = v ?? 20),
+            ),
+            if (_errorText != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _errorText!,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                  fontSize: 12.5,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _submitting ? null : () => Navigator.pop(context),
+          child: const Text('Annuler'),
+        ),
+        FilledButton(
+          onPressed: _submitting ? null : _submit,
+          child: _submitting
+              ? const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Créer'),
+        ),
+      ],
     );
   }
 }

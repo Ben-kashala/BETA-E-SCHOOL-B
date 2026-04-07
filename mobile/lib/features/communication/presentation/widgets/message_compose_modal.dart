@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/network/api_service.dart';
+import '../../../../core/providers/auth_provider.dart';
 
 class MessageComposeModal extends ConsumerStatefulWidget {
   final String? initialSubject;
@@ -48,15 +49,33 @@ class _MessageComposeModalState extends ConsumerState<MessageComposeModal> {
   Future<void> _loadRecipients() async {
     setState(() => _loadingRecipients = true);
     try {
-      // Charger les utilisateurs disponibles (enseignants, admins, etc.)
+      final currentUser = ref.read(authProvider).user;
+      final isAdminOrPromoter =
+          currentUser?.role == 'ADMIN' || currentUser?.role == 'PROMOTER';
+
+      // Aligner la logique mobile sur le web :
+      // ADMIN/PROMOTER => tous les utilisateurs actifs de l'école ;
+      // autres rôles => personnel de l'école.
       final response = await ApiService().get(
-        '/api/auth/users/school-staff/',
+        isAdminOrPromoter
+            ? '/api/auth/users/'
+            : '/api/auth/users/school-staff/',
+        queryParameters: isAdminOrPromoter
+            ? {'is_active': true, 'page_size': 500}
+            : null,
         useCache: false,
       );
+      final data = response.data;
+      final recipients = data is List
+          ? data
+          : (data is Map && data['results'] is List ? data['results'] : []);
+
+      final currentUserId = currentUser?.id;
       setState(() {
-        _recipients = response.data is List
-            ? response.data
-            : (response.data['results'] ?? []);
+        _recipients = recipients
+            .whereType<dynamic>()
+            .where((u) => currentUserId == null || u['id'] != currentUserId)
+            .toList();
         _loadingRecipients = false;
       });
     } catch (e) {

@@ -507,7 +507,7 @@ class AttendanceViewSet(viewsets.ModelViewSet):
             'late': late,
             'attendance_rate': round(attendance_rate, 2)
         })
-    
+
     @action(detail=False, methods=['get'], url_path='attendance_summary')
     def attendance_summary(self, request):
         """

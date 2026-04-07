@@ -41,6 +41,20 @@ class _TeacherStudentsPageState extends ConsumerState<TeacherStudentsPage> {
     }
   }
 
+  String _studentClassLabel(dynamic student) {
+    if (student is! Map) return '';
+    final direct = student['class_name'];
+    if (direct != null && '$direct'.trim().isNotEmpty) return '$direct';
+    final sc = student['school_class'];
+    if (sc is Map) {
+      final n = sc['name'];
+      if (n != null && '$n'.trim().isNotEmpty) return '$n';
+    }
+    if (sc is int) return 'Classe #$sc';
+    if (sc is num) return 'Classe #${sc.toInt()}';
+    return '';
+  }
+
   void _applyFilters() {
     setState(() {
       _filteredStudents = _students.where((student) {
@@ -89,12 +103,14 @@ class _TeacherStudentsPageState extends ConsumerState<TeacherStudentsPage> {
                             final firstName = user['first_name'] ?? '';
                             final lastName = user['last_name'] ?? '';
                             final studentId = student['student_id'] ?? '';
-                            final className = student['class_name'] ?? student['school_class']?['name'] ?? '';
+                            final className = _studentClassLabel(student);
                             
                             return Card(
                               margin: const EdgeInsets.only(bottom: 8),
                               child: ListTile(
                                 leading: CircleAvatar(
+                                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                                  foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
                                   child: Text(
                                     firstName.isNotEmpty ? firstName[0].toUpperCase() : '?',
                                   ),

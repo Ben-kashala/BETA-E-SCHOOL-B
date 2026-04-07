@@ -26,8 +26,12 @@ class HiveService {
     final data = _cacheBox.get(key);
     if (data == null) return null;
     
-    final timestamp = data['timestamp'] as int;
-    final expiration = data['expiration'] as int?;
+    final ts = data['timestamp'];
+    final timestamp = ts is int ? ts : (ts is num ? ts.toInt() : int.tryParse('$ts') ?? 0);
+    final expRaw = data['expiration'];
+    final int? expiration = expRaw == null
+        ? null
+        : (expRaw is int ? expRaw : (expRaw is num ? expRaw.toInt() : int.tryParse('$expRaw')));
     
     if (expiration != null) {
       final now = DateTime.now().millisecondsSinceEpoch;
@@ -37,7 +41,11 @@ class HiveService {
       }
     }
     
-    return data['value'] as T?;
+    final val = data['value'];
+    if (val == null) return null;
+    // Évite les cast invalides (ex. double stocké alors que T=bool) qui crashent au scroll/rebuild.
+    if (val is T) return val as T;
+    return null;
   }
   
   static Future<void> clearCache() async {
@@ -54,7 +62,10 @@ class HiveService {
   }
   
   static T? getSetting<T>(String key, {T? defaultValue}) {
-    return _settingsBox.get(key, defaultValue: defaultValue) as T?;
+    final v = _settingsBox.get(key, defaultValue: defaultValue);
+    if (v == null) return null;
+    if (v is T) return v as T;
+    return defaultValue;
   }
   
   static Future<void> clearSettings() async {
@@ -69,9 +80,12 @@ class HiveService {
     for (final key in keys) {
       final data = _cacheBox.get(key);
       if (data != null) {
-        final timestamp = data['timestamp'] as int;
-        final expiration = data['expiration'] as int?;
-        
+        final ts = data['timestamp'];
+        final timestamp = ts is int ? ts : (ts is num ? ts.toInt() : int.tryParse('$ts') ?? 0);
+        final expRaw = data['expiration'];
+        final int? expiration = expRaw == null
+            ? null
+            : (expRaw is int ? expRaw : (expRaw is num ? expRaw.toInt() : int.tryParse('$expRaw')));
         if (expiration != null && now - timestamp > expiration) {
           await _cacheBox.delete(key);
         }

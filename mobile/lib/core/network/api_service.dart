@@ -1,8 +1,44 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../config/app_config.dart';
 import 'connectivity_service.dart';
 import '../database/hive_service.dart';
+
+/// Message lisible depuis une erreur Dio (JSON, corps binaire, etc.).
+/// Fonction top-level pour un usage fiable depuis tout import de ce fichier.
+String dioErrorMessage(Object e) {
+  if (e is DioException) {
+    final d = e.response?.data;
+    if (d is Map) {
+      final err = d['error'] ?? d['detail'];
+      if (err != null) return err.toString();
+    }
+    if (d is List<int>) {
+      try {
+        final m = jsonDecode(utf8.decode(d));
+        if (m is Map && (m['error'] != null || m['detail'] != null)) {
+          return (m['error'] ?? m['detail']).toString();
+        }
+      } catch (_) {}
+    }
+    if (d is String && d.isNotEmpty) {
+      try {
+        final m = jsonDecode(d);
+        if (m is Map && m['error'] != null) return m['error'].toString();
+      } catch (_) {}
+    }
+    final msg = e.message ?? 'Erreur réseau';
+    if (msg.contains('validateStatus')) {
+      final c = e.response?.statusCode;
+      return 'Erreur serveur${c != null ? ' ($c)' : ''}. Réessayez ou contactez l’école.';
+    }
+    return msg;
+  }
+  return e.toString();
+}
 
 class ApiService {
   static final ApiService _instance = ApiService._internal();
@@ -15,6 +51,81 @@ class ApiService {
   String get baseUrl => _dio.options.baseUrl;
 
   Future<String?> getToken() async => _storage.read(key: 'access_token');
+
+  /// En-têtes pour requêtes Dio « brutes » (PDF, etc.) qui ne passent pas par [_dio].
+  Future<Map<String, String>> getAuthHeaders() async {
+    final token = await _storage.read(key: 'access_token');
+    final schoolCode = await _storage.read(key: 'school_code');
+    return {
+      if (token != null) 'Authorization': 'Bearer $token',
+      if (schoolCode != null) 'X-School-Code': schoolCode,
+    };
+  }
+
+  /// Alias de [dioErrorMessage] pour compatibilité avec l’existant.
+  static String parseDioError(Object e) => dioErrorMessage(e);
+
+  static bool _looksLikePdf(List<int> data) =>
+      data.length >= 5 &&
+      data[0] == 0x25 &&
+      data[1] == 0x50 &&
+      data[2] == 0x44 &&
+      data[3] == 0x46 &&
+      data[4] == 0x2d;
+
+  static String? _messageFromResponseBytes(List<int> data) {
+    if (data.isEmpty) return null;
+    try {
+      final m = jsonDecode(utf8.decode(data));
+      if (m is Map) {
+        final o = m['error'] ?? m['detail'] ?? m['message'];
+        if (o != null) return o.toString();
+      }
+    } catch (_) {}
+    final s = utf8.decode(data, allowMalformed: true).trim();
+    if (s.length < 600 && !s.toLowerCase().contains('<!doctype')) {
+      return s;
+    }
+    return null;
+  }
+
+  /// GET binaire authentifié sans lever [DioException] sur HTTP 4xx/5xx (lecture du corps d’erreur).
+  Future<Uint8List> downloadAuthenticatedBinary(String path) async {
+    assert(path.startsWith('/'), 'path doit commencer par /');
+    final headers = await getAuthHeaders();
+    final root = _dio.options.baseUrl.replaceAll(RegExp(r'/$'), '');
+    final url = '$root$path';
+    final dio = Dio(
+      BaseOptions(
+        validateStatus: (_) => true,
+        connectTimeout: AppConfig.apiTimeout,
+        receiveTimeout: AppConfig.apiTimeout,
+      ),
+    );
+    final res = await dio.get<List<int>>(
+      url,
+      options: Options(
+        headers: {
+          ...headers,
+          'Accept': 'application/pdf, application/json;q=0.9, */*;q=0.8',
+        },
+        responseType: ResponseType.bytes,
+      ),
+    );
+    final code = res.statusCode ?? 0;
+    final data = res.data;
+    if (code >= 200 && code < 300 && data != null && data.isNotEmpty) {
+      if (_looksLikePdf(data)) {
+        return Uint8List.fromList(data);
+      }
+      final err = _messageFromResponseBytes(data);
+      throw Exception(err ?? 'Le serveur n’a pas renvoyé un PDF valide');
+    }
+    final err = (data != null && data.isNotEmpty)
+        ? (_messageFromResponseBytes(data) ?? 'Erreur serveur ($code)')
+        : 'Erreur serveur ($code)';
+    throw Exception(err);
+  }
 
   /// Clé de cache isolée par établissement pour éviter de mélanger les données entre écoles.
   Future<String> _cacheKey(String path, Map<String, dynamic>? queryParameters) async {

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/network/api_service.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/search_filter_bar.dart';
 
 class ExamsPage extends ConsumerStatefulWidget {
@@ -96,8 +97,9 @@ class _ExamsPageState extends ConsumerState<ExamsPage> {
                         child: ListTile(
                           contentPadding: const EdgeInsets.all(16),
                           leading: const CircleAvatar(
-                            backgroundColor: Colors.red,
-                            child: Icon(Icons.quiz, color: Colors.white),
+                            backgroundColor: AppTheme.avatarBackgroundColor,
+                            foregroundColor: AppTheme.onAvatarBackgroundColor,
+                            child: Icon(Icons.quiz),
                           ),
                           title: Text(exam['title'] ?? 'Sans titre'),
                           subtitle: Column(

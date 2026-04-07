@@ -191,6 +191,8 @@ class _AssignmentDetailPageState extends ConsumerState<AssignmentDetailPage> {
                   margin: const EdgeInsets.symmetric(vertical: 4),
                   child: ListTile(
                     leading: CircleAvatar(
+                      backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                      foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
                       child: Text('${index + 1}'),
                     ),
                     title: Text(question['question_text'] ?? 'Question'),

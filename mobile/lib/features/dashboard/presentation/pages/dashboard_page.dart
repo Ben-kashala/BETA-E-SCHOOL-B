@@ -3,7 +3,9 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/providers/auth_provider.dart';
 import '../../../../core/network/api_service.dart';
-import '../../../parent/presentation/widgets/progress_charts_widget.dart';
+import '../../../../core/layout/scroll_content_padding.dart';
+import '../../../../core/theme/app_theme.dart';
+import '../../../auth/domain/models/user_model.dart';
 
 class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({super.key});
@@ -14,13 +16,45 @@ class DashboardPage extends ConsumerStatefulWidget {
 
 class _DashboardPageState extends ConsumerState<DashboardPage> {
   List<dynamic> _childrenDashboard = [];
-  Map<int, Map<String, dynamic>> _childrenDetails = {};
   bool _childrenLoading = true;
 
   @override
   void initState() {
     super.initState();
     _loadChildrenIfParent();
+    // Après remplacement de assets/images/logo.png, évince le cache image (sinon ancienne image jusqu’à redémarrage).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      imageCache.evict(AssetImage('assets/images/logo.png'));
+    });
+  }
+
+  static int? _parseStudentId(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return num.tryParse(v.toString())?.toInt();
+  }
+
+  /// Texte lisible sur cartes (clair ou sombre) alors que le thème global est adapté au fond primaryColor.
+  static Widget _cardForegroundTheme(BuildContext context, {required Widget child}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Theme(
+      data: Theme.of(context).copyWith(
+        textTheme: Theme.of(context).textTheme.apply(
+          bodyColor: isDark ? Colors.white : AppTheme.textPrimary,
+          displayColor: isDark ? Colors.white : AppTheme.textPrimary,
+        ),
+      ),
+      child: child,
+    );
+  }
+
+  static String _schoolDisplayName(UserModel? user) {
+    final n = user?.schoolName?.trim();
+    if (n != null && n.isNotEmpty) return n;
+    final c = user?.schoolCode?.trim();
+    if (c != null && c.isNotEmpty) return c;
+    return 'E-School';
   }
 
   Future<void> _loadChildrenIfParent() async {
@@ -40,39 +74,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               ? data['results'] as List
               : <dynamic>[]);
 
-      // Charger les détails pour chaque enfant (notes, présences)
-      final detailsMap = <int, Map<String, dynamic>>{};
-      for (var item in list) {
-        final identity = item is Map
-            ? (item['identity'] as Map?) ?? item
-            : <String, dynamic>{};
-        final studentId = identity['id'];
-        if (studentId != null) {
-          try {
-            // Charger les notes
-            final gradesResponse = await api.get(
-              '/api/academics/grades/',
-              queryParameters: {'student': studentId.toString()},
-            );
-            final grades = gradesResponse.data is List
-                ? gradesResponse.data
-                : (gradesResponse.data['results'] ?? []);
-
-            detailsMap[studentId] = {
-              'grades': grades,
-              'attendance_by_week': item['attendance_by_week'] ?? [],
-              'average_score': item['average_score'],
-            };
-          } catch (e) {
-            // Ignore errors for individual children
-          }
-        }
-      }
-
       if (mounted) {
         setState(() {
           _childrenDashboard = List<dynamic>.from(list);
-          _childrenDetails = detailsMap;
           _childrenLoading = false;
         });
       }
@@ -99,7 +103,44 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Tableau de bord'),
+        automaticallyImplyLeading: false,
+        titleSpacing: 0,
+        toolbarHeight: 52,
+        title: Stack(
+          alignment: Alignment.center,
+          clipBehavior: Clip.none,
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Image.asset(
+                'assets/images/logo.png',
+                height: 100,
+                width: 95,
+                fit: BoxFit.contain,
+                gaplessPlayback: true,
+                errorBuilder: (context, error, stackTrace) => Icon(
+                  Icons.school_outlined,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: 60,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 68),
+              child: Text(
+                _schoolDisplayName(user),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications_outlined),
@@ -120,54 +161,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
+          padding: ScrollContentPadding.page(context, trailing: 28),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Bienvenue
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Bonjour,',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        user?.fullName ??
-                            (isStudent
-                                ? 'Élève'
-                                : isParent
-                                    ? 'Parent'
-                                    : isTeacher
-                                        ? 'Enseignant'
-                                        : isAdmin
-                                            ? 'Administrateur'
-                                            : isAccountant
-                                                ? 'Comptable'
-                                                : isDisciplineOfficer
-                                                    ? 'Chargé de discipline'
-                                                    : isPromoter
-                                                        ? 'Promoteur'
-                                                        : 'Utilisateur'),
-                        style: Theme.of(context).textTheme.headlineMedium,
-                      ),
-                      if (isStudent && user?.studentId != null) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          'Matricule: ${user!.studentId}',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-
               // Contenu selon le rôle
               if (isStudent) ...[
                 // Dashboard Élève
@@ -222,7 +219,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     ),
                     _DashboardCard(
                       icon: Icons.message,
-                      title: 'Communication',
+                      title: 'Envoyer un message',
                       color: Colors.teal,
                       onTap: () => context.push('/communication'),
                     ),
@@ -241,14 +238,19 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   const Center(
                       child: Padding(
                           padding: EdgeInsets.all(24),
-                          child: CircularProgressIndicator()))
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                          )))
                 else if (_childrenDashboard.isEmpty)
                   Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(
-                        'Aucun enfant inscrit',
-                        style: Theme.of(context).textTheme.bodyMedium,
+                    child: _cardForegroundTheme(
+                      context,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(
+                          'Aucun enfant inscrit',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
                       ),
                     ),
                   )
@@ -265,20 +267,20 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     final className = identity['class_name'] as String? ??
                         identity['school_class_academic_year'] as String? ??
                         '';
-                    final studentId = identity['id'];
-                    final details =
-                        studentId != null ? _childrenDetails[studentId] : null;
+                    final studentId = _parseStudentId(identity['id']);
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 20),
                       clipBehavior: Clip.antiAlias,
-                      child: Column(
+                      child: _cardForegroundTheme(
+                        context,
+                        child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           InkWell(
                             onTap: () {
                               if (studentId != null) {
-                                context.push('/students/$studentId');
+                                context.push('/students/${studentId.toString()}');
                               }
                             },
                             child: Padding(
@@ -330,20 +332,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                               ),
                             ),
                           ),
-                          // Graphiques de progression
-                          if (details != null)
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                              child: ProgressChartsWidget(
-                                attendanceData: List<Map<String, dynamic>>.from(
-                                    details['attendance_by_week'] ?? []),
-                                gradesData: List<Map<String, dynamic>>.from(
-                                    details['grades'] ?? []),
-                                averageScore:
-                                    details['average_score']?.toDouble(),
-                              ),
-                            ),
                         ],
+                      ),
                       ),
                     );
                   })),
@@ -369,14 +359,20 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                       onTap: () => context.push('/grades'),
                     ),
                     _DashboardCard(
+                      icon: Icons.how_to_reg,
+                      title: 'Présences',
+                      color: Colors.green,
+                      onTap: () => context.push('/presences'),
+                    ),
+                    _DashboardCard(
                       icon: Icons.event,
                       title: 'Réunions',
-                      color: Colors.green,
+                      color: Colors.deepOrange,
                       onTap: () => context.push('/meetings'),
                     ),
                     _DashboardCard(
                       icon: Icons.payment,
-                      title: 'Paiements',
+                      title: 'Payer',
                       color: Colors.purple,
                       onTap: () => context.push('/payments'),
                     ),
@@ -400,7 +396,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     ),
                     _DashboardCard(
                       icon: Icons.message,
-                      title: 'Communication',
+                      title: 'Envoyer un message',
                       color: Colors.cyan,
                       onTap: () => context.push('/communication'),
                     ),
@@ -428,10 +424,28 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   childAspectRatio: 1.05,
                   children: [
                     _DashboardCard(
+                      icon: Icons.groups_2,
+                      title: 'Ma classe (Titulariat)',
+                      color: Colors.indigo,
+                      onTap: () => context.push('/teacher/my-class'),
+                    ),
+                    _DashboardCard(
                       icon: Icons.class_,
-                      title: 'Mes Classes',
+                      title: 'Classes',
                       color: Colors.blue,
                       onTap: () => context.push('/teacher/classes'),
+                    ),
+                    _DashboardCard(
+                      icon: Icons.menu_book,
+                      title: 'Matières par classe',
+                      color: Colors.deepPurple,
+                      onTap: () => context.push('/teacher/class-subjects'),
+                    ),
+                    _DashboardCard(
+                      icon: Icons.people,
+                      title: 'Élèves',
+                      color: Colors.green,
+                      onTap: () => context.push('/teacher/students'),
                     ),
                     _DashboardCard(
                       icon: Icons.assignment,
@@ -489,7 +503,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     ),
                     _DashboardCard(
                       icon: Icons.message,
-                      title: 'Communication',
+                      title: 'Envoyer un message',
                       color: Colors.cyan,
                       onTap: () => context.push('/teacher/communication'),
                     ),
@@ -542,7 +556,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     ),
                     _DashboardCard(
                       icon: Icons.payment,
-                      title: 'Paiements',
+                      title: 'Payer',
                       color: Colors.teal,
                       onTap: () => context.push('/admin/payments'),
                     ),
@@ -560,7 +574,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     ),
                     _DashboardCard(
                       icon: Icons.message,
-                      title: 'Communication',
+                      title: 'Envoyer un message',
                       color: Colors.cyan,
                       onTap: () => context.push('/admin/communication'),
                     ),
@@ -625,7 +639,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     ),
                     _DashboardCard(
                       icon: Icons.payment,
-                      title: 'Paiements',
+                      title: 'Payer',
                       color: Colors.green,
                       onTap: () => context.push('/accountant/payments'),
                     ),
@@ -673,7 +687,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     ),
                     _DashboardCard(
                       icon: Icons.message,
-                      title: 'Communication',
+                      title: 'Envoyer un message',
                       color: Colors.cyan,
                       onTap: () =>
                           context.push('/discipline-officer/communication'),
@@ -714,16 +728,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           ),
         ),
       ),
-      bottomNavigationBar: _wrapBottomNavSafe(
-          context,
-          _buildBottomNavigationBar(context, isStudent, isParent, isTeacher,
-              isAdmin, isAccountant, isDisciplineOfficer, isPromoter)),
+      bottomNavigationBar: _buildBottomNavigationBar(context, isStudent, isParent,
+          isTeacher, isAdmin, isAccountant, isDisciplineOfficer, isPromoter),
     );
-  }
-
-  Widget? _wrapBottomNavSafe(BuildContext context, Widget? child) {
-    if (child == null) return null;
-    return SafeArea(child: child);
   }
 
   Widget? _buildBottomNavigationBar(
@@ -774,7 +781,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               context.push('/grades');
               break;
             case 2:
-              context.push('/meetings');
+              context.push('/presences');
               break;
             case 3:
               context.push('/payments');
@@ -784,7 +791,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home), label: 'Accueil'),
           NavigationDestination(icon: Icon(Icons.grade), label: 'Notes'),
-          NavigationDestination(icon: Icon(Icons.event), label: 'Réunions'),
+          NavigationDestination(
+              icon: Icon(Icons.how_to_reg), label: 'Présences'),
           NavigationDestination(icon: Icon(Icons.payment), label: 'Paiements'),
         ],
       );
@@ -800,9 +808,12 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               context.push('/teacher/classes');
               break;
             case 2:
-              context.push('/teacher/assignments');
+              context.push('/teacher/students');
               break;
             case 3:
+              context.push('/teacher/assignments');
+              break;
+            case 4:
               context.push('/teacher/grades');
               break;
           }
@@ -810,6 +821,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home), label: 'Accueil'),
           NavigationDestination(icon: Icon(Icons.class_), label: 'Classes'),
+          NavigationDestination(icon: Icon(Icons.people), label: 'Élèves'),
           NavigationDestination(icon: Icon(Icons.assignment), label: 'Devoirs'),
           NavigationDestination(icon: Icon(Icons.grade), label: 'Notes'),
         ],
@@ -951,7 +963,11 @@ class _DashboardCard extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 title,
-                style: Theme.of(context).textTheme.titleSmall,
+                style: Theme.of(context).brightness == Brightness.dark
+                    ? Theme.of(context).textTheme.titleSmall
+                    : Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: AppTheme.textPrimary,
+                        ),
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,

@@ -17,6 +17,7 @@ import '../../features/library/presentation/pages/book_reader_page.dart';
 import '../../features/grades/presentation/pages/grades_page.dart';
 import '../../features/enrollment/presentation/pages/enrollment_page.dart';
 import '../../features/meetings/presentation/pages/meetings_page.dart';
+import '../../features/parent/presentation/pages/parent_presence_page.dart';
 import '../../features/payments/presentation/pages/payments_page.dart';
 import '../../features/payments/presentation/pages/payment_receipt_page.dart';
 import '../../features/tutoring/presentation/pages/tutoring_page.dart';
@@ -32,6 +33,7 @@ import '../../features/teacher/presentation/pages/teacher_grades_page.dart';
 import '../../features/teacher/presentation/pages/teacher_quizzes_page.dart';
 import '../../features/teacher/presentation/pages/teacher_quiz_detail_page.dart';
 import '../../features/teacher/presentation/pages/teacher_courses_page.dart';
+import '../../features/teacher/presentation/pages/teacher_course_form_page.dart';
 import '../../features/teacher/presentation/pages/teacher_quiz_create_page.dart';
 import '../../features/teacher/presentation/pages/teacher_my_class_page.dart';
 import '../../features/teacher/presentation/pages/teacher_class_subjects_page.dart';
@@ -105,8 +107,23 @@ final routerProvider = Provider<GoRouter>((ref) {
             return '/dashboard';
           }
         }
-        // Enseignant : accès uniquement aux routes teacher
+        // Enseignant : parcours dédié /teacher/* (évite notes, biblio, etc. « parent/élève »)
         if (userRole == 'TEACHER') {
+          if (path.startsWith('/grades')) {
+            return '/teacher/grades';
+          }
+          if (path.startsWith('/library')) {
+            return '/teacher/library${path.substring('/library'.length)}';
+          }
+          if (path.startsWith('/communication')) {
+            return '/teacher/communication';
+          }
+          if (path.startsWith('/discipline')) {
+            return '/teacher/discipline';
+          }
+          if (path.startsWith('/presences')) {
+            return '/teacher/attendance';
+          }
           if (path.startsWith('/courses') ||
               path.startsWith('/assignments') ||
               path.startsWith('/exams') ||
@@ -173,7 +190,16 @@ final routerProvider = Provider<GoRouter>((ref) {
             return '/dashboard';
           }
         }
-        // Discipline et Communication : accessibles Parent et Élève (aligné web)
+        // Présences parent : réservé aux parents ; enseignant → feuille de présence
+        if (path.startsWith('/presences')) {
+          if (userRole == 'PARENT') {
+            return null;
+          }
+          if (userRole == 'TEACHER') {
+            return '/teacher/attendance';
+          }
+          return '/dashboard';
+        }
       }
 
       return null;
@@ -252,6 +278,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const MeetingsPage(),
       ),
       GoRoute(
+        path: '/presences',
+        builder: (context, state) => const ParentPresencePage(),
+      ),
+      GoRoute(
         path: '/payments',
         builder: (context, state) => const PaymentsPage(),
         routes: [
@@ -315,8 +345,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/students/:id',
         builder: (context, state) {
-          final id = state.pathParameters['id']!;
-          return StudentDetailPage(studentId: int.parse(id));
+          final id = state.pathParameters['id'] ?? '';
+          final sid = int.tryParse(id) ?? num.tryParse(id)?.toInt();
+          if (sid == null) {
+            return Scaffold(
+              appBar: AppBar(title: const Text('Erreur')),
+              body: const Center(child: Text('Identifiant élève invalide')),
+            );
+          }
+          return StudentDetailPage(studentId: sid);
         },
       ),
       // Routes pour les enseignants
@@ -365,6 +402,34 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/teacher/courses',
         builder: (context, state) => const TeacherCoursesPage(),
+        routes: [
+          GoRoute(
+            path: 'create',
+            builder: (context, state) => const TeacherCourseFormPage(),
+          ),
+          GoRoute(
+            path: ':id',
+            builder: (context, state) {
+              final id = int.tryParse(state.pathParameters['id'] ?? '');
+              if (id == null) {
+                return const TeacherCoursesPage();
+              }
+              return CourseDetailPage(courseId: id);
+            },
+            routes: [
+              GoRoute(
+                path: 'edit',
+                builder: (context, state) {
+                  final id = int.tryParse(state.pathParameters['id'] ?? '');
+                  if (id == null) {
+                    return const TeacherCoursesPage();
+                  }
+                  return TeacherCourseFormPage(courseId: id);
+                },
+              ),
+            ],
+          ),
+        ],
       ),
       GoRoute(
         path: '/teacher/grades',
@@ -377,7 +442,16 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/teacher/my-class',
-        builder: (context, state) => const TeacherMyClassPage(),
+        builder: (context, state) {
+          final extra = state.extra;
+          int? initialId;
+          if (extra is int) {
+            initialId = extra;
+          } else if (extra is num) {
+            initialId = extra.toInt();
+          }
+          return TeacherMyClassPage(initialClassId: initialId);
+        },
       ),
       GoRoute(
         path: '/teacher/class-subjects',
@@ -396,8 +470,25 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/teacher/library',
-        builder: (context, state) =>
-            const LibraryPage(), // Réutiliser LibraryPage
+        builder: (context, state) => const LibraryPage(),
+        routes: [
+          GoRoute(
+            path: ':id',
+            builder: (context, state) {
+              final id = state.pathParameters['id']!;
+              return BookDetailPage(bookId: int.parse(id));
+            },
+            routes: [
+              GoRoute(
+                path: 'read',
+                builder: (context, state) {
+                  final bookId = int.parse(state.pathParameters['id']!);
+                  return BookReaderPage(bookId: bookId);
+                },
+              ),
+            ],
+          ),
+        ],
       ),
       GoRoute(
         path: '/teacher/meetings',

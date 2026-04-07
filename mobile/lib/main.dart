@@ -140,9 +140,19 @@ class ESchoolApp extends ConsumerWidget {
       themeMode: ThemeMode.system,
       routerConfig: router,
       builder: (context, child) {
+        final mq = MediaQuery.of(context);
+        // Edge-to-edge : sans marge, le contenu passe sous la barre de navigation système.
         return MediaQuery(
-          data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
-          child: child!,
+          data: mq.copyWith(textScaleFactor: 1.0),
+          child: SafeArea(
+            top: false,
+            bottom: true,
+            left: false,
+            right: false,
+            minimum: const EdgeInsets.only(bottom: 12),
+            maintainBottomViewPadding: false,
+            child: child ?? const SizedBox.shrink(),
+          ),
         );
       },
     );

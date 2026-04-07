@@ -2,7 +2,9 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/layout/scroll_content_padding.dart';
 import '../../../../core/providers/auth_provider.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/network/api_service.dart';
 
 void _showChangePasswordDialog(BuildContext context) {
@@ -226,15 +228,20 @@ class ProfilePage extends ConsumerWidget {
         title: const Text('Profil'),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: ScrollContentPadding.page(context),
         child: Column(
           children: [
             CircleAvatar(
               radius: 50,
-              backgroundColor: Theme.of(context).colorScheme.primary,
+              backgroundColor: AppTheme.avatarBackgroundColor,
+              foregroundColor: AppTheme.onAvatarBackgroundColor,
               child: Text(
                 user?.firstName[0].toUpperCase() ?? (isStudent ? 'E' : 'P'),
-                style: const TextStyle(fontSize: 40, color: Colors.white),
+                style: const TextStyle(
+                  fontSize: 40,
+                  color: AppTheme.onAvatarBackgroundColor,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -353,6 +360,7 @@ class ProfilePage extends ConsumerWidget {
                 minimumSize: const Size(double.infinity, 48),
               ),
             ),
+            const SizedBox(height: 8),
           ],
         ),
       ),

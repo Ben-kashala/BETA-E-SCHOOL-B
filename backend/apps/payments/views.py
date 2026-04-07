@@ -143,7 +143,9 @@ class PaymentViewSet(viewsets.ModelViewSet):
     search_fields = ['payment_id', 'reference_number', 'transaction_id']
     
     def get_queryset(self):
-        queryset = Payment.objects.all()
+        queryset = Payment.objects.select_related(
+            "user", "school", "student", "student__user"
+        ).all()
         if self.request.user.school:
             queryset = queryset.filter(school=self.request.user.school)
         # Admin and accountant can see all school payments; others only their own
@@ -538,40 +540,57 @@ class PaymentViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def download_receipt(self, request, pk=None):
         """Génère et télécharge le reçu de paiement en PDF"""
+        from django.http import HttpResponse
+
         payment = self.get_object()
-        
+
         # Vérifier que le paiement est complété
         if payment.status != 'COMPLETED':
             return Response(
                 {'error': 'Seuls les paiements complétés peuvent générer un reçu'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        # Obtenir ou créer le reçu
+
         receipt, created = PaymentReceipt.objects.get_or_create(
             payment=payment,
             defaults={'receipt_number': f"REC-{uuid.uuid4().hex[:12].upper()}"}
         )
-        
-        # Générer le PDF si nécessaire
-        if not receipt.pdf_file or created:
-            from .utils import generate_payment_receipt_pdf
+
+        pdf_bytes = None
+        if receipt.pdf_file:
             try:
-                generate_payment_receipt_pdf(receipt)
+                with receipt.pdf_file.open('rb') as fh:
+                    pdf_bytes = fh.read()
             except Exception as e:
+                logger.warning(
+                    "Reçu PDF illisible ou fichier absent (receipt_id=%s): %s",
+                    receipt.pk,
+                    e,
+                )
+                pdf_bytes = None
+
+        if not pdf_bytes:
+            from .utils import build_payment_receipt_pdf_bytes, save_payment_receipt_pdf_file
+            try:
+                pdf_bytes = build_payment_receipt_pdf_bytes(receipt)
+            except Exception as e:
+                logger.exception("Échec génération PDF reçu (payment_id=%s)", payment.pk)
                 return Response(
                     {'error': 'Échec de la génération du PDF', 'detail': str(e)},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
-        
-        # Retourner le fichier PDF
-        from django.http import FileResponse
-        return FileResponse(
-            receipt.pdf_file.open(),
-            content_type='application/pdf',
-            as_attachment=True,
-            filename=f'receipt_{receipt.receipt_number}.pdf'
-        )
+            try:
+                save_payment_receipt_pdf_file(receipt, pdf_bytes)
+            except Exception as e:
+                logger.warning(
+                    "PDF reçu non enregistré sur le disque — envoi des octets quand même: %s",
+                    e,
+                )
+
+        safe_name = f"receipt_{receipt.receipt_number}.pdf".replace('"', "")
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{safe_name}"'
+        return response
     
     @action(detail=True, methods=['post'])
     def create_installments(self, request, pk=None):

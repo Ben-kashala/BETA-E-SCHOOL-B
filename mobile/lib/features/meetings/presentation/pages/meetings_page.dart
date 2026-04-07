@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/services.dart';
@@ -240,6 +239,28 @@ class _MeetingsPageState extends ConsumerState<MeetingsPage> {
     });
   }
 
+  /// `teacher` peut être un PK (int) ou un objet avec `name` / `user`.
+  String _participantLabel(dynamic participant, String fallbackPrefix) {
+    if (participant == null) return 'N/A';
+    if (participant is Map) {
+      final name = participant['name'];
+      if (name != null && '$name'.trim().isNotEmpty) return '$name';
+      final u = participant['user'];
+      if (u is Map) {
+        final n =
+            '${u['first_name'] ?? ''} ${u['last_name'] ?? ''}'.trim();
+        if (n.isNotEmpty) return n;
+      }
+      final id = participant['id'];
+      if (id != null) return '$fallbackPrefix #$id';
+      return fallbackPrefix;
+    }
+    if (participant is int || participant is num) {
+      return '$fallbackPrefix #$participant';
+    }
+    return fallbackPrefix;
+  }
+
   Color _getStatusColor(String? status) {
     switch (status?.toLowerCase()) {
       case 'scheduled':
@@ -374,7 +395,9 @@ class _MeetingsPageState extends ConsumerState<MeetingsPage> {
                                       children: [
                                         const Icon(Icons.person, size: 16),
                                         const SizedBox(width: 8),
-                                        Text('Avec: ${meeting['teacher']['name'] ?? 'N/A'}'),
+                                        Text(
+                                          'Avec: ${_participantLabel(meeting['teacher'], 'Enseignant')}',
+                                        ),
                                       ],
                                     ),
                                     const SizedBox(height: 16),

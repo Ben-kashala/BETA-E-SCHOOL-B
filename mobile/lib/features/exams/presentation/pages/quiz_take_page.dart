@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:async';
 import '../../../../core/network/api_service.dart';
+import '../../../../core/theme/app_theme.dart';
 
 class QuizTakePage extends ConsumerStatefulWidget {
   final int quizId;
@@ -16,6 +17,25 @@ class QuizTakePage extends ConsumerStatefulWidget {
 
   @override
   ConsumerState<QuizTakePage> createState() => _QuizTakePageState();
+}
+
+/// Réponses API JSON : bool / 0 / 1 / "true" — évite les incohérences avec RadioListTile<bool>.
+bool? _parseBoolAnswer(dynamic v) {
+  if (v == null) return null;
+  if (v is bool) return v;
+  if (v is num) return v != 0;
+  if (v is String) {
+    final s = v.toLowerCase().trim();
+    if (s == 'true' || s == '1' || s == 'yes') return true;
+    if (s == 'false' || s == '0' || s == 'no') return false;
+  }
+  return null;
+}
+
+String _answerString(dynamic v) {
+  if (v == null) return '';
+  if (v is String) return v;
+  return v.toString();
 }
 
 class _QuizTakePageState extends ConsumerState<QuizTakePage> {
@@ -206,7 +226,7 @@ class _QuizTakePageState extends ConsumerState<QuizTakePage> {
               return RadioListTile<String>(
                 title: Text(optionValue),
                 value: option,
-                groupValue: currentAnswer?.toString(),
+                groupValue: currentAnswer == null ? null : _answerString(currentAnswer),
                 onChanged: (value) {
                   setState(() {
                     _answers[questionId] = value!;
@@ -218,9 +238,9 @@ class _QuizTakePageState extends ConsumerState<QuizTakePage> {
         );
 
       case 'MULTIPLE_CHOICE':
-        final selectedAnswers = (currentAnswer is String 
-            ? currentAnswer.split(',').where((a) => a.isNotEmpty).toSet()
-            : <String>{}).toSet();
+        final caStr = _answerString(currentAnswer);
+        final selectedAnswers =
+            caStr.split(',').where((a) => a.isNotEmpty).toSet();
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -255,6 +275,7 @@ class _QuizTakePageState extends ConsumerState<QuizTakePage> {
         );
 
       case 'TRUE_FALSE':
+        final tfGroup = _parseBoolAnswer(currentAnswer);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -266,7 +287,7 @@ class _QuizTakePageState extends ConsumerState<QuizTakePage> {
             RadioListTile<bool>(
               title: const Text('Vrai'),
               value: true,
-              groupValue: currentAnswer == 'true' || currentAnswer == true,
+              groupValue: tfGroup,
               onChanged: (value) {
                 setState(() {
                   _answers[questionId] = true;
@@ -276,7 +297,7 @@ class _QuizTakePageState extends ConsumerState<QuizTakePage> {
             RadioListTile<bool>(
               title: const Text('Faux'),
               value: false,
-              groupValue: currentAnswer == 'false' || currentAnswer == false,
+              groupValue: tfGroup,
               onChanged: (value) {
                 setState(() {
                   _answers[questionId] = false;
@@ -475,9 +496,6 @@ class _QuizTakePageState extends ConsumerState<QuizTakePage> {
                             )
                           : const Icon(Icons.check),
                       label: Text(_isSubmitting ? 'Soumission...' : 'Soumettre'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                      ),
                     ),
                 ],
               ),
@@ -505,14 +523,22 @@ class _QuizTakePageState extends ConsumerState<QuizTakePage> {
                 
                 return ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: isCurrent 
-                        ? Theme.of(context).primaryColor
-                        : isAnswered 
+                    backgroundColor: isCurrent
+                        ? AppTheme.avatarBackgroundColor
+                        : isAnswered
                             ? Colors.green
                             : Colors.grey,
+                    foregroundColor: isCurrent
+                        ? AppTheme.onAvatarBackgroundColor
+                        : Colors.white,
                     child: Text(
                       '${index + 1}',
-                      style: const TextStyle(color: Colors.white),
+                      style: TextStyle(
+                        color: isCurrent
+                            ? AppTheme.onAvatarBackgroundColor
+                            : Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                   title: Text(

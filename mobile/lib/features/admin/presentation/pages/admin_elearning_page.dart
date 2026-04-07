@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/network/api_service.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/providers/auth_provider.dart';
 import '../../../../core/widgets/search_filter_bar.dart';
 
@@ -606,9 +607,11 @@ class _AdminElearningPageState extends ConsumerState<AdminElearningPage> {
                                   margin: const EdgeInsets.only(bottom: 8),
                                   child: ListTile(
                                     leading: const CircleAvatar(
-                                      backgroundColor: Colors.blue,
-                                      child:
-                                          Icon(Icons.book, color: Colors.white),
+                                      backgroundColor:
+                                          AppTheme.avatarBackgroundColor,
+                                      foregroundColor:
+                                          AppTheme.onAvatarBackgroundColor,
+                                      child: Icon(Icons.book),
                                     ),
                                     title: Text(course['title'] ?? 'Cours'),
                                     subtitle: Column(
@@ -660,7 +663,12 @@ class _AdminElearningPageState extends ConsumerState<AdminElearningPage> {
                                       ],
                                     ),
                                     onTap: () {
-                                      context.push('/courses/${course['id']}');
+                                      final role =
+                                          ref.read(authProvider).user?.role;
+                                      final path = role == 'TEACHER'
+                                          ? '/teacher/courses/${course['id']}'
+                                          : '/courses/${course['id']}';
+                                      context.push(path);
                                     },
                                   ),
                                 );

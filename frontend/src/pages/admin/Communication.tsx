@@ -126,7 +126,9 @@ export default function AdminCommunication() {
   const { data: usersData, isLoading: usersLoading } = useQuery({
     queryKey: ['users-for-messages'],
     queryFn: async () => {
-      const response = await api.get('/auth/users/', { params: { is_active: true } })
+      const response = await api.get('/auth/users/', {
+        params: { is_active: true, page_size: 500 },
+      })
       return response.data
     },
     enabled: showMessageForm,

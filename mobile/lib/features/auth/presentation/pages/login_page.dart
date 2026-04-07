@@ -85,13 +85,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 // Logo de l'application (à remplacer par assets/images/logo.png quand disponible)
                 Image.asset(
                   'assets/images/logo.png',
-                  height: 80,
-                  width: 80,
+                  height: 150,
+                  width: 150,
+                  fit: BoxFit.contain,
                   errorBuilder: (context, error, stackTrace) {
                     // Fallback vers l'icône si le logo n'existe pas encore
                     return Icon(
                       Icons.school,
-                      size: 80,
+                      size: 120,
                       color: Theme.of(context).colorScheme.primary,
                     );
                   },

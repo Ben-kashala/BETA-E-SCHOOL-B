@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+
+import 'attendance_week_chart_widget.dart';
 
 class ProgressChartsWidget extends StatelessWidget {
   final List<Map<String, dynamic>> attendanceData;
@@ -28,7 +29,7 @@ class ProgressChartsWidget extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          _buildAttendanceChart(context),
+          AttendanceWeekChartWidget(attendanceData: attendanceData),
           const SizedBox(height: 24),
         ],
         // Graphique des notes
@@ -78,231 +79,6 @@ class ProgressChartsWidget extends StatelessWidget {
     );
   }
 
-  static const double _barMaxHeight = 160;
-
-  Widget _buildAttendanceChart(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Légende
-            Wrap(
-              spacing: 16,
-              runSpacing: 8,
-              children: [
-                _buildLegendItem(context, 'Présents', Colors.green),
-                _buildLegendItem(context, 'Absents', Colors.red),
-                _buildLegendItem(context, 'En retard', Colors.orange),
-                _buildLegendItem(context, 'Excusés', Colors.blue),
-              ],
-            ),
-            const SizedBox(height: 20),
-            // Barres empilées (une barre par semaine)
-            SizedBox(
-              height: _barMaxHeight + 36,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: attendanceData.map((week) {
-                  final present = (week['present'] as num?)?.toInt() ?? 0;
-                  final absent = (week['absent'] as num?)?.toInt() ?? 0;
-                  final late = (week['late'] as num?)?.toInt() ?? 0;
-                  final excused = (week['excused'] as num?)?.toInt() ?? 0;
-                  final total = (week['total'] as num?)?.toInt() ?? 1;
-                  final label = week['label'] as String? ?? '';
-                  final isPartialWeek = total > 0 && total < 5;
-
-                  return Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: GestureDetector(
-                        onTap: () => _showWeekDetail(context, label, present, absent, late, excused, total, isPartialWeek),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            // Barre empilée verticale
-                            SizedBox(
-                              height: _barMaxHeight,
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  if (total > 0) ...[
-                                    _stackSegment(_barMaxHeight * (excused / total).clamp(0.0, 1.0), Colors.blue),
-                                    _stackSegment(_barMaxHeight * (late / total).clamp(0.0, 1.0), Colors.orange),
-                                    _stackSegment(_barMaxHeight * (absent / total).clamp(0.0, 1.0), Colors.red),
-                                    _stackSegment(_barMaxHeight * (present / total).clamp(0.0, 1.0), Colors.green),
-                                  ] else
-                                    Container(
-                                      height: _barMaxHeight,
-                                      decoration: BoxDecoration(
-                                        color: (isDark ? Colors.grey : Colors.grey[300])!,
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              label,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                fontSize: 11,
-                              ),
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            if (isPartialWeek)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 2),
-                                child: Text(
-                                  'Partielle',
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    fontSize: 9,
-                                    fontStyle: FontStyle.italic,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                'Appuyez sur une barre pour voir le détail',
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _stackSegment(double heightPx, Color color) {
-    if (heightPx <= 0) return const SizedBox.shrink();
-    return SizedBox(
-      height: heightPx,
-      child: Container(
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(4),
-        ),
-      ),
-    );
-  }
-
-  void _showWeekDetail(
-    BuildContext context,
-    String label,
-    int present,
-    int absent,
-    int late,
-    int excused,
-    int total,
-    bool isPartialWeek,
-  ) {
-    final theme = Theme.of(context);
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text(
-                    label,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  if (isPartialWeek) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        'Semaine partielle',
-                        style: theme.textTheme.labelSmall,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-              const SizedBox(height: 16),
-              _detailRow(ctx, 'Présents', present, Colors.green),
-              _detailRow(ctx, 'Absents', absent, Colors.red),
-              _detailRow(ctx, 'En retard', late, Colors.orange),
-              _detailRow(ctx, 'Excusés', excused, Colors.blue),
-              const Divider(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Total', style: theme.textTheme.titleSmall),
-                  Text(
-                    '$total jour${total > 1 ? 's' : ''}',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _detailRow(BuildContext context, String label, int value, Color color) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 12,
-                height: 12,
-                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-              ),
-              const SizedBox(width: 8),
-              Text(label, style: theme.textTheme.bodyMedium),
-            ],
-          ),
-          Text(
-            '$value',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildGradesChart(BuildContext context) {
     if (gradesData.isEmpty) {
       return Card(
@@ -319,9 +95,16 @@ class ProgressChartsWidget extends StatelessWidget {
     // Grouper par matière
     final Map<String, List<double>> gradesBySubject = {};
     for (var grade in gradesData) {
-      final subject = grade['subject']?['name'] ?? 'Autre';
-      final score = grade['score'] ?? 0.0;
-      final totalPoints = grade['total_points'] ?? 1.0;
+      final dynamic subj = grade['subject'];
+      final String subject = subj is Map
+          ? (subj['name'] ?? 'Autre').toString()
+          : (subj?.toString() ?? 'Autre');
+      final score = (grade['score'] is num)
+          ? (grade['score'] as num).toDouble()
+          : double.tryParse('${grade['score'] ?? 0}') ?? 0.0;
+      final totalPoints = (grade['total_points'] is num)
+          ? (grade['total_points'] as num).toDouble()
+          : double.tryParse('${grade['total_points'] ?? 1}') ?? 1.0;
       final percentage = (score / totalPoints) * 20; // Convertir sur 20
       
       if (!gradesBySubject.containsKey(subject)) {
@@ -376,27 +159,6 @@ class ProgressChartsWidget extends StatelessWidget {
           }).toList(),
         ),
       ),
-    );
-  }
-
-  Widget _buildLegendItem(BuildContext context, String label, Color color) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 12),
-        ),
-      ],
     );
   }
 

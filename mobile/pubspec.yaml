@@ -82,6 +82,7 @@ dev_dependencies:
   json_serializable: ^6.7.1
   hive_generator: ^2.0.1
   flutter_launcher_icons: ^0.14.1
+  flutter_native_splash: ^2.4.4
 
 # Éviter sqflite_android 2.4.x (BAKLAVA/API 36) si le SDK Android n'a pas ces constantes
 dependency_overrides:
@@ -104,3 +105,16 @@ flutter_launcher_icons:
   image_path: "assets/images/logo.png"
   adaptive_icon_background: "#FFFFFF"
   adaptive_icon_foreground: "assets/images/logo.png"
+  remove_alpha_ios: true
+
+# Écran natif au lancement (avant le 1er frame Flutter). Régénérer après changement :
+#   dart run flutter_native_splash:create
+flutter_native_splash:
+  color: "#21335C"
+  image: assets/images/logo.png
+  android_gravity: center
+  ios_content_mode: scaleAspectFit
+  web: false
+  android_12:
+    color: "#21335C"
+    image: assets/images/logo.png
