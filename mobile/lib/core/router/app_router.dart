@@ -145,6 +145,21 @@ final routerProvider = Provider<GoRouter>((ref) {
         }
         // Admin : accès uniquement aux routes admin
         if (userRole == 'ADMIN') {
+          if (path == '/payments' || path.startsWith('/payments/')) {
+            return '/admin/payments';
+          }
+          if (path == '/meetings' || path.startsWith('/meetings/')) {
+            return '/admin/meetings';
+          }
+          if (path == '/communication' || path.startsWith('/communication/')) {
+            return '/admin/communication';
+          }
+          if (path == '/library' || path.startsWith('/library/')) {
+            return '/admin/library';
+          }
+          if (path == '/discipline' || path.startsWith('/discipline/')) {
+            return '/admin/discipline';
+          }
           if (path.startsWith('/courses') ||
               path.startsWith('/assignments') ||
               path.startsWith('/exams') ||
