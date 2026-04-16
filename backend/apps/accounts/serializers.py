@@ -48,6 +48,11 @@ class UserSerializer(serializers.ModelSerializer):
             )
         return value
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        _validate_unique_email_phone(self, attrs)
+        return attrs
+
     def create(self, validated_data):
         if validated_data.get('username') == SUPERADMIN_USERNAME:
             raise serializers.ValidationError(
@@ -83,6 +88,53 @@ def _normalize_phone_digits(phone):
     return ''.join(c for c in str(phone) if c.isdigit())
 
 
+def _target_school_for_serializer(serializer, attrs):
+    """École cible de validation (create/update)."""
+    if attrs.get('school') is not None:
+        return attrs.get('school')
+    if serializer.instance is not None:
+        return getattr(serializer.instance, 'school', None)
+    request = serializer.context.get('request') if serializer.context else None
+    if request is not None:
+        return getattr(request.user, 'school', None)
+    return None
+
+
+def _validate_unique_email_phone(serializer, attrs):
+    """Validation applicative pour renvoyer un message clair avant la contrainte DB."""
+    school = _target_school_for_serializer(serializer, attrs)
+    if school is None:
+        return
+
+    UserModel = serializer.Meta.model
+    qs = UserModel.objects.filter(school=school)
+    if serializer.instance is not None:
+        qs = qs.exclude(pk=serializer.instance.pk)
+
+    raw_email = attrs.get('email')
+    if raw_email is not None:
+        email = str(raw_email).strip()
+        if email and qs.filter(email__iexact=email).exists():
+            raise serializers.ValidationError({
+                'email': "Cette adresse email est déjà utilisée dans cette école."
+            })
+
+    raw_phone = attrs.get('phone')
+    if raw_phone is not None:
+        phone = str(raw_phone).strip()
+        if phone:
+            digits = _normalize_phone_digits(phone)
+            for user in qs.exclude(phone__isnull=True).exclude(phone=''):
+                pd = _normalize_phone_digits(user.phone)
+                same = pd == digits or (
+                    len(pd) >= 10 and len(digits) >= 10 and pd[-10:] == digits[-10:]
+                )
+                if same:
+                    raise serializers.ValidationError({
+                        'phone': "Ce numéro de téléphone est déjà utilisé dans cette école."
+                    })
+
+
 def get_user_from_login_identifier(identifier):
     """
     Retourne l'utilisateur correspondant à l'identifiant de connexion :
@@ -112,11 +164,36 @@ def get_user_from_login_identifier(identifier):
                 return user
         return None
 
-    # Username (par défaut)
-    try:
-        return User.objects.get(username=identifier)
-    except User.DoesNotExist:
-        return None
+
+def _matching_users_for_identifier(identifier):
+    """
+    Retourne tous les utilisateurs correspondant à l'identifiant saisi
+    (email, téléphone, username) pour détecter les ambiguïtés.
+    """
+    from django.contrib.auth import get_user_model
+    from django.db.models import Q
+    User = get_user_model()
+
+    identifier = (identifier or '').strip()
+    if not identifier:
+        return User.objects.none()
+
+    digits = _normalize_phone_digits(identifier)
+
+    if '@' in identifier:
+        return User.objects.filter(email__iexact=identifier)
+
+    if len(digits) == 10:
+        matches = []
+        for user in User.objects.exclude(Q(phone__isnull=True) | Q(phone='')):
+            phone_digits = _normalize_phone_digits(user.phone)
+            if phone_digits == digits or (len(phone_digits) >= 10 and phone_digits[-10:] == digits):
+                matches.append(user.id)
+        if not matches:
+            return User.objects.none()
+        return User.objects.filter(id__in=matches)
+
+    return User.objects.filter(username=identifier)
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -132,7 +209,16 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         from django.contrib.auth import get_user_model
         User = get_user_model()
         
-        user = get_user_from_login_identifier(identifier)
+        matches = _matching_users_for_identifier(identifier)
+        if matches.count() > 1:
+            raise serializers.ValidationError({
+                'non_field_errors': [
+                    "Cet identifiant (email/téléphone) est utilisé par plusieurs comptes. "
+                    "Utilisez votre nom d'utilisateur pour vous connecter."
+                ]
+            })
+
+        user = matches.first() if matches.exists() else None
         if user is None:
             raise serializers.ValidationError({
                 'username': ['Identifiant incorrect. Utilisez votre nom d\'utilisateur, email ou numéro de téléphone (10 chiffres).']
@@ -216,6 +302,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
             raise serializers.ValidationError({"password": "Les mots de passe ne correspondent pas."})
+        _validate_unique_email_phone(self, attrs)
         return attrs
     
     def create(self, validated_data):

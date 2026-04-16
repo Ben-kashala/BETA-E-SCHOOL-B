@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/network/api_service.dart';
 import '../../../../core/widgets/search_filter_bar.dart';
+import '../../../../core/providers/auth_provider.dart';
+import '../../../students/presentation/widgets/student_bottom_nav.dart';
 
 class LibraryPage extends ConsumerStatefulWidget {
   const LibraryPage({super.key});
@@ -79,6 +81,8 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
 
   @override
   Widget build(BuildContext context) {
+    final role = ref.watch(authProvider).user?.role;
+    final path = GoRouterState.of(context).uri.path;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Bibliothèque'),
@@ -186,6 +190,9 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                       ),
         ],
       ),
+      bottomNavigationBar: role == 'STUDENT' && !path.startsWith('/teacher/')
+          ? const StudentBottomNav()
+          : null,
     );
   }
 }

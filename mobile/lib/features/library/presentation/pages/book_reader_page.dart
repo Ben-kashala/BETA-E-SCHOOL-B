@@ -8,6 +8,8 @@ import 'dart:io';
 import '../../../../core/network/api_service.dart';
 import '../../../../core/database/database_service.dart';
 import '../../../../core/database/hive_service.dart';
+import '../../../../core/providers/auth_provider.dart';
+import '../../../students/presentation/widgets/student_bottom_nav.dart';
 
 class BookReaderPage extends ConsumerStatefulWidget {
   final int bookId;
@@ -268,6 +270,8 @@ class _BookReaderPageState extends ConsumerState<BookReaderPage> {
 
   @override
   Widget build(BuildContext context) {
+    final role = ref.watch(authProvider).user?.role;
+    final path = GoRouterState.of(context).uri.path;
     return Scaffold(
       appBar: _showControls
           ? AppBar(
@@ -439,6 +443,9 @@ class _BookReaderPageState extends ConsumerState<BookReaderPage> {
               onPressed: _toggleControls,
               child: const Icon(Icons.visibility),
             ),
+      bottomNavigationBar: role == 'STUDENT' && !path.startsWith('/teacher/')
+          ? const StudentBottomNav()
+          : null,
     );
   }
 }

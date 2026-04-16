@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/network/api_service.dart';
 import '../../../../core/widgets/search_filter_bar.dart';
+import '../../../../core/providers/auth_provider.dart';
+import '../../../students/presentation/widgets/student_bottom_nav.dart';
 
 class AssignmentsPage extends ConsumerStatefulWidget {
   const AssignmentsPage({super.key});
@@ -82,6 +84,8 @@ class _AssignmentsPageState extends ConsumerState<AssignmentsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final role = ref.watch(authProvider).user?.role;
+    final path = GoRouterState.of(context).uri.path;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Mes Devoirs'),
@@ -193,6 +197,9 @@ class _AssignmentsPageState extends ConsumerState<AssignmentsPage> {
                       ),
         ],
       ),
+      bottomNavigationBar: role == 'STUDENT' && !path.startsWith('/teacher/')
+          ? const StudentBottomNav()
+          : null,
     );
   }
 }

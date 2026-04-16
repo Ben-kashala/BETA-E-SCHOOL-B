@@ -5,6 +5,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/network/api_service.dart';
 import '../../../../core/database/hive_service.dart';
 import '../../../../core/widgets/search_filter_bar.dart';
+import '../../../../core/providers/auth_provider.dart';
+import '../../../students/presentation/widgets/student_bottom_nav.dart';
 
 class CoursesPage extends ConsumerStatefulWidget {
   const CoursesPage({super.key});
@@ -81,6 +83,8 @@ class _CoursesPageState extends ConsumerState<CoursesPage> {
 
   @override
   Widget build(BuildContext context) {
+    final role = ref.watch(authProvider).user?.role;
+    final path = GoRouterState.of(context).uri.path;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Mes Cours'),
@@ -170,6 +174,9 @@ class _CoursesPageState extends ConsumerState<CoursesPage> {
                       ),
         ],
       ),
+      bottomNavigationBar: role == 'STUDENT' && !path.startsWith('/teacher/')
+          ? const StudentBottomNav()
+          : null,
     );
   }
 }

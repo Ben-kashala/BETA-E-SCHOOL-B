@@ -41,11 +41,16 @@ import '../../features/teacher/presentation/pages/teacher_students_page.dart';
 import '../../features/admin/presentation/pages/admin_enrollments_page.dart';
 import '../../features/admin/presentation/pages/admin_students_page.dart';
 import '../../features/admin/presentation/pages/admin_classes_page.dart';
+import '../../features/admin/presentation/pages/admin_class_detail_page.dart';
+import '../../features/admin/presentation/pages/admin_payments_page.dart';
+import '../../features/admin/presentation/pages/admin_communication_page.dart';
 import '../../features/admin/presentation/pages/admin_teachers_page.dart';
 import '../../features/admin/presentation/pages/admin_former_students_page.dart';
 import '../../features/admin/presentation/pages/admin_elearning_page.dart';
+import '../../features/accountant/presentation/pages/accountant_dashboard_page.dart';
 import '../../features/accountant/presentation/pages/accountant_expenses_page.dart';
 import '../../features/accountant/presentation/pages/accountant_caisse_page.dart';
+import '../../features/accountant/presentation/pages/accountant_payments_page.dart';
 import '../../features/students/presentation/pages/student_detail_page.dart';
 import '../../features/promoter/presentation/pages/promoter_dashboard_page.dart';
 import '../../features/promoter/presentation/pages/promoter_schools_page.dart';
@@ -205,6 +210,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
+      // Évite GoException si l’app ouvre « / » (web, lien, bouton Home de l’erreur go_router).
+      GoRoute(
+        path: '/',
+        redirect: (context, state) {
+          final isAuthenticated = authState.isAuthenticated;
+          if (!isAuthenticated) return '/login';
+          return '/dashboard';
+        },
+      ),
       GoRoute(
         path: '/splash',
         builder: (context, state) => const SplashPage(),
@@ -523,6 +537,18 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/admin/classes',
         builder: (context, state) => const AdminClassesPage(),
+        routes: [
+          GoRoute(
+            path: ':id',
+            builder: (context, state) {
+              final id = int.tryParse(state.pathParameters['id'] ?? '');
+              if (id == null) {
+                return const AdminClassesPage();
+              }
+              return AdminClassDetailPage(classId: id);
+            },
+          ),
+        ],
       ),
       GoRoute(
         path: '/admin/teachers',
@@ -530,8 +556,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/admin/payments',
-        builder: (context, state) =>
-            const PaymentsPage(), // Réutiliser PaymentsPage
+        builder: (context, state) => const AdminPaymentsPage(),
       ),
       GoRoute(
         path: '/admin/expenses',
@@ -565,8 +590,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/admin/communication',
-        builder: (context, state) =>
-            const CommunicationPage(), // Réutiliser CommunicationPage
+        builder: (context, state) => const AdminCommunicationPage(),
       ),
       GoRoute(
         path: '/admin/former-students',
@@ -578,14 +602,23 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       // Routes pour les comptables
       GoRoute(
+        path: '/accountant',
+        builder: (context, state) => const AccountantDashboardPage(),
+      ),
+      GoRoute(
         path: '/accountant/enrollments',
         builder: (context, state) =>
-            const EnrollmentPage(), // Réutiliser EnrollmentPage
+            const AdminEnrollmentsPage(baseRoute: '/accountant/enrollments'),
+        routes: [
+          GoRoute(
+            path: 'new',
+            builder: (context, state) => const EnrollmentPage(),
+          ),
+        ],
       ),
       GoRoute(
         path: '/accountant/payments',
-        builder: (context, state) =>
-            const PaymentsPage(), // Réutiliser PaymentsPage
+        builder: (context, state) => const AccountantPaymentsPage(),
       ),
       GoRoute(
         path: '/accountant/expenses',
@@ -594,6 +627,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/accountant/caisse',
         builder: (context, state) => const AccountantCaissePage(),
+      ),
+      GoRoute(
+        path: '/accountant/communication',
+        builder: (context, state) => const CommunicationPage(),
       ),
       // Routes pour les chargés de discipline
       GoRoute(

@@ -78,12 +78,19 @@ class _TeacherGradesPageState extends ConsumerState<TeacherGradesPage> {
       String? currentYear;
       final years = <String>[];
       if (ayData is Map) {
-        currentYear = ayData['current']?.toString();
+        final cy = '${ayData['current'] ?? ''}'.trim();
+        currentYear = cy.isEmpty ? null : cy;
         final raw = ayData['available'];
         if (raw is List) {
-          years.addAll(raw.map((e) => e.toString()));
+          years.addAll(raw.map((e) => e.toString().trim()).where((s) => s.isNotEmpty));
         }
       }
+      // Valeurs uniques (l’API peut renvoyer des doublons → crash DropdownButton).
+      final seenY = <String>{};
+      final dedupedYears = years.where((y) => seenY.add(y)).toList();
+      years
+        ..clear()
+        ..addAll(dedupedYears);
       if (currentYear != null && currentYear.isNotEmpty && !years.contains(currentYear)) {
         years.insert(0, currentYear);
       }
@@ -95,7 +102,8 @@ class _TeacherGradesPageState extends ConsumerState<TeacherGradesPage> {
         _classes = classes;
         _subjects = subjects;
         _academicYears = years;
-        _selectedAcademicYear = currentYear ?? years.first;
+        _selectedAcademicYear =
+            (currentYear != null && years.contains(currentYear)) ? currentYear : years.first;
         _selectedClassId = classes.isNotEmpty ? classes.first['id'] as int? : null;
         _isLoading = false;
       });

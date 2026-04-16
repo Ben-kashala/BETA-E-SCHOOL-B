@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_service.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/search_filter_bar.dart';
+import '../widgets/admin_bottom_nav.dart';
 
 class AdminTeachersPage extends ConsumerStatefulWidget {
   const AdminTeachersPage({super.key});
@@ -75,6 +76,13 @@ class _AdminTeachersPageState extends ConsumerState<AdminTeachersPage> {
         ),
         actions: [
           TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _showTeacherForm(teacher: teacher);
+            },
+            child: const Text('Modifier'),
+          ),
+          TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('Fermer'),
           ),
@@ -107,14 +115,28 @@ class _AdminTeachersPageState extends ConsumerState<AdminTeachersPage> {
   }
 
   void _showCreateTeacher() {
+    _showTeacherForm();
+  }
+
+  void _showTeacherForm({dynamic teacher}) {
     final formKey = GlobalKey<FormState>();
-    final username = TextEditingController();
-    final email = TextEditingController();
-    final firstName = TextEditingController();
-    final lastName = TextEditingController();
+    final teacherMap = teacher is Map ? Map<String, dynamic>.from(teacher) : null;
+    final user = teacherMap?['user'] is Map
+        ? Map<String, dynamic>.from(teacherMap!['user'] as Map)
+        : <String, dynamic>{};
+    final isEditing = teacherMap != null;
+
+    final username = TextEditingController(text: '${user['username'] ?? ''}');
+    final email = TextEditingController(text: '${user['email'] ?? ''}');
+    final firstName = TextEditingController(text: '${user['first_name'] ?? ''}');
+    final lastName = TextEditingController(text: '${user['last_name'] ?? ''}');
+    final phone = TextEditingController(text: '${user['phone'] ?? ''}');
     final password = TextEditingController();
     final password2 = TextEditingController();
-    final employeeId = TextEditingController();
+    final employeeId =
+        TextEditingController(text: '${teacherMap?['employee_id'] ?? ''}');
+    final specialization =
+        TextEditingController(text: '${teacherMap?['specialization'] ?? ''}');
     bool loading = false;
 
     showModalBottomSheet(
@@ -132,7 +154,10 @@ class _AdminTeachersPageState extends ConsumerState<AdminTeachersPage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text('Créer un enseignant', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    Text(
+                      isEditing ? 'Modifier l\'enseignant' : 'Créer un enseignant',
+                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    ),
                     const SizedBox(height: 20),
                     TextFormField(
                       controller: username,
@@ -148,6 +173,12 @@ class _AdminTeachersPageState extends ConsumerState<AdminTeachersPage> {
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
+                      controller: phone,
+                      decoration: const InputDecoration(labelText: 'Téléphone'),
+                      keyboardType: TextInputType.phone,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
                       controller: firstName,
                       decoration: const InputDecoration(labelText: 'Prénom *'),
                       validator: (v) => (v == null || v.trim().isEmpty) ? 'Requis' : null,
@@ -159,23 +190,30 @@ class _AdminTeachersPageState extends ConsumerState<AdminTeachersPage> {
                       validator: (v) => (v == null || v.trim().isEmpty) ? 'Requis' : null,
                     ),
                     const SizedBox(height: 12),
-                    TextFormField(
-                      controller: password,
-                      decoration: const InputDecoration(labelText: 'Mot de passe *'),
-                      obscureText: true,
-                      validator: (v) => (v == null || v.length < 6) ? 'Min. 6 caractères' : null,
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: password2,
-                      decoration: const InputDecoration(labelText: 'Confirmer le mot de passe *'),
-                      obscureText: true,
-                      validator: (v) => v != password.text ? 'Les mots de passe ne correspondent pas' : null,
-                    ),
-                    const SizedBox(height: 12),
+                    if (!isEditing) ...[
+                      TextFormField(
+                        controller: password,
+                        decoration: const InputDecoration(labelText: 'Mot de passe *'),
+                        obscureText: true,
+                        validator: (v) => (v == null || v.length < 6) ? 'Min. 6 caractères' : null,
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: password2,
+                        decoration: const InputDecoration(labelText: 'Confirmer le mot de passe *'),
+                        obscureText: true,
+                        validator: (v) => v != password.text ? 'Les mots de passe ne correspondent pas' : null,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     TextFormField(
                       controller: employeeId,
                       decoration: const InputDecoration(labelText: 'Matricule (optionnel)'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: specialization,
+                      decoration: const InputDecoration(labelText: 'Spécialisation (optionnel)'),
                     ),
                     const SizedBox(height: 24),
                     if (loading)
@@ -196,28 +234,70 @@ class _AdminTeachersPageState extends ConsumerState<AdminTeachersPage> {
                                 if (!formKey.currentState!.validate()) return;
                                 setModalState(() => loading = true);
                                 try {
-                                  final registerRes = await ApiService().post('/api/auth/register/', data: {
-                                    'username': username.text.trim(),
-                                    'email': email.text.trim(),
-                                    'first_name': firstName.text.trim(),
-                                    'last_name': lastName.text.trim(),
-                                    'password': password.text,
-                                    'password2': password2.text,
-                                    'role': 'TEACHER',
-                                  });
-                                  final userId = registerRes.data is Map ? (registerRes.data as Map)['id'] as int? : null;
-                                  if (userId == null) {
-                                    setModalState(() => loading = false);
-                                    if (ctx.mounted) ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Utilisateur créé mais ID introuvable dans la réponse.')));
-                                    return;
+                                  if (isEditing) {
+                                    final teacherId = teacherMap['id'];
+                                    final userId = user['id'];
+                                    if (teacherId == null || userId == null) {
+                                      throw Exception('Identifiants enseignant/utilisateur introuvables.');
+                                    }
+
+                                    await ApiService().patch(
+                                      '/api/auth/users/$userId/',
+                                      data: {
+                                        'username': username.text.trim(),
+                                        'email': email.text.trim(),
+                                        'first_name': firstName.text.trim(),
+                                        'last_name': lastName.text.trim(),
+                                        'phone': phone.text.trim().isEmpty ? null : phone.text.trim(),
+                                      },
+                                    );
+                                    await ApiService().patch(
+                                      '/api/auth/teachers/$teacherId/',
+                                      data: {
+                                        if (employeeId.text.trim().isNotEmpty)
+                                          'employee_id': employeeId.text.trim()
+                                        else
+                                          'employee_id': null,
+                                        if (specialization.text.trim().isNotEmpty)
+                                          'specialization': specialization.text.trim()
+                                        else
+                                          'specialization': null,
+                                      },
+                                    );
+                                  } else {
+                                    final registerRes = await ApiService().post('/api/auth/register/', data: {
+                                      'username': username.text.trim(),
+                                      'email': email.text.trim(),
+                                      'first_name': firstName.text.trim(),
+                                      'last_name': lastName.text.trim(),
+                                      'phone': phone.text.trim().isEmpty ? null : phone.text.trim(),
+                                      'password': password.text,
+                                      'password2': password2.text,
+                                      'role': 'TEACHER',
+                                    });
+                                    final userId = registerRes.data is Map ? (registerRes.data as Map)['id'] as int? : null;
+                                    if (userId == null) {
+                                      setModalState(() => loading = false);
+                                      if (ctx.mounted) ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Utilisateur créé mais ID introuvable dans la réponse.')));
+                                      return;
+                                    }
+                                    await ApiService().post('/api/auth/teachers/', data: {
+                                      'user_id': userId,
+                                      if (employeeId.text.trim().isNotEmpty) 'employee_id': employeeId.text.trim(),
+                                      if (specialization.text.trim().isNotEmpty) 'specialization': specialization.text.trim(),
+                                    });
                                   }
-                                  await ApiService().post('/api/auth/teachers/', data: {
-                                    'user_id': userId,
-                                    if (employeeId.text.trim().isNotEmpty) 'employee_id': employeeId.text.trim(),
-                                  });
                                   if (ctx.mounted) {
                                     Navigator.of(ctx).pop();
-                                    ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Enseignant créé avec succès.')));
+                                    ScaffoldMessenger.of(ctx).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          isEditing
+                                              ? 'Enseignant modifié avec succès.'
+                                              : 'Enseignant créé avec succès.',
+                                        ),
+                                      ),
+                                    );
                                     _loadTeachers();
                                   }
                                 } catch (e) {
@@ -229,7 +309,7 @@ class _AdminTeachersPageState extends ConsumerState<AdminTeachersPage> {
                                   }
                                 }
                               },
-                              child: const Text('Créer'),
+                              child: Text(isEditing ? 'Enregistrer' : 'Créer'),
                             ),
                           ),
                         ],
@@ -298,6 +378,7 @@ class _AdminTeachersPageState extends ConsumerState<AdminTeachersPage> {
           ),
         ],
       ),
+      bottomNavigationBar: const AdminBottomNav(),
     );
   }
 }

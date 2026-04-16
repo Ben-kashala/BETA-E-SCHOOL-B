@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_service.dart';
+import '../widgets/admin_bottom_nav.dart';
 
 class AdminFormerStudentsPage extends ConsumerStatefulWidget {
   const AdminFormerStudentsPage({super.key});
@@ -83,6 +84,7 @@ class _AdminFormerStudentsPageState extends ConsumerState<AdminFormerStudentsPag
           ),
         ],
       ),
+      bottomNavigationBar: const AdminBottomNav(),
     );
   }
 }

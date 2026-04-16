@@ -144,7 +144,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications_outlined),
-            onPressed: () => context.push('/communication'),
+            onPressed: () => context.push(
+              isAccountant ? '/accountant/communication' : '/communication',
+            ),
           ),
           IconButton(
             icon: const Icon(Icons.person_outline),
@@ -617,7 +619,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   ],
                 ),
               ] else if (isAccountant) ...[
-                // Dashboard Comptable
+                // Dashboard Comptable (aligné menu web : TDB, Inscriptions, Paiements, Dépenses, Caisse)
                 Text(
                   'Actions rapides',
                   style: Theme.of(context).textTheme.titleLarge,
@@ -632,6 +634,12 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   childAspectRatio: 1.05,
                   children: [
                     _DashboardCard(
+                      icon: Icons.dashboard,
+                      title: 'Tableau de bord',
+                      color: Colors.indigo,
+                      onTap: () => context.push('/accountant'),
+                    ),
+                    _DashboardCard(
                       icon: Icons.person_add,
                       title: 'Inscriptions',
                       color: Colors.blue,
@@ -639,7 +647,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     ),
                     _DashboardCard(
                       icon: Icons.payment,
-                      title: 'Payer',
+                      title: 'Paiements',
                       color: Colors.green,
                       onTap: () => context.push('/accountant/payments'),
                     ),
@@ -654,6 +662,12 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                       title: 'Caisse',
                       color: Colors.orange,
                       onTap: () => context.push('/accountant/caisse'),
+                    ),
+                    _DashboardCard(
+                      icon: Icons.message,
+                      title: 'Communication',
+                      color: Colors.teal,
+                      onTap: () => context.push('/accountant/communication'),
                     ),
                   ],
                 ),
@@ -949,6 +963,10 @@ class _DashboardCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cardColor = Theme.of(context).cardTheme.color ??
+        Theme.of(context).colorScheme.surface;
+    final useLightText = ThemeData.estimateBrightnessForColor(cardColor) ==
+        Brightness.dark;
     return Card(
       child: InkWell(
         onTap: onTap,
@@ -963,11 +981,10 @@ class _DashboardCard extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 title,
-                style: Theme.of(context).brightness == Brightness.dark
-                    ? Theme.of(context).textTheme.titleSmall
-                    : Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: AppTheme.textPrimary,
-                        ),
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color:
+                          useLightText ? Colors.white : AppTheme.textPrimary,
+                    ),
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,

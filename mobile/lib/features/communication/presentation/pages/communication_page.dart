@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/network/api_service.dart';
 import '../../../../core/providers/auth_provider.dart';
 import '../../../../core/widgets/search_filter_bar.dart';
 import '../widgets/message_compose_modal.dart';
+import '../../../accountant/presentation/widgets/accountant_bottom_nav.dart';
+import '../../../admin/presentation/widgets/admin_bottom_nav.dart';
+import '../../../discipline_officer/presentation/widgets/discipline_officer_bottom_nav.dart';
 
 /// Communication — annonces et messages (synchronisé avec le web).
 class CommunicationPage extends ConsumerStatefulWidget {
@@ -404,6 +408,17 @@ class _CommunicationPageState extends ConsumerState<CommunicationPage>
                 ),
               ),
             ),
+      bottomNavigationBar:
+          GoRouterState.of(context).uri.path.startsWith('/accountant/')
+              ? const AccountantBottomNav()
+              : GoRouterState.of(context).uri.path.startsWith('/admin/')
+                  ? const AdminBottomNav()
+                  : GoRouterState.of(context)
+                          .uri
+                          .path
+                          .startsWith('/discipline-officer/')
+                      ? const DisciplineOfficerBottomNav()
+                      : null,
     );
   }
 

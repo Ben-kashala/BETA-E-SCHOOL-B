@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/network/api_service.dart';
 import '../../../../core/widgets/search_filter_bar.dart';
+import '../../../admin/presentation/widgets/admin_bottom_nav.dart';
+import '../../../discipline_officer/presentation/widgets/discipline_officer_bottom_nav.dart';
 
 class MeetingsPage extends ConsumerStatefulWidget {
   const MeetingsPage({super.key});
@@ -48,7 +51,64 @@ class _MeetingsPageState extends ConsumerState<MeetingsPage> {
     }
   }
 
-  Future<void> _showCreateMeeting() async {
+  DateTime? _parseMeetingDate(dynamic value) {
+    if (value == null) return null;
+    final text = value.toString().trim();
+    if (text.isEmpty) return null;
+    return DateTime.tryParse(text)?.toLocal();
+  }
+
+  int? _extractId(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is Map) {
+      final id = value['id'];
+      if (id is int) return id;
+      if (id is num) return id.toInt();
+    }
+    return null;
+  }
+
+  Future<void> _openMeetingLink(dynamic rawUrl) async {
+    final urlText = rawUrl?.toString().trim() ?? '';
+    if (urlText.isEmpty) return;
+
+    final uri = Uri.tryParse(urlText);
+    if (uri == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Lien de réunion invalide.')),
+      );
+      return;
+    }
+
+    try {
+      final launched = await launchUrl(
+            uri,
+            mode: LaunchMode.externalNonBrowserApplication,
+          ) ||
+          await launchUrl(uri, mode: LaunchMode.externalApplication) ||
+          await launchUrl(uri, mode: LaunchMode.platformDefault);
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Impossible d’ouvrir le lien de réunion sur cet appareil.',
+            ),
+          ),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Impossible d’ouvrir le lien de réunion.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _showMeetingForm({dynamic existingMeeting}) async {
     List<dynamic> teachers = [];
     List<dynamic> parents = [];
     List<dynamic> students = [];
@@ -64,13 +124,44 @@ class _MeetingsPageState extends ConsumerState<MeetingsPage> {
     final formKey = GlobalKey<FormState>();
     final title = TextEditingController();
     final description = TextEditingController();
-    int? teacherId = teachers.isNotEmpty ? (teachers.first['id'] as int) : null;
-    int? parentId;
-    int? studentId;
-    String meetingType = 'INDIVIDUAL';
-    DateTime meetingDate = DateTime.now().add(const Duration(days: 1));
-    int durationMinutes = 30;
+    final location = TextEditingController();
+    final videoLink = TextEditingController();
+    final isEditing = existingMeeting != null;
+    int? teacherId = _extractId(existingMeeting?['teacher']) ??
+        (teachers.isNotEmpty ? (teachers.first['id'] as int) : null);
+    int? parentId = _extractId(existingMeeting?['parent']);
+    int? studentId = _extractId(existingMeeting?['student']);
+    String meetingType = (existingMeeting?['meeting_type'] ?? 'INDIVIDUAL').toString();
+    DateTime meetingDate = _parseMeetingDate(existingMeeting?['meeting_date']) ??
+        DateTime.now().add(const Duration(days: 1));
+    int durationMinutes = existingMeeting?['duration_minutes'] is num
+        ? (existingMeeting['duration_minutes'] as num).toInt()
+        : 30;
+    String? videoPlatform = existingMeeting?['video_platform']?.toString();
+    bool autoGenerateVideoLink = false;
+    bool isPublished = existingMeeting?['is_published'] == true;
+    List<int> selectedTeacherIds = [];
+    List<int> selectedParentIds = [];
     bool loading = false;
+
+    title.text = existingMeeting?['title']?.toString() ?? '';
+    description.text = existingMeeting?['description']?.toString() ?? '';
+    location.text = existingMeeting?['location']?.toString() ?? '';
+    videoLink.text = existingMeeting?['video_link']?.toString() ?? '';
+
+    String teacherName(dynamic teacher) {
+      final u = teacher['user'] ?? {};
+      final name =
+          '${u['first_name'] ?? ''} ${u['last_name'] ?? ''}'.trim();
+      return name.isEmpty ? 'Enseignant' : name;
+    }
+
+    String parentName(dynamic parent) {
+      final u = parent['user'] ?? {};
+      final name =
+          '${u['first_name'] ?? ''} ${u['last_name'] ?? ''}'.trim();
+      return name.isEmpty ? 'Parent' : name;
+    }
 
     if (!mounted) return;
     showModalBottomSheet(
@@ -88,7 +179,10 @@ class _MeetingsPageState extends ConsumerState<MeetingsPage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text('Nouvelle réunion', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    Text(
+                      isEditing ? 'Modifier la réunion' : 'Nouvelle réunion',
+                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    ),
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: title,
@@ -103,31 +197,160 @@ class _MeetingsPageState extends ConsumerState<MeetingsPage> {
                       validator: (v) => (v == null || v.trim().isEmpty) ? 'Requis' : null,
                     ),
                     const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: meetingType,
+                      decoration: const InputDecoration(labelText: 'Type'),
+                      items: const [
+                        DropdownMenuItem(value: 'INDIVIDUAL', child: Text('Individuelle')),
+                        DropdownMenuItem(value: 'GROUP', child: Text('Groupe')),
+                        DropdownMenuItem(value: 'GENERAL', child: Text('Générale')),
+                        DropdownMenuItem(value: 'TEACHER_MEETING', child: Text('Réunion avec enseignant')),
+                        DropdownMenuItem(value: 'PARENT_MEETING', child: Text('Réunion avec parent')),
+                      ],
+                      onChanged: (v) => setModalState(() => meetingType = v ?? 'INDIVIDUAL'),
+                    ),
+                    const SizedBox(height: 12),
                     DropdownButtonFormField<int>(
-                      value: teacherId,
-                      decoration: const InputDecoration(labelText: 'Enseignant *'),
+                      initialValue: teacherId,
+                      decoration: const InputDecoration(labelText: 'Enseignant principal'),
                       items: teachers.map((t) {
-                        final u = t['user'] ?? {};
-                        final name = '${u['first_name'] ?? ''} ${u['last_name'] ?? ''}'.trim();
-                        return DropdownMenuItem<int>(value: t['id'] as int, child: Text(name.isEmpty ? 'Enseignant' : name));
+                        return DropdownMenuItem<int>(
+                          value: t['id'] as int,
+                          child: Text(teacherName(t)),
+                        );
                       }).toList(),
                       onChanged: (v) => setModalState(() => teacherId = v),
                       validator: (v) => v == null ? 'Requis' : null,
                     ),
                     const SizedBox(height: 12),
+                    if (meetingType == 'TEACHER_MEETING' || meetingType == 'GROUP' || meetingType == 'GENERAL') ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Expanded(child: Text('Enseignants supplémentaires', style: TextStyle(fontWeight: FontWeight.w600))),
+                          TextButton(
+                            onPressed: () {
+                              setModalState(() {
+                                final ids = teachers
+                                    .map((t) => t['id'])
+                                    .whereType<int>()
+                                    .where((id) => id != teacherId)
+                                    .toList();
+                                if (selectedTeacherIds.length == ids.length) {
+                                  selectedTeacherIds = [];
+                                } else {
+                                  selectedTeacherIds = ids;
+                                }
+                              });
+                            },
+                            child: Text(
+                              selectedTeacherIds.length ==
+                                      teachers
+                                          .map((t) => t['id'])
+                                          .whereType<int>()
+                                          .where((id) => id != teacherId)
+                                          .length
+                                  ? 'Tout désélectionner'
+                                  : 'Tout sélectionner',
+                            ),
+                          ),
+                        ],
+                      ),
+                      Container(
+                        constraints: const BoxConstraints(maxHeight: 180),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: ListView(
+                          shrinkWrap: true,
+                          children: teachers.map((t) {
+                            final id = t['id'] as int;
+                            if (id == teacherId) return const SizedBox.shrink();
+                            return CheckboxListTile(
+                              value: selectedTeacherIds.contains(id),
+                              title: Text(teacherName(t)),
+                              onChanged: (checked) {
+                                setModalState(() {
+                                  if (checked == true) {
+                                    selectedTeacherIds = [...selectedTeacherIds, id];
+                                  } else {
+                                    selectedTeacherIds =
+                                        selectedTeacherIds.where((e) => e != id).toList();
+                                  }
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     DropdownButtonFormField<int>(
-                      value: parentId,
+                      initialValue: parentId,
                       decoration: const InputDecoration(labelText: 'Parent (optionnel)'),
                       items: [const DropdownMenuItem<int>(value: null, child: Text('— Aucun —')), ...parents.map((p) {
-                        final u = p['user'] ?? {};
-                        final name = '${u['first_name'] ?? ''} ${u['last_name'] ?? ''}'.trim();
-                        return DropdownMenuItem<int>(value: p['id'] as int, child: Text(name.isEmpty ? 'Parent' : name));
+                        return DropdownMenuItem<int>(value: p['id'] as int, child: Text(parentName(p)));
                       })],
                       onChanged: (v) => setModalState(() => parentId = v),
                     ),
                     const SizedBox(height: 12),
+                    if (meetingType == 'PARENT_MEETING' || meetingType == 'GROUP' || meetingType == 'GENERAL' || meetingType == 'TEACHER_MEETING') ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Expanded(child: Text('Parents participants', style: TextStyle(fontWeight: FontWeight.w600))),
+                          TextButton(
+                            onPressed: () {
+                              setModalState(() {
+                                final ids = parents.map((p) => p['id']).whereType<int>().toList();
+                                if (selectedParentIds.length == ids.length) {
+                                  selectedParentIds = [];
+                                } else {
+                                  selectedParentIds = ids;
+                                }
+                              });
+                            },
+                            child: Text(
+                              selectedParentIds.length ==
+                                      parents.map((p) => p['id']).whereType<int>().length
+                                  ? 'Tout désélectionner'
+                                  : 'Tout sélectionner',
+                            ),
+                          ),
+                        ],
+                      ),
+                      Container(
+                        constraints: const BoxConstraints(maxHeight: 180),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: ListView(
+                          shrinkWrap: true,
+                          children: parents.map((p) {
+                            final id = p['id'] as int;
+                            return CheckboxListTile(
+                              value: selectedParentIds.contains(id),
+                              title: Text(parentName(p)),
+                              onChanged: (checked) {
+                                setModalState(() {
+                                  if (checked == true) {
+                                    selectedParentIds = [...selectedParentIds, id];
+                                  } else {
+                                    selectedParentIds =
+                                        selectedParentIds.where((e) => e != id).toList();
+                                  }
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     DropdownButtonFormField<int>(
-                      value: studentId,
+                      initialValue: studentId,
                       decoration: const InputDecoration(labelText: 'Élève (optionnel)'),
                       items: [const DropdownMenuItem<int>(value: null, child: Text('— Aucun —')), ...students.map((s) {
                         final name = s['user_name'] ?? '${s['user']?['first_name'] ?? ''} ${s['user']?['last_name'] ?? ''}'.trim();
@@ -136,32 +359,68 @@ class _MeetingsPageState extends ConsumerState<MeetingsPage> {
                       onChanged: (v) => setModalState(() => studentId = v),
                     ),
                     const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      value: meetingType,
-                      decoration: const InputDecoration(labelText: 'Type'),
-                      items: const [
-                        DropdownMenuItem(value: 'INDIVIDUAL', child: Text('Individuelle')),
-                        DropdownMenuItem(value: 'GROUP', child: Text('Groupe')),
-                        DropdownMenuItem(value: 'PARENT_MEETING', child: Text('Réunion parent')),
-                      ],
-                      onChanged: (v) => setModalState(() => meetingType = v ?? 'INDIVIDUAL'),
+                    TextFormField(
+                      controller: location,
+                      decoration: const InputDecoration(labelText: 'Lieu'),
                     ),
                     const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: videoPlatform,
+                      decoration: const InputDecoration(labelText: 'Plateforme visio'),
+                      items: const [
+                        DropdownMenuItem(value: 'GOOGLE_MEET', child: Text('Google Meet')),
+                        DropdownMenuItem(value: 'ZOOM', child: Text('Zoom')),
+                        DropdownMenuItem(value: 'TEAMS', child: Text('Microsoft Teams')),
+                        DropdownMenuItem(value: 'OTHER', child: Text('Autre')),
+                      ],
+                      onChanged: (v) => setModalState(() {
+                        videoPlatform = v;
+                        if (v == null || v == 'OTHER') {
+                          autoGenerateVideoLink = false;
+                        }
+                      }),
+                    ),
+                    const SizedBox(height: 12),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Générer automatiquement le lien'),
+                      value: autoGenerateVideoLink,
+                      onChanged: (videoPlatform == null || videoPlatform == 'OTHER')
+                          ? null
+                          : (value) => setModalState(() => autoGenerateVideoLink = value),
+                    ),
+                    if (videoPlatform != null &&
+                        videoPlatform != 'OTHER' &&
+                        !autoGenerateVideoLink) ...[
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: videoLink,
+                        decoration: const InputDecoration(labelText: 'Lien vidéo'),
+                        keyboardType: TextInputType.url,
+                      ),
+                    ],
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Publier la réunion'),
+                      value: isPublished,
+                      onChanged: (value) => setModalState(() => isPublished = value),
+                    ),
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       title: const Text('Date et heure'),
                       subtitle: Text(DateFormat('dd/MM/yyyy HH:mm').format(meetingDate)),
                       onTap: () async {
-                        final date = await showDatePicker(context: ctx, initialDate: meetingDate, firstDate: DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 365)));
+                        final date = await showDatePicker(context: ctx2, initialDate: meetingDate, firstDate: DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 365)));
                         if (date != null) {
-                          final time = await showTimePicker(context: ctx, initialTime: TimeOfDay.fromDateTime(meetingDate));
+                          if (!ctx2.mounted) return;
+                          final time = await showTimePicker(context: ctx2, initialTime: TimeOfDay.fromDateTime(meetingDate));
                           if (time != null) setModalState(() => meetingDate = DateTime(date.year, date.month, date.day, time.hour, time.minute));
                         }
                       },
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<int>(
-                      value: durationMinutes,
+                      initialValue: durationMinutes,
                       decoration: const InputDecoration(labelText: 'Durée (minutes)'),
                       items: [15, 30, 45, 60, 90].map((m) => DropdownMenuItem<int>(value: m, child: Text('$m min'))).toList(),
                       onChanged: (v) => setModalState(() => durationMinutes = v ?? 30),
@@ -180,7 +439,7 @@ class _MeetingsPageState extends ConsumerState<MeetingsPage> {
                                 if (!formKey.currentState!.validate()) return;
                                 setModalState(() => loading = true);
                                 try {
-                                  await ApiService().post('/api/meetings/', data: {
+                                  final payload = {
                                     'title': title.text.trim(),
                                     'description': description.text.trim(),
                                     'teacher': teacherId,
@@ -189,11 +448,34 @@ class _MeetingsPageState extends ConsumerState<MeetingsPage> {
                                     'meeting_type': meetingType,
                                     'meeting_date': meetingDate.toUtc().toIso8601String(),
                                     'duration_minutes': durationMinutes,
+                                    'location': location.text.trim().isEmpty ? null : location.text.trim(),
+                                    'video_platform': videoPlatform,
+                                    'video_link': videoLink.text.trim().isEmpty ? null : videoLink.text.trim(),
+                                    'auto_generate_video_link': autoGenerateVideoLink,
+                                    'is_published': isPublished,
+                                    'participant_ids': selectedTeacherIds,
+                                    'parent_ids': selectedParentIds,
                                     'status': 'SCHEDULED',
-                                  });
+                                  };
+                                  if (isEditing) {
+                                    await ApiService().patch(
+                                      '/api/meetings/${existingMeeting['id']}/',
+                                      data: payload,
+                                    );
+                                  } else {
+                                    await ApiService().post('/api/meetings/', data: payload);
+                                  }
                                   if (ctx.mounted) {
                                     Navigator.of(ctx).pop();
-                                    ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Réunion créée.')));
+                                    ScaffoldMessenger.of(ctx).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          isEditing
+                                              ? 'Réunion modifiée.'
+                                              : 'Réunion créée.',
+                                        ),
+                                      ),
+                                    );
                                     _loadMeetings();
                                   }
                                 } catch (e) {
@@ -201,7 +483,7 @@ class _MeetingsPageState extends ConsumerState<MeetingsPage> {
                                   if (ctx.mounted) ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('Erreur: ${e.toString().replaceAll(RegExp(r'^Exception:?\s*'), '')}')));
                                 }
                               },
-                              child: const Text('Créer'),
+                              child: Text(isEditing ? 'Enregistrer' : 'Créer'),
                             ),
                           ),
                         ],
@@ -276,13 +558,14 @@ class _MeetingsPageState extends ConsumerState<MeetingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final path = GoRouterState.of(context).uri.path;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Réunions'),
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: _showCreateMeeting,
+            onPressed: () => _showMeetingForm(),
           ),
         ],
       ),
@@ -323,9 +606,7 @@ class _MeetingsPageState extends ConsumerState<MeetingsPage> {
                           itemCount: _filteredMeetings.length,
                           itemBuilder: (context, index) {
                             final meeting = _filteredMeetings[index];
-                      final date = meeting['date'] != null
-                          ? DateTime.parse(meeting['date'])
-                          : null;
+                      final date = _parseMeetingDate(meeting['meeting_date']);
                       final status = meeting['status'] ?? 'scheduled';
 
                       return Card(
@@ -390,6 +671,34 @@ class _MeetingsPageState extends ConsumerState<MeetingsPage> {
                                     ),
                                     const SizedBox(height: 16),
                                   ],
+                                  if (date != null) ...[
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.calendar_today, size: 16),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            'Date: ${DateFormat('dd/MM/yyyy HH:mm').format(date)}',
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                  ],
+                                  if ((meeting['location'] ?? '').toString().trim().isNotEmpty) ...[
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.place_outlined, size: 16),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            'Lieu: ${meeting['location']}',
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                  ],
                                   if (meeting['teacher'] != null) ...[
                                     Row(
                                       children: [
@@ -405,15 +714,7 @@ class _MeetingsPageState extends ConsumerState<MeetingsPage> {
                                   // Lien visioconférence
                                   if (meeting['video_link'] != null) ...[
                                     ElevatedButton.icon(
-                                      onPressed: () async {
-                                        final url = meeting['video_link'];
-                                        if (url != null && await canLaunchUrl(Uri.parse(url))) {
-                                          await launchUrl(
-                                            Uri.parse(url),
-                                            mode: LaunchMode.externalApplication,
-                                          );
-                                        }
-                                      },
+                                      onPressed: () => _openMeetingLink(meeting['video_link']),
                                       icon: const Icon(Icons.video_call),
                                       label: const Text('Rejoindre la visioconférence'),
                                       style: ElevatedButton.styleFrom(
@@ -422,6 +723,12 @@ class _MeetingsPageState extends ConsumerState<MeetingsPage> {
                                     ),
                                     const SizedBox(height: 16),
                                   ],
+                                  FilledButton.icon(
+                                    onPressed: () => _showMeetingForm(existingMeeting: meeting),
+                                    icon: const Icon(Icons.edit),
+                                    label: const Text('Modifier la réunion'),
+                                  ),
+                                  const SizedBox(height: 16),
                                   // Code de réunion
                                   if (meeting['meeting_id'] != null) ...[
                                     Container(
@@ -547,6 +854,11 @@ class _MeetingsPageState extends ConsumerState<MeetingsPage> {
                       ),
         ],
       ),
+      bottomNavigationBar: path.startsWith('/admin/')
+          ? const AdminBottomNav()
+          : path.startsWith('/discipline-officer/')
+              ? const DisciplineOfficerBottomNav()
+              : null,
     );
   }
 }

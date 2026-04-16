@@ -6,6 +6,8 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/network/api_service.dart';
 import '../../../../core/database/database_service.dart';
+import '../../../../core/providers/auth_provider.dart';
+import '../../../students/presentation/widgets/student_bottom_nav.dart';
 import 'dart:io';
 
 class CourseDetailPage extends ConsumerStatefulWidget {
@@ -144,10 +146,15 @@ class _CourseDetailPageState extends ConsumerState<CourseDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final role = ref.watch(authProvider).user?.role;
+    final path = GoRouterState.of(context).uri.path;
     if (_isLoading) {
       return Scaffold(
         appBar: AppBar(title: const Text('Détails du cours')),
         body: const Center(child: CircularProgressIndicator()),
+        bottomNavigationBar: role == 'STUDENT' && !path.startsWith('/teacher/')
+            ? const StudentBottomNav()
+            : null,
       );
     }
 
@@ -155,6 +162,9 @@ class _CourseDetailPageState extends ConsumerState<CourseDetailPage> {
       return Scaffold(
         appBar: AppBar(title: const Text('Détails du cours')),
         body: const Center(child: Text('Cours non trouvé')),
+        bottomNavigationBar: role == 'STUDENT' && !path.startsWith('/teacher/')
+            ? const StudentBottomNav()
+            : null,
       );
     }
 
@@ -225,6 +235,9 @@ class _CourseDetailPageState extends ConsumerState<CourseDetailPage> {
           ],
         ),
       ),
+      bottomNavigationBar: role == 'STUDENT' && !path.startsWith('/teacher/')
+          ? const StudentBottomNav()
+          : null,
     );
   }
 }

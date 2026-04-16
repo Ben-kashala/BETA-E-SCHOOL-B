@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'core/database/hive_service.dart';
@@ -64,6 +65,8 @@ class _AppInitializerState extends State<AppInitializer> {
     // 1) Initialisations essentielles : si échec → on affiche l'écran d'erreur
     try {
       print('🚀 [AppInitializer] Démarrage des initialisations...');
+      // Requis pour DateFormat(..., 'fr_FR') (intl) — évite LocaleDataException
+      await initializeDateFormatting('fr_FR', null);
       await Hive.initFlutter();
       print('✅ [AppInitializer] Hive initialisé');
       

@@ -31,30 +31,65 @@ class _SplashPageState extends ConsumerState<SplashPage> {
 
   @override
   Widget build(BuildContext context) {
+    const brandBlue = Color(0xFF21335C);
+    // Même logique que le splash natif et la page login : logo sur fond clair pour un contraste lisible.
     return Scaffold(
+      backgroundColor: Colors.white,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.school,
-              size: 100,
-              color: Theme.of(context).colorScheme.primary,
+            Container(
+              width: 220,
+              height: 130,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Image.asset(
+                'assets/images/logo.png',
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) {
+                  return Icon(
+                    Icons.school,
+                    size: 72,
+                    color: Theme.of(context).colorScheme.primary,
+                  );
+                },
+              ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
             Text(
               'E-School',
-              style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                    color: Theme.of(context).colorScheme.primary,
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    color: brandBlue,
+                    fontWeight: FontWeight.w600,
                   ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
-              'Gestion Scolaire',
-              style: Theme.of(context).textTheme.titleLarge,
+              'Gestion scolaire',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: brandBlue.withValues(alpha: 0.75),
+                  ),
             ),
-            const SizedBox(height: 48),
-            const CircularProgressIndicator(),
+            const SizedBox(height: 40),
+            const SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: brandBlue,
+              ),
+            ),
           ],
         ),
       ),

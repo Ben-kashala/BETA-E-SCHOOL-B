@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/network/api_service.dart';
 import '../../../../core/providers/auth_provider.dart';
 import '../../../../core/widgets/search_filter_bar.dart';
 import '../widgets/discipline_request_modal.dart';
+import '../../../admin/presentation/widgets/admin_bottom_nav.dart';
+import '../../../discipline_officer/presentation/widgets/discipline_officer_bottom_nav.dart';
 
 /// Fiches de discipline — synchronisé avec le web (Parent : enfants ; Élève : ses fiches).
 class DisciplinePage extends ConsumerStatefulWidget {
@@ -259,6 +262,7 @@ class _DisciplinePageState extends ConsumerState<DisciplinePage> {
     final canClose = isAdmin || isDisciplineOfficer;
     final canProcessRequests = isAdmin || isDisciplineOfficer;
 
+    final path = GoRouterState.of(context).uri.path;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Fiches de discipline'),
@@ -723,6 +727,11 @@ class _DisciplinePageState extends ConsumerState<DisciplinePage> {
           ),
         ],
       ),
+      bottomNavigationBar: path.startsWith('/admin/')
+          ? const AdminBottomNav()
+          : path.startsWith('/discipline-officer/')
+              ? const DisciplineOfficerBottomNav()
+              : null,
     );
   }
 }

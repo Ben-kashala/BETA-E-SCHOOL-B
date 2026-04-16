@@ -6,6 +6,8 @@ import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';
 import '../../../../core/network/api_service.dart';
 import '../../../../core/database/database_service.dart';
+import '../../../../core/providers/auth_provider.dart';
+import '../../../students/presentation/widgets/student_bottom_nav.dart';
 
 class BookDetailPage extends ConsumerStatefulWidget {
   final int bookId;
@@ -149,10 +151,15 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final role = ref.watch(authProvider).user?.role;
+    final path = GoRouterState.of(context).uri.path;
     if (_isLoading) {
       return Scaffold(
         appBar: AppBar(title: const Text('Détails du livre')),
         body: const Center(child: CircularProgressIndicator()),
+        bottomNavigationBar: role == 'STUDENT' && !path.startsWith('/teacher/')
+            ? const StudentBottomNav()
+            : null,
       );
     }
 
@@ -160,6 +167,9 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       return Scaffold(
         appBar: AppBar(title: const Text('Détails du livre')),
         body: const Center(child: Text('Livre non trouvé')),
+        bottomNavigationBar: role == 'STUDENT' && !path.startsWith('/teacher/')
+            ? const StudentBottomNav()
+            : null,
       );
     }
 
@@ -232,6 +242,9 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
           ],
         ),
       ),
+      bottomNavigationBar: role == 'STUDENT' && !path.startsWith('/teacher/')
+          ? const StudentBottomNav()
+          : null,
     );
   }
 }

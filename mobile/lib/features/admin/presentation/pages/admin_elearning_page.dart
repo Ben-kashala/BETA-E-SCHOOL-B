@@ -6,6 +6,7 @@ import '../../../../core/network/api_service.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/providers/auth_provider.dart';
 import '../../../../core/widgets/search_filter_bar.dart';
+import '../widgets/admin_bottom_nav.dart';
 
 class AdminElearningPage extends ConsumerStatefulWidget {
   const AdminElearningPage({super.key});
@@ -678,6 +679,7 @@ class _AdminElearningPageState extends ConsumerState<AdminElearningPage> {
           ),
         ],
       ),
+      bottomNavigationBar: const AdminBottomNav(),
     );
   }
 }

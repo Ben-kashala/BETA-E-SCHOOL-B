@@ -66,13 +66,17 @@ class AppTheme {
               fontWeight: FontWeight.w600,
             );
           }
-          return TextStyle(color: textSecondary, fontSize: 12);
+          return const TextStyle(
+            color: textPrimary,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          );
         }),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return const IconThemeData(color: primaryColor, size: 24);
           }
-          return IconThemeData(color: textSecondary, size: 24);
+          return const IconThemeData(color: textPrimary, size: 24);
         }),
       ),
       cardTheme: CardThemeData(
@@ -206,13 +210,17 @@ class AppTheme {
               fontWeight: FontWeight.w600,
             );
           }
-          return TextStyle(color: textSecondary, fontSize: 12);
+          return const TextStyle(
+            color: textPrimary,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          );
         }),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return const IconThemeData(color: primaryColor, size: 24);
           }
-          return IconThemeData(color: textSecondary, size: 24);
+          return const IconThemeData(color: textPrimary, size: 24);
         }),
       ),
       cardTheme: CardThemeData(

@@ -103,8 +103,7 @@ class GradeBulletin(models.Model):
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='grade_bulletins', verbose_name="Matière")
     school_class = models.ForeignKey(
         SchoolClass, on_delete=models.CASCADE, null=True, blank=True,
-        related_name='grade_bulletins', verbose_name="Classe (contexte de la note)"
-    )
+        related_name='grade_bulletins', verbose_name="Classe")
     teacher = models.ForeignKey(Teacher, on_delete=models.SET_NULL, null=True, blank=True, related_name='given_grade_bulletins', verbose_name="Enseignant")
     academic_year = models.CharField(max_length=20, verbose_name="Année scolaire")
     

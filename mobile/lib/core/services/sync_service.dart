@@ -1,4 +1,6 @@
 import 'package:workmanager/workmanager.dart';
+import 'package:flutter/widgets.dart';
+import 'package:path_provider/path_provider.dart';
 import '../database/database_service.dart';
 import '../network/api_service.dart';
 import '../network/connectivity_service.dart';
@@ -25,8 +27,17 @@ class SyncService {
       ),
     );
   }
+
+  static Future<void> _ensureBackgroundServicesInitialized() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    final appDir = await getApplicationDocumentsDirectory();
+    await DatabaseService.init(appDir.path);
+    ApiService().init();
+    await ConnectivityService().init();
+  }
   
   static Future<void> syncPendingData() async {
+    await _ensureBackgroundServicesInitialized();
     final isConnected = await ConnectivityService.isConnected();
     if (!isConnected) return;
     
@@ -112,6 +123,7 @@ class SyncService {
 @pragma('vm:entry-point')
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
+    await SyncService._ensureBackgroundServicesInitialized();
     if (task == 'syncData') {
       await SyncService.syncPendingData();
     }

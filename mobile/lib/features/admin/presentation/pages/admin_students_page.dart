@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/network/api_service.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../widgets/admin_bottom_nav.dart';
 
 class AdminStudentsPage extends ConsumerStatefulWidget {
   const AdminStudentsPage({super.key});
@@ -116,6 +117,7 @@ class _AdminStudentsPageState extends ConsumerState<AdminStudentsPage> {
           ),
         ],
       ),
+      bottomNavigationBar: const AdminBottomNav(),
     );
   }
 }

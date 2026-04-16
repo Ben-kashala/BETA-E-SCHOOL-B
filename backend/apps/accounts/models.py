@@ -3,6 +3,8 @@ User and authentication models
 """
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.db.models import Q
+from django.db.models.functions import Lower
 from apps.schools.models import School
 from .constants import SUPERADMIN_USERNAME
 
@@ -53,6 +55,20 @@ class User(AbstractUser):
         verbose_name = "Utilisateur"
         verbose_name_plural = "Utilisateurs"
         ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                Lower('email'),
+                'school',
+                condition=Q(email__isnull=False) & ~Q(email=''),
+                name='uniq_user_email_per_school_ci',
+            ),
+            models.UniqueConstraint(
+                'phone',
+                'school',
+                condition=Q(phone__isnull=False) & ~Q(phone=''),
+                name='uniq_user_phone_per_school',
+            ),
+        ]
     
     def __str__(self):
         return f"{self.username} ({self.get_role_display()})"

@@ -6,6 +6,8 @@ import 'package:intl/intl.dart';
 import '../../../../core/network/api_service.dart';
 import '../../../../core/services/sync_service.dart';
 import '../../../../core/database/database_service.dart';
+import '../../../../core/providers/auth_provider.dart';
+import '../../../students/presentation/widgets/student_bottom_nav.dart';
 import '../widgets/assignment_submission_modal.dart';
 
 class AssignmentDetailPage extends ConsumerStatefulWidget {
@@ -98,10 +100,15 @@ class _AssignmentDetailPageState extends ConsumerState<AssignmentDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final role = ref.watch(authProvider).user?.role;
+    final path = GoRouterState.of(context).uri.path;
     if (_isLoading) {
       return Scaffold(
         appBar: AppBar(title: const Text('Détails du devoir')),
         body: const Center(child: CircularProgressIndicator()),
+        bottomNavigationBar: role == 'STUDENT' && !path.startsWith('/teacher/')
+            ? const StudentBottomNav()
+            : null,
       );
     }
 
@@ -109,6 +116,9 @@ class _AssignmentDetailPageState extends ConsumerState<AssignmentDetailPage> {
       return Scaffold(
         appBar: AppBar(title: const Text('Détails du devoir')),
         body: const Center(child: Text('Devoir non trouvé')),
+        bottomNavigationBar: role == 'STUDENT' && !path.startsWith('/teacher/')
+            ? const StudentBottomNav()
+            : null,
       );
     }
 
@@ -283,6 +293,9 @@ class _AssignmentDetailPageState extends ConsumerState<AssignmentDetailPage> {
           ],
         ),
       ),
+      bottomNavigationBar: role == 'STUDENT' && !path.startsWith('/teacher/')
+          ? const StudentBottomNav()
+          : null,
     );
   }
 }

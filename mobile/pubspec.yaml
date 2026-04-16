@@ -109,12 +109,13 @@ flutter_launcher_icons:
 
 # Écran natif au lancement (avant le 1er frame Flutter). Régénérer après changement :
 #   dart run flutter_native_splash:create
+# Fond clair : le logo « schooli » est foncé ; sur bleu #21335C il disparaissait (même cause que sur la page login).
 flutter_native_splash:
-  color: "#21335C"
+  color: "#FFFFFF"
   image: assets/images/logo.png
   android_gravity: center
   ios_content_mode: scaleAspectFit
   web: false
   android_12:
-    color: "#21335C"
+    color: "#FFFFFF"
     image: assets/images/logo.png

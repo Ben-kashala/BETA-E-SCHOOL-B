@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/network/api_service.dart';
 import '../../../../core/widgets/search_filter_bar.dart';
+import '../widgets/admin_bottom_nav.dart';
 
 class AdminClassesPage extends ConsumerStatefulWidget {
   const AdminClassesPage({super.key});
@@ -16,6 +17,30 @@ class _AdminClassesPageState extends ConsumerState<AdminClassesPage> {
   List<dynamic> _filteredClasses = [];
   bool _isLoading = true;
   String _searchQuery = '';
+
+  String? _titulaireLabel(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is Map) {
+      final fullName = raw['full_name']?.toString().trim();
+      if (fullName != null && fullName.isNotEmpty) return fullName;
+
+      final user = raw['user'];
+      if (user is Map) {
+        final firstName = user['first_name']?.toString().trim() ?? '';
+        final lastName = user['last_name']?.toString().trim() ?? '';
+        final combined = '$firstName $lastName'.trim();
+        if (combined.isNotEmpty) return combined;
+      }
+
+      final id = raw['id'];
+      if (id != null) return 'Titulaire #$id';
+      return 'Titulaire assigné';
+    }
+    if (raw is int || raw is num) return 'Titulaire #$raw';
+
+    final text = raw.toString().trim();
+    return text.isEmpty ? null : text;
+  }
 
   @override
   void initState() {
@@ -85,6 +110,7 @@ class _AdminClassesPageState extends ConsumerState<AdminClassesPage> {
                           itemCount: _filteredClasses.length,
                           itemBuilder: (context, index) {
                             final classItem = _filteredClasses[index];
+                            final titulaire = _titulaireLabel(classItem['titulaire']);
                             return Card(
                               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                               child: ListTile(
@@ -94,8 +120,8 @@ class _AdminClassesPageState extends ConsumerState<AdminClassesPage> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text('Niveau: ${classItem['level'] ?? 'N/A'}'),
-                                    if (classItem['titulaire'] != null)
-                                      Text('Titulaire: ${classItem['titulaire']['full_name'] ?? 'N/A'}'),
+                                    if (titulaire != null)
+                                      Text('Titulaire: $titulaire'),
                                   ],
                                 ),
                                 trailing: const Icon(Icons.chevron_right),
@@ -110,6 +136,7 @@ class _AdminClassesPageState extends ConsumerState<AdminClassesPage> {
           ),
         ],
       ),
+      bottomNavigationBar: const AdminBottomNav(),
     );
   }
 }
