@@ -368,6 +368,7 @@ class _MeetingsPageState extends ConsumerState<MeetingsPage> {
                       initialValue: videoPlatform,
                       decoration: const InputDecoration(labelText: 'Plateforme visio'),
                       items: const [
+                        DropdownMenuItem(value: 'JITSI', child: Text('Jitsi Meet')),
                         DropdownMenuItem(value: 'GOOGLE_MEET', child: Text('Google Meet')),
                         DropdownMenuItem(value: 'ZOOM', child: Text('Zoom')),
                         DropdownMenuItem(value: 'TEAMS', child: Text('Microsoft Teams')),

@@ -1,3 +1,5 @@
+from uuid import uuid4
+import re
 from rest_framework import serializers
 from .models import Meeting, MeetingParticipant
 from apps.accounts.serializers import UserSerializer
@@ -73,43 +75,78 @@ class MeetingCreateSerializer(serializers.ModelSerializer):
             'video_link': {'required': False, 'allow_blank': True},
             'video_platform': {'required': False, 'allow_blank': True},
         }
-    
-    def create(self, validated_data):
-        participant_ids = validated_data.pop('participant_ids', [])
-        student_ids = validated_data.pop('student_ids', [])
-        parent_ids = validated_data.pop('parent_ids', [])
-        group_ids = validated_data.pop('group_ids', [])
+
+    def validate(self, attrs):
+        auto_generate_video_link = attrs.get('auto_generate_video_link', False)
+        video_platform = attrs.get('video_platform')
+        if auto_generate_video_link and not video_platform:
+            raise serializers.ValidationError({
+                'video_platform': "Sélectionnez une plateforme avant de générer automatiquement le lien."
+            })
+        return attrs
+
+    def _extract_meeting_id_from_link(self, video_link):
+        if not video_link:
+            return None
+
+        patterns = [
+            r'meet\.google\.com/([a-z0-9-]+)',
+            r'zoom\.us/(?:j|wc/join)/([0-9]+)',
+            r'meet\.jit\.si/([A-Za-z0-9_-]+)',
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, video_link)
+            if match:
+                return match.group(1)
+        return None
+
+    def _generate_jitsi_link(self, meeting_date):
+        timestamp = meeting_date.strftime('%Y%m%d%H%M') if meeting_date else 'meeting'
+        room_name = f"eschool-{timestamp}-{uuid4().hex[:10]}"
+        return {
+            'link': f'https://meet.jit.si/{room_name}',
+            'meeting_id': room_name,
+            'password': None,
+            'platform': 'JITSI',
+        }
+
+    def _apply_video_link_rules(self, validated_data):
         auto_generate_video_link = validated_data.pop('auto_generate_video_link', False)
-        
-        # Handle video link generation
+
         if auto_generate_video_link and validated_data.get('video_platform'):
-            video_data = self.generate_video_link(validated_data.get('video_platform'), validated_data.get('meeting_date'))
+            video_data = self.generate_video_link(
+                validated_data.get('video_platform'),
+                validated_data.get('meeting_date'),
+            )
             if video_data:
                 validated_data['video_link'] = video_data.get('link')
                 validated_data['meeting_id'] = video_data.get('meeting_id')
-                if video_data.get('password'):
-                    validated_data['meeting_password'] = video_data.get('password')
-        # If video_link is provided manually, try to extract meeting_id from Google Meet URL
+                validated_data['video_platform'] = video_data.get(
+                    'platform',
+                    validated_data.get('video_platform'),
+                )
+                validated_data['meeting_password'] = video_data.get('password')
         elif validated_data.get('video_link') and not validated_data.get('meeting_id'):
-            video_link = validated_data.get('video_link')
-            if 'meet.google.com' in video_link:
-                # Extract code from Google Meet URL: https://meet.google.com/xxx-xxxx-xxx
-                import re
-                match = re.search(r'meet\.google\.com/([a-z0-9-]+)', video_link)
-                if match:
-                    validated_data['meeting_id'] = match.group(1)
-        
-        # Handle publication
-        if validated_data.get('is_published'):
-            from django.utils import timezone
-            validated_data['published_at'] = timezone.now()
-        
-        meeting = Meeting.objects.create(**validated_data)
-        
+            validated_data['meeting_id'] = self._extract_meeting_id_from_link(
+                validated_data.get('video_link')
+            )
+
+        return validated_data
+
+    def _sync_related_items(
+        self,
+        meeting,
+        *,
+        participant_ids,
+        student_ids,
+        parent_ids,
+        group_ids,
+        meeting_type,
+    ):
+        if group_ids is not None:
+            meeting.groups.set(group_ids)
         # Add groups
         if group_ids:
-            meeting.groups.set(group_ids)
-            # Add all students from selected groups as participants
             from apps.accounts.models import Student
             from apps.schools.models import SchoolClass
             for group_id in group_ids:
@@ -122,8 +159,7 @@ class MeetingCreateSerializer(serializers.ModelSerializer):
                             user=student.user,
                             defaults={'role': 'Élève'}
                         )
-                        # Also add parent if exists (only for non-PARENT_MEETING types)
-                        if student.parent and validated_data.get('meeting_type') != 'PARENT_MEETING':
+                        if student.parent and meeting_type != 'PARENT_MEETING':
                             MeetingParticipant.objects.get_or_create(
                                 meeting=meeting,
                                 user=student.parent,
@@ -131,9 +167,9 @@ class MeetingCreateSerializer(serializers.ModelSerializer):
                             )
                 except SchoolClass.DoesNotExist:
                     pass
-        
-        # Add individual participants
-        from apps.accounts.models import User
+
+        from apps.accounts.models import User, Student, Parent
+
         for user_id in participant_ids:
             try:
                 user = User.objects.get(id=user_id)
@@ -144,9 +180,7 @@ class MeetingCreateSerializer(serializers.ModelSerializer):
                 )
             except User.DoesNotExist:
                 pass
-        
-        # Add students
-        from apps.accounts.models import Student
+
         for student_id in student_ids:
             try:
                 student = Student.objects.get(id=student_id)
@@ -155,8 +189,7 @@ class MeetingCreateSerializer(serializers.ModelSerializer):
                     user=student.user,
                     defaults={'role': 'Élève'}
                 )
-                # Also add parent if exists (only for non-PARENT_MEETING types)
-                if student.parent and validated_data.get('meeting_type') != 'PARENT_MEETING':
+                if student.parent and meeting_type != 'PARENT_MEETING':
                     MeetingParticipant.objects.get_or_create(
                         meeting=meeting,
                         user=student.parent,
@@ -164,9 +197,7 @@ class MeetingCreateSerializer(serializers.ModelSerializer):
                     )
             except Student.DoesNotExist:
                 pass
-        
-        # Add parents
-        from apps.accounts.models import Parent
+
         for parent_id in parent_ids:
             try:
                 parent = Parent.objects.get(id=parent_id)
@@ -177,8 +208,55 @@ class MeetingCreateSerializer(serializers.ModelSerializer):
                 )
             except Parent.DoesNotExist:
                 pass
+    
+    def create(self, validated_data):
+        participant_ids = validated_data.pop('participant_ids', [])
+        student_ids = validated_data.pop('student_ids', [])
+        parent_ids = validated_data.pop('parent_ids', [])
+        group_ids = validated_data.pop('group_ids', [])
+        validated_data = self._apply_video_link_rules(validated_data)
+        
+        # Handle publication
+        if validated_data.get('is_published'):
+            from django.utils import timezone
+            validated_data['published_at'] = timezone.now()
+        
+        meeting = Meeting.objects.create(**validated_data)
+        self._sync_related_items(
+            meeting,
+            participant_ids=participant_ids,
+            student_ids=student_ids,
+            parent_ids=parent_ids,
+            group_ids=group_ids,
+            meeting_type=validated_data.get('meeting_type'),
+        )
         
         return meeting
+
+    def update(self, instance, validated_data):
+        participant_ids = validated_data.pop('participant_ids', [])
+        student_ids = validated_data.pop('student_ids', [])
+        parent_ids = validated_data.pop('parent_ids', [])
+        group_ids = validated_data.pop('group_ids', None)
+        validated_data = self._apply_video_link_rules(validated_data)
+
+        if validated_data.get('is_published') and not instance.published_at:
+            from django.utils import timezone
+            validated_data['published_at'] = timezone.now()
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        self._sync_related_items(
+            instance,
+            participant_ids=participant_ids,
+            student_ids=student_ids,
+            parent_ids=parent_ids,
+            group_ids=group_ids,
+            meeting_type=validated_data.get('meeting_type', instance.meeting_type),
+        )
+        return instance
     
     def generate_video_link(self, platform, meeting_date):
         """Generate video link based on platform
@@ -188,32 +266,9 @@ class MeetingCreateSerializer(serializers.ModelSerializer):
         if not platform or not meeting_date:
             return None
         
-        # For Google Meet, we can generate a simple link
-        # Note: Real Google Meet links require API integration, this is a placeholder
-        if platform == 'GOOGLE_MEET':
-            # Format: https://meet.google.com/xxx-xxxx-xxx
-            import random
-            import string
-            code = ''.join(random.choices(string.ascii_lowercase + string.digits, k=12))
-            meeting_code = f"{code[:3]}-{code[3:7]}-{code[7:]}"
-            return {
-                'link': f"https://meet.google.com/{meeting_code}",
-                'meeting_id': meeting_code,
-                'password': None  # Google Meet doesn't use passwords in the URL
-            }
-        
-        # For Zoom, we would need API integration
-        # This is a placeholder - real implementation would use Zoom API
-        elif platform == 'ZOOM':
-            # Generate a placeholder Zoom link with meeting ID and password
-            import random
-            import string
-            meeting_id = ''.join(random.choices(string.digits, k=10))
-            password = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-            return {
-                'link': f"https://zoom.us/j/{meeting_id}",
-                'meeting_id': meeting_id,
-                'password': password
-            }
+        # Sans intégration API Google/Zoom/Teams, on génère un salon Jitsi
+        # réellement joignable pour éviter de produire de faux liens.
+        if platform in {'GOOGLE_MEET', 'ZOOM', 'TEAMS', 'JITSI'}:
+            return self._generate_jitsi_link(meeting_date)
         
         return None

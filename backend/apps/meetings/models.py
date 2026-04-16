@@ -46,7 +46,7 @@ class Meeting(models.Model):
     # Video conference
     video_link = models.URLField(null=True, blank=True, verbose_name="Lien visioconférence")
     video_platform = models.CharField(max_length=50, null=True, blank=True, 
-                                     choices=[('ZOOM', 'Zoom'), ('TEAMS', 'Microsoft Teams'), 
+                                     choices=[('JITSI', 'Jitsi Meet'), ('ZOOM', 'Zoom'), ('TEAMS', 'Microsoft Teams'), 
                                              ('GOOGLE_MEET', 'Google Meet'), ('OTHER', 'Autre')],
                                      verbose_name="Plateforme visio")
     meeting_id = models.CharField(max_length=100, null=True, blank=True, verbose_name="ID de réunion")

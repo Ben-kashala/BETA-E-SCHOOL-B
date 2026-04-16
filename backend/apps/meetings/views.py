@@ -15,7 +15,7 @@ class MeetingViewSet(viewsets.ModelViewSet):
     search_fields = ['title', 'description']
     
     def get_serializer_class(self):
-        if self.action == 'create':
+        if self.action in ['create', 'update', 'partial_update']:
             return MeetingCreateSerializer
         return MeetingSerializer
     

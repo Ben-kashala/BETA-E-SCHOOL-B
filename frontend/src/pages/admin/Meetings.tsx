@@ -21,7 +21,7 @@ const meetingSchema = z.object({
   meeting_date: z.string().min(1, 'La date est requise'),
   duration_minutes: z.number().min(15).max(480).default(30),
   location: z.string().optional(),
-  video_platform: z.enum(['ZOOM', 'TEAMS', 'GOOGLE_MEET', 'OTHER']).optional(),
+  video_platform: z.enum(['ZOOM', 'TEAMS', 'GOOGLE_MEET', 'JITSI', 'OTHER']).optional(),
   video_link: z.string().url('URL invalide').optional().or(z.literal('')),
   auto_generate_video_link: z.boolean().default(false),
   is_published: z.boolean().default(false),
@@ -46,7 +46,7 @@ type MeetingRecord = {
   meeting_date?: string | null
   duration_minutes?: number | null
   location?: string | null
-  video_platform?: 'ZOOM' | 'TEAMS' | 'GOOGLE_MEET' | 'OTHER' | null
+  video_platform?: 'ZOOM' | 'TEAMS' | 'GOOGLE_MEET' | 'JITSI' | 'OTHER' | null
   video_link?: string | null
   auto_generate_video_link?: boolean
   is_published?: boolean
@@ -227,7 +227,7 @@ export default function AdminMeetings() {
       CANCELLED: 'badge-danger',
       IN_PROGRESS: 'badge-warning',
     }
-    return badges[status] || 'badge-info'
+    return status ? (badges[status] || 'badge-info') : 'badge-info'
   }
 
   const getStatusLabel = (status?: string) => {
@@ -237,7 +237,7 @@ export default function AdminMeetings() {
       CANCELLED: 'Annulée',
       IN_PROGRESS: 'En cours',
     }
-    return labels[status] || status
+    return status ? (labels[status] || status) : 'Inconnu'
   }
 
   const normalizeCollection = (data: any) => data?.results ?? data ?? []
@@ -691,6 +691,7 @@ export default function AdminMeetings() {
                   </label>
                   <select {...register('video_platform')} className="input">
                     <option value="">Sélectionner une plateforme</option>
+                    <option value="JITSI">Jitsi Meet</option>
                     <option value="GOOGLE_MEET">Google Meet</option>
                     <option value="ZOOM">Zoom</option>
                     <option value="TEAMS">Microsoft Teams</option>
@@ -709,7 +710,7 @@ export default function AdminMeetings() {
                       disabled={!videoPlatform || videoPlatform === 'OTHER'}
                     />
                     <span className="text-sm text-gray-700 dark:text-gray-300">
-                      Générer le lien {videoPlatform === 'GOOGLE_MEET' ? 'Google Meet' : videoPlatform === 'ZOOM' ? 'Zoom' : ''}
+                      Générer le lien {videoPlatform === 'JITSI' ? 'Jitsi Meet' : videoPlatform === 'GOOGLE_MEET' ? 'Jitsi Meet' : videoPlatform === 'ZOOM' ? 'Jitsi Meet' : videoPlatform === 'TEAMS' ? 'Jitsi Meet' : ''}
                     </span>
                   </label>
                   {videoPlatform && videoPlatform !== 'OTHER' && !autoGenerateVideo && (
