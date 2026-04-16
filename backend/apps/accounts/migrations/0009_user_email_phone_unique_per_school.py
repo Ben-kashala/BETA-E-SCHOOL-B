@@ -55,6 +55,7 @@ def deduplicate_user_contacts(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
+    atomic = False
 
     dependencies = [
         ('accounts', '0008_platformsettings'),
